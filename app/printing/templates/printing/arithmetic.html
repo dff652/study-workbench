@@ -1,0 +1,3 @@
+{% extends 'web/base.html' %}{% block content %}<h1>确定性算术复算</h1><p>支持有理数四则运算及 -10～10 整数幂；不判断一般恒等式、题干含义或独立掌握。</p>
+<form method="post">{% csrf_token %}<label>表达式<input name="expression" required maxlength="512" value="{{ request.POST.expression }}" placeholder="1/3 + 1/6"></label><label>预期结果（可选）<input name="expected" maxlength="512" value="{{ request.POST.expected }}" placeholder="1/2"></label><button>复算</button></form>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}{% if result %}<p>精确结果：{{ result.result }}</p>{% if result.matches != None %}<p>与预期一致：{{ result.matches|yesno:'是,否' }}</p>{% endif %}{% endif %}{% endblock %}

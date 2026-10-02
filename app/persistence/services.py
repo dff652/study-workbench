@@ -291,6 +291,11 @@ def review_revision(actor, household_id, revision_id, *, action, expected_head,
     if action == "accept":
         _check_heads(household, vector)
         _eligible(row)
+        if row.entity.kind == 'question':
+            from django.apps import apps
+            if apps.is_installed('app.study'):
+                from app.study.services import validate_variant_publication
+                validate_variant_publication(actor, row.pk)
     if action == "withdraw" and row.entity.published_revision_id != row.pk:
         _error("review_conflict", "Withdraw only the currently published revision")
     decision = ReviewDecision.objects.create(household=household, revision=row, actor=actor,

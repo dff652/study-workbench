@@ -1,0 +1,19 @@
+<section class="panel region-editor" data-storage-key="swb-learning-sources-{{ storage_key|default:'new' }}" {% if is_edit %}data-edit="true"{% endif %}>
+  <div class="section-heading"><div><h2>原图证据</h2><p class="muted">从已上传资料页选一个或多个区域。只读原图；每次保存都会留下本版引用。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
+  {% if page_cards %}
+    <div class="source-page-grid">
+      {% for card in page_cards %}
+        <article class="region-card" data-page-id="{{ card.page_id }}" data-page-label="第 {{ card.position }} 页" data-rotation="{{ card.preview.rotation }}" data-preview-sha="{{ card.preview.sha256 }}" data-width="{{ card.preview.width }}" data-height="{{ card.preview.height }}">
+          <div class="section-heading compact-heading"><div><h3><a href="{{ card.page_url }}">第 {{ card.position }} 页</a></h3><p class="muted">{{ card.original_name }}</p></div>
+            <label class="rotation-row">旋转<select class="rotation-select" aria-label="第 {{ card.position }} 页旋转角度">{% for option in card.preview_options %}<option value="{{ option.rotation }}" data-url="{{ option.url }}" data-width="{{ option.width }}" data-height="{{ option.height }}" data-sha="{{ option.sha256 }}" {% if option.rotation == card.preview.rotation %}selected{% endif %}>{{ option.rotation }}°</option>{% endfor %}</select></label>
+          </div>
+          <div class="image-wrap"><img class="region-image" src="{{ card.preview_url }}" width="{{ card.preview.width }}" height="{{ card.preview.height }}" alt="第 {{ card.position }} 页原图"><canvas class="region-canvas" aria-label="拖动框选第 {{ card.position }} 页"></canvas></div>
+          <button type="button" class="secondary-button add-region">加入原图区域</button>
+          <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend><label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button></fieldset>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}<p class="notice">还没有已上传资料页。无来源区域时仍可保存观察，请在说明中写明证据缺口。</p>{% endif %}
+  <div class="selected-regions"><h3>本次选区</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">未选区域。来源观察可以保留未知；尝试保存作答时需要确认作者和原图证据。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
+  {% if form.sources.errors %}<div class="notice error" role="alert">{{ form.sources.errors }}</div>{% endif %}
+</section>

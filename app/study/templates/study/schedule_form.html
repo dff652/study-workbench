@@ -1,0 +1,15 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{{ back_url }}">复习安排</a><span aria-hidden="true">/</span><span>{{ page_title }}</span></nav>
+  <h1>{{ page_title }}</h1>
+  <p class="notice">计划会固定到所选题目的精确已发布版本。目标日期由你指定，不会从上传或录入日期推算。</p>
+  <form method="post" class="study-form panel">
+    {% csrf_token %}{{ form.request_key }}{{ form.context_token }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}</div>{% endfor %}
+    <div class="form-actions"><button class="primary-button" type="submit">{{ submit_label }}</button><a class="secondary-button link-button" href="{{ back_url }}">返回</a></div>
+  </form>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'study/study.css' %}">{% endblock %}

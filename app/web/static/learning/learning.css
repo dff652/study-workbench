@@ -1,0 +1,30 @@
+.learning-filter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; align-items: end; }
+.learning-filter .field { min-width: 0; margin: 0; }
+.learning-filter input, .learning-filter select { width: 100%; min-height: 42px; padding: .55rem .65rem; border: 1px solid #aebbc6; border-radius: 7px; background: #fff; }
+.learning-attempt-list { display: grid; gap: .8rem; margin: 0; padding: 0; list-style: none; }
+.attempt-card { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfd; }
+.attempt-card p:last-child { margin-bottom: 0; }
+.learning-facts { display: grid; grid-template-columns: minmax(9rem, .35fr) minmax(0, 1fr); gap: .45rem .9rem; margin: 0; }
+.learning-facts dt { color: var(--muted); font-weight: 650; }
+.learning-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.dimension-panel { min-width: 0; }
+.dimension-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.dimension-result { min-width: 0; padding: .9rem; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
+.dimension-result:last-child { grid-column: 1 / -1; }
+.dimension-summary { margin: .6rem 0; padding-left: 1.3rem; }
+.learning-assessment-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .2rem .8rem; }
+.learning-assessment-form > .panel:first-of-type { grid-column: 1 / -1; }
+.learning-assessment-form > .panel:last-of-type, .learning-assessment-form > .form-actions { grid-column: 1 / -1; }
+.learning-assessment-form ul { margin: .2rem 0; padding-left: 1.4rem; }
+.learning-assessment-form li { margin: .25rem 0; }
+.history-source-grid .history-region-box { border-color: #c55c18; }
+
+@media (max-width: 680px) {
+  .learning-filter { grid-template-columns: 1fr; }
+  .learning-facts { grid-template-columns: 1fr; gap: .15rem; }
+  .learning-facts dd { margin-bottom: .5rem; }
+  .dimension-grid { grid-template-columns: 1fr; }
+  .dimension-result:last-child { grid-column: 1; }
+  .learning-assessment-form { grid-template-columns: 1fr; }
+  .learning-assessment-form > .panel { grid-column: 1 !important; }
+}

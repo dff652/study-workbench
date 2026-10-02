@@ -1,0 +1,135 @@
+import json
+from django.db import DatabaseError, transaction
+from django.test import TransactionTestCase
+from app.persistence import services as core
+from app.persistence.models import EntityRecord, RevisionRecord
+from app.web import services as materials, records
+from app.printing import services
+from app.printing.models import TeacherAnswerRevision, AnswerDecision, ExportSnapshot
+from tests.web.test_services import ManualServicesTests, key
+
+
+class PrintTests(TransactionTestCase):
+    setUp=ManualServicesTests.setUp
+    tearDown=ManualServicesTests.tearDown
+    page=ManualServicesTests.page
+    source=ManualServicesTests.source
+    question=ManualServicesTests.question
+
+    def published(self,text='1/3 + 1/6 = ?'):
+        q=self.question(text=text)
+        context=core.review_context(self.owner,self.house.pk,q['revision_id'])
+        core.review_revision(self.owner,self.house.pk,q['revision_id'],action='accept',reason='核对合成题干',
+            request_key=key(),**{k:context[k] for k in ['expected_head','expected_dependencies','expected_decision_id']})
+        return RevisionRecord.objects.get(pk=q['revision_id'])
+
+    def answer(self,q,text='1/2'):
+        return services.save_answer(self.owner,self.house.pk,q.pk,body=text,
+            formulas=[['f',['t','1'],['t','2']]],basis='有理数通分复算',
+            expected=services.answer_context(q),request_key=key())
+
+    def test_teacher_answers_append_review_replay_and_stale_guard(self):
+        q=self.published();expected=services.answer_context(q);request_key=key()
+        inputs=dict(body='1/2',formulas=[],basis='通分',expected=expected,request_key=request_key)
+        first=services.save_answer(self.owner,self.house.pk,q.pk,**inputs)
+        self.assertEqual(first,services.save_answer(self.owner,self.house.pk,q.pk,**inputs))
+        a=TeacherAnswerRevision.objects.get(pk=first['answer_id'])
+        services.review_answer(self.owner,a.pk,action='accepted',reason='独立复算',expected=services.answer_context(q),request_key=key())
+        self.answer(q,'另一份解析')
+        self.assertEqual(services.accepted_answer(q)[0].pk,a.pk)
+        self.assertEqual(a.body,'1/2');self.assertEqual(TeacherAnswerRevision.objects.count(),2)
+        with self.assertRaises(core.PersistenceError):services.save_answer(self.owner,self.house.pk,q.pk,**{**inputs,'request_key':key()})
+        with self.assertRaises(DatabaseError),transaction.atomic():TeacherAnswerRevision.objects.filter(pk=a.pk).update(body='覆盖')
+        with self.assertRaises(DatabaseError),transaction.atomic():AnswerDecision.objects.all().delete()
+
+    def test_print_modes_download_authorization_duplicate_hash_and_edit_history(self):
+        q=self.published()
+        with self.assertRaises(core.PersistenceError):services.export_questions(self.owner,self.house.pk,[q.pk],title='答案',purpose='parent_answers')
+        a=TeacherAnswerRevision.objects.get(pk=self.answer(q)['answer_id'])
+        services.review_answer(self.owner,a.pk,action='accepted',reason='复算通过',expected=services.answer_context(q),request_key=key())
+        practice=services.export_questions(self.owner,self.house.pk,[q.pk],title='独立练习',purpose='independent_practice')
+        answers=services.export_questions(self.owner,self.house.pk,[q.pk],title='家长答案',purpose='parent_answers')
+        self.assertEqual(practice.pk,services.export_questions(self.owner,self.house.pk,[q.pk],title='独立练习',purpose='independent_practice').pk)
+        document=json.loads(services.snapshot_file(self.owner,practice.pk,'content.json').read_text())
+        self.assertFalse(any(b['role'] in {'method','answer','classification','assessment'} for p in document['pages'] for b in p))
+        self.assertEqual(answers.provenance['answers'][0]['answer_id'],a.pk)
+        for actor in (self.other,):
+            with self.assertRaises(core.PersistenceError):services.snapshot_file(actor,practice.pk,'document.pdf')
+        self.client.force_login(self.viewer)
+        response=self.client.get(f'/prints/snapshots/{practice.pk}/document.pdf/')
+        self.assertEqual(response.status_code,200);self.assertIn('no-store',response['Cache-Control']);response.close()
+        self.client.logout();self.assertEqual(self.client.get(f'/prints/snapshots/{practice.pk}/document.pdf/').status_code,302)
+        with self.assertRaises(DatabaseError),transaction.atomic():ExportSnapshot.objects.filter(pk=practice.pk).update(title='覆盖')
+        path=services.snapshot_file(self.owner,practice.pk,'document.pdf');path.write_bytes(b'modified')
+        from app.exports.contracts import ExportError
+        with self.assertRaises(ExportError):services.snapshot_file(self.owner,practice.pk,'document.pdf')
+
+    def test_erratum_review_changes_working_text_preserves_print_and_no_child_records(self):
+        q=self.published('1+1=3')
+        result=services.save_erratum(self.owner,self.house.pk,q.pk,corrected_text='1+1=2',basis='整数加法复算',
+            expected=records.edit_context(q),request_key=key())
+        e=RevisionRecord.objects.get(pk=result['revision_id'])
+        with self.assertRaises(core.PersistenceError):services.apply_erratum(self.owner,self.house.pk,e.pk,expected=records.edit_context(q),request_key=key())
+        c=core.review_context(self.owner,self.house.pk,e.pk)
+        records.review(self.owner,self.house.pk,'erratum',e.entity.stable_id,e.pk,action='accept',reason='复算',context=c,request_key=key())
+        revised=services.apply_erratum(self.owner,self.house.pk,e.pk,expected=records.edit_context(q),request_key=key())
+        new=RevisionRecord.objects.get(pk=revised['revision_id'])
+        self.assertEqual(new.payload['printed_text'],'1+1=3');self.assertEqual(new.payload['working_text'],'1+1=2')
+        self.assertEqual(q.payload['working_text'],'1+1=3')
+        self.assertEqual(EntityRecord.objects.filter(kind__in=['attempt','assessment']).count(),0)
+        c=core.review_context(self.owner,self.house.pk,new.pk)
+        records.review(self.owner,self.house.pk,'question',new.entity.stable_id,new.pk,action='accept',reason='按勘误接受',context=c,request_key=key())
+
+    def test_answer_cannot_cross_family_or_be_written_by_viewer(self):
+        q=self.published()
+        for actor,house in [(self.viewer,self.house),(self.other,self.house)]:
+            with self.assertRaises(core.PersistenceError):services.save_answer(actor,house.pk,q.pk,body='1/2',formulas=[],basis='复算',expected=services.answer_context(q),request_key=key())
+        with self.assertRaises(DatabaseError),transaction.atomic():TeacherAnswerRevision.objects.create(household=self.other_house,
+            question_revision=q,revision_no=1,body='x',basis='x',created_by=self.other)
+
+    def test_unsupported_formula_has_source_labelled_image_fallback(self):
+        q=self.published()
+        region=q.payload['evidence_refs'][0]['region_revision_id']
+        fallback=services.source_formula_image(self.owner,self.house.pk,q.pk,region,'原图中的不支持公式')
+        a=services.save_answer(self.owner,self.house.pk,q.pk,body='见来源公式图片',formulas=[fallback],basis='人工核对原图',
+            expected=services.answer_context(q),request_key=key())
+        services.review_answer(self.owner,a['answer_id'],action='accepted',reason='来源核对',expected=services.answer_context(q),request_key=key())
+        snapshot=services.export_questions(self.owner,self.house.pk,[q.pk],title='图片公式回退',purpose='parent_answers')
+        document=json.loads(services.snapshot_file(self.owner,snapshot.pk,'content.json').read_text())
+        self.assertTrue(any(b['kind']=='formula_image' and region in b['content']['source_ref'] for p in document['pages'] for b in p))
+        with self.assertRaises(core.PersistenceError):services.source_formula_image(self.other,self.house.pk,q.pk,region,'越权')
+
+    def test_long_question_paginates_without_losing_text(self):
+        text='请计算并写出每一步的依据。'*300
+        q=self.published(text)
+        snapshot=services.export_questions(self.owner,self.house.pk,[q.pk],title='长题分页',purpose='independent_practice')
+        document=json.loads(services.snapshot_file(self.owner,snapshot.pk,'content.json').read_text())
+        self.assertGreater(len(document['pages']),1)
+        from html import unescape
+        printed=''.join(unescape(b['content']).replace('<br/>','\n') for p in document['pages'] for b in p if b['role']=='question')
+        self.assertEqual(printed,'1. '+text)
+
+
+from tests.study import test_services as study_fixture
+
+
+class EvidencePrintTests(TransactionTestCase):
+    setUp=study_fixture.StudyServiceTests.setUp
+    create_observation=study_fixture.StudyServiceTests.create_observation
+    create_attempt=study_fixture.StudyServiceTests.create_attempt
+    save_and_review=study_fixture.StudyServiceTests.save_and_review
+
+    def test_report_freezes_real_attempt_review_and_unknown_dimensions(self):
+        attempt=self.create_attempt()
+        evaluation=self.save_and_review(attempt['attempt_id'])
+        exported=services.export_evidence_report(self.owner,self.learner_entity.pk)
+        report=exported.provenance['report']
+        self.assertEqual(report['attempts'][0]['attempt_revision_id'],attempt['revision_id'])
+        self.assertEqual(report['attempts'][0]['assessments'][0]['assessment_revision_id'],evaluation['revision_id'])
+        self.assertTrue(report['insufficient_evidence'])
+        document=json.loads(services.snapshot_file(self.owner,exported.pk,'content.json').read_text())
+        self.assertEqual(document['purpose'],'evidence_report')
+        self.assertEqual(document['source']['state'],'draft')
+        with self.assertRaises(core.PersistenceError):services.export_evidence_report(self.other,self.learner_entity.pk)
+        self.client.force_login(self.owner)
+        self.assertEqual(self.client.get(f'/prints/reports/{self.learner_entity.pk}/').status_code,200)

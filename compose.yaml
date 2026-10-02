@@ -1,0 +1,131 @@
+services:
+  web:
+    image: study-workbench:${SWB_IMAGE_TAG:-local}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        SWB_RESOURCE_OWNER: ${SWB_RESOURCE_OWNER:-manual}
+        SWB_SOURCE_REVISION: ${SWB_SOURCE_REVISION:-working-tree}
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    cpus: 1.0
+    mem_limit: 512m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    ports:
+      - "${SWB_BIND_ADDRESS:-127.0.0.1}:${SWB_HOST_PORT:-8000}:8000"
+    environment: &runtime_environment
+      DJANGO_SETTINGS_MODULE: app.production
+      SWB_DB_HOST: db
+      SWB_DB_PORT: "5432"
+      SWB_DB_NAME: ${SWB_DB_NAME:?Set SWB_DB_NAME in the private environment file}
+      SWB_DB_USER: ${SWB_DB_USER:?Set SWB_DB_USER in the private environment file}
+      SWB_DB_PASSWORD: ${SWB_DB_PASSWORD:?Set SWB_DB_PASSWORD in the private environment file}
+      SWB_SECRET_KEY: ${SWB_SECRET_KEY:?Set SWB_SECRET_KEY in the private environment file}
+      SWB_DATA_ROOT: /var/lib/study-workbench/private
+      SWB_ALLOWED_HOSTS: ${SWB_ALLOWED_HOSTS:?Set SWB_ALLOWED_HOSTS in the private environment file}
+      SWB_CSRF_TRUSTED_ORIGINS: ${SWB_CSRF_TRUSTED_ORIGINS:-}
+      SWB_SECURE_SSL_REDIRECT: ${SWB_SECURE_SSL_REDIRECT:-false}
+      SWB_SECURE_COOKIES: ${SWB_SECURE_COOKIES:-false}
+      SWB_TRUST_PROXY_HEADERS: ${SWB_TRUST_PROXY_HEADERS:-false}
+      SWB_MODEL_API_KEY: ${SWB_MODEL_API_KEY:-}
+      SWB_MODEL_ALLOWED_HOSTS: ${SWB_MODEL_ALLOWED_HOSTS:-}
+    volumes:
+      - private_data:/var/lib/study-workbench/private
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,urllib.request; host=next(value.strip() for value in os.environ['SWB_ALLOWED_HOSTS'].split(',') if value.strip()); request=urllib.request.Request('http://127.0.0.1:8000/healthz',headers={'Host':host}); urllib.request.urlopen(request,timeout=4)"
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+      com.study-workbench.service: web
+
+  worker:
+    image: study-workbench:${SWB_IMAGE_TAG:-local}
+    entrypoint: [python, scripts/run_model_tasks.py, --watch]
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 75s
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 64
+    cpus: 0.5
+    mem_limit: 384m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    environment: *runtime_environment
+    volumes:
+      - private_data:/var/lib/study-workbench/private
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [frontend, backend]
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+      com.study-workbench.service: worker
+
+  db:
+    image: postgres@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 60s
+    cpus: 1.0
+    mem_limit: 256m
+    shm_size: 64m
+    environment:
+      POSTGRES_DB: ${SWB_DB_NAME:?Set SWB_DB_NAME in the private environment file}
+      POSTGRES_USER: ${SWB_DB_USER:?Set SWB_DB_USER in the private environment file}
+      POSTGRES_PASSWORD: ${SWB_DB_PASSWORD:?Set SWB_DB_PASSWORD in the private environment file}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+      com.study-workbench.service: db
+
+volumes:
+  private_data:
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+  db_data:
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+
+networks:
+  frontend:
+    driver: bridge
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+  backend:
+    driver: bridge
+    internal: true
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}

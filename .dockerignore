@@ -1,0 +1,14 @@
+**
+!app/
+!app/**
+!manage.py
+!requirements.txt
+!requirements-container.txt
+!licenses/
+!licenses/**
+!scripts/
+!scripts/container_entrypoint.sh
+!scripts/run_model_tasks.py
+!scripts/manage_private_retention.py
+**/__pycache__/
+*.py[cod]

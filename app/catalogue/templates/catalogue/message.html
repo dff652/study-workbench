@@ -1,0 +1,3 @@
+{% extends "web/base.html" %}
+{% block title %}{{ title }} · 题目拆分与合题{% endblock %}
+{% block content %}<section class="panel"><h1>{{ title }}</h1><p role="status">{{ message }}</p><a href="{% url 'catalogue:index' %}">返回题目列表</a></section>{% endblock %}

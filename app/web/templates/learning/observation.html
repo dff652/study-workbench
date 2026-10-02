@@ -1,0 +1,18 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}来源观察 · 学习档案{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'learning:index' %}?household={{ household_id|urlencode }}">学习档案</a><span aria-hidden="true">/</span><span>来源观察</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">来源观察</p><h1>{{ observation.observation_id }}</h1><p class="muted">观察不等于作答；只有明确确认作者和依据后，才可关联到一次作答。</p></div><a class="secondary-button" href="{{ edit_url }}">追加观察修订</a></div>
+  <section class="panel"><h2>当前观察版本</h2>
+    <dl class="learning-facts"><dt>档案上下文</dt><dd>{% if observation.profile_context_id %}<a href="{% url 'learning:profile_detail' observation.profile_context_id %}">{{ observation.profile_context_id }}</a>（不代表作者确认）{% else %}无{% endif %}</dd>
+      <dt>可读性</dt><dd>{{ current_legibility_label }}</dd>
+      <dt>作者状态</dt><dd>{% if current_revision.author_state.value == "confirmed" %}已确认：{{ current_revision.author_learner_id }}{% else %}未知{% endif %}</dd>
+      <dt>实际日期</dt><dd>{% if current_revision.actual_date_state.value == "known" %}{{ current_revision.actual_date }}{% else %}未知{% endif %}</dd>
+      <dt>说明</dt><dd>{{ current_revision.notes|default:"（未填写）" }}</dd>
+    </dl>
+    {% if sources %}<div class="history-source-grid">{% for source in sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% else %}<p class="notice">本版没有来源区域；请保留说明中的证据缺口。</p>{% endif %}
+  </section>
+  <section class="panel"><h2>观察修订历史</h2><ol class="history-list">{% for item in history %}<li><h3>修订 {{ item.revision.header.revision_no }} · {{ item.revision.header.recorded_at }}</h3><p>{{ item.revision.header.change_reason }}</p><p>作者：{% if item.revision.author_state.value == "confirmed" %}{{ item.revision.author_learner_id }}（{{ item.revision.confirmation_basis }}）{% else %}未知{% endif %}；日期：{% if item.revision.actual_date %}{{ item.revision.actual_date }}{% else %}未知{% endif %}；可读性：{{ item.revision.legibility.value }}</p><p>{{ item.revision.notes }}</p>{% if item.sources %}<div class="history-source-grid">{% for source in item.sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% endif %}</li>{% empty %}<li>无历史版本。</li>{% endfor %}</ol></section>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

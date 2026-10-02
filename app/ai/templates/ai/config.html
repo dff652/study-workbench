@@ -1,0 +1,16 @@
+{% extends "web/base.html" %}
+{% block title %}模型服务配置 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><span>追加配置版本</span></nav>
+  <section class="panel narrow-panel">
+    <p class="eyebrow">仅家庭所有者</p><h1>模型服务配置</h1>
+    <p class="muted">保存会追加不可改写的配置版本。API 密钥不在此页面输入或保存，只能由后台从固定环境变量 <code>SWB_MODEL_API_KEY</code> 读取。</p>
+    <p class="notice">启用前请确认服务地址的主机已加入服务端 <code>SWB_MODEL_ALLOWED_HOSTS</code> 白名单。选区图像按原图坐标裁切并重编码；原图不会修改。</p>
+    <form method="post" class="stack-form">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
+      <div class="button-row"><button class="primary-button" type="submit">追加配置</button><a class="quiet-button" href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">返回</a></div>
+    </form>
+  </section>
+{% endblock %}

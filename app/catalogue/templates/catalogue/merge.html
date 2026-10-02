@@ -1,0 +1,19 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}合并题目{% endblock %}
+{% block content %}
+  <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
+  <nav class="breadcrumbs"><a href="{% url 'catalogue:index' %}?household_id={{ household_id }}">题目拆分与合题</a><span aria-hidden="true">/</span><span>合并题目</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">人工整理 · 不推断答案</p><h1>合并题目</h1><p class="muted">请选择不同的当前题目版本，再人工录入合并后的题号与题干。所有来源题目保持不变。</p></div></div>
+  {% if phase == "select" %}<form method="post" class="panel knowledge-form">{% csrf_token %}{{ selection_form.household_id }}
+    <div class="field"><label>来源题目</label>{{ selection_form.source_revision_ids }}{{ selection_form.source_revision_ids.errors }}</div>
+    <button type="submit" class="primary-button">继续填写合并内容</button>
+  </form>{% else %}<section class="panel"><h2>已选来源题目版本</h2><ul class="association-list">{% for row in selected %}<li><a href="{% url 'catalogue:question_detail' entity_id=row.entity.pk %}">{{ row.number }} · {{ row.title }}</a><span class="muted">r{{ row.revision.revision_no }} · {{ row.revision.pk }}</span>{% if row.missing %}<span class="status-badge warning">题干或来源区域待补</span>{% endif %}</li>{% endfor %}</ul></section>
+    <form method="post" class="panel knowledge-form">{% csrf_token %}<input type="hidden" name="phase" value="save">
+      {{ create_form.request_key }}{{ create_form.household_id }}{{ create_form.context_token }}{{ create_form.source_revision_ids }}
+      <div class="field"><label for="id_original_number">合并后原资料题号</label>{{ create_form.original_number }}{{ create_form.original_number.errors }}</div>
+      <div class="field"><label for="id_printed_text">合并后印刷题干</label>{{ create_form.printed_text }}<span class="help-text">{{ create_form.printed_text.help_text }}</span>{{ create_form.printed_text.errors }}</div>
+      <div class="field"><label for="id_reason">合题说明</label>{{ create_form.reason }}{{ create_form.reason.errors }}</div>
+      <div class="form-actions"><button type="submit" class="primary-button">建立合并题草稿</button><a class="secondary-button link-button" href="{% url 'catalogue:merge' %}?household_id={{ household_id }}">重新选择</a></div>
+    </form>{% endif %}
+{% endblock %}

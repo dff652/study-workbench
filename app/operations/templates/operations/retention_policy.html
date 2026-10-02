@@ -1,0 +1,23 @@
+{% extends "web/base.html" %}
+{% block title %}本机导出保留策略 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="/">资料</a><span aria-hidden="true">/</span><span>本机导出保留策略</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 仅本机导出文件</p><h1>本机导出保留策略</h1><p class="muted">策略按版本追加。默认不自动归档或退役；退役前会先验证并保留受控归档副本。</p></div></div>
+  {% if default_policy %}<div class="notice">当前使用默认保留策略：导出文件不自动归档或退役。原始照片、领域修订历史和模型提案始终保留。</div>{% else %}
+    <section class="panel"><h2>当前策略</h2><dl>
+      <dt>策略版本</dt><dd>{{ current.revision_no }} · {{ current.created_at|date:"Y-m-d H:i" }}</dd>
+      <dt>归档期限</dt><dd>{% if current.archive_after_days == 0 %}0 天{% elif current.archive_after_days %}{{ current.archive_after_days }} 天{% else %}不自动归档{% endif %}</dd>
+      <dt>退役期限</dt><dd>{% if current.delete_after_days == 0 %}0 天{% elif current.delete_after_days %}{{ current.delete_after_days }} 天{% else %}不自动退役{% endif %}</dd>
+      <dt>策略依据</dt><dd>{{ current.reason }}</dd>
+    </dl></section>
+  {% endif %}
+  <section class="panel"><h2>追加策略版本</h2><p class="muted">退役只移除已生成的本机导出文件。归档副本与审计记录继续保留，不影响原始照片、作答、评价、其他领域历史或模型提案。</p>
+    <form method="post" class="knowledge-form">{% csrf_token %}{{ form.request_key }}
+      {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}{{ field.errors }}</div>{% endfor %}
+      <div class="form-actions"><button type="submit" class="primary-button">追加策略</button><a class="secondary-button link-button" href="/">返回资料</a></div>
+    </form>
+  </section>
+  {% if history %}<section class="panel"><h2>策略历史</h2><ol>{% for row in history %}<li><strong>版本 {{ row.revision_no }}</strong> · {{ row.created_at|date:"Y-m-d H:i" }} · 归档 {% if row.archive_after_days == 0 %}0 天{% elif row.archive_after_days %}{{ row.archive_after_days }} 天{% else %}关闭{% endif %} · 退役 {% if row.delete_after_days == 0 %}0 天{% elif row.delete_after_days %}{{ row.delete_after_days }} 天{% else %}关闭{% endif %}<br><span class="muted">{{ row.reason }} · 操作人 {{ row.created_by_id }}</span></li>{% endfor %}</ol></section>{% endif %}
+  <section class="panel"><h2>保留边界</h2><p>本机操作不代表供应商已删除其副本；供应商侧留存仍为未知。完整保留范围、备份和恢复步骤见本机数据策略文档。</p></section>
+{% endblock %}

@@ -276,6 +276,7 @@ class RequestReceipt(models.Model):
         WEB_UPLOAD = "web_upload", "Upload"
         WEB_ORDER = "web_order", "Page order"
         WEB_QUESTION = "web_question", "Question"
+        WEB_RECORD = "web_record", "Business record"
 
     id = models.BigAutoField(primary_key=True)
     household = models.ForeignKey(Household, on_delete=models.PROTECT, related_name="request_receipts")
@@ -289,6 +290,6 @@ class RequestReceipt(models.Model):
         db_table = "swb_requestreceipt"
         constraints = [
             models.UniqueConstraint(fields=("household", "request_key"), name="swb_receipt_house_request_uniq"),
-            models.CheckConstraint(condition=models.Q(operation__in=("stage", "review", "web_material", "web_upload", "web_order", "web_question")), name="swb_receipt_op_valid"),
+            models.CheckConstraint(condition=models.Q(operation__in=("stage", "review", "web_material", "web_upload", "web_order", "web_question", "web_record")), name="swb_receipt_op_valid"),
             models.CheckConstraint(condition=models.Q(request_hash__regex=r"^[0-9a-f]{64}$"), name="swb_receipt_hash_valid"),
         ]

@@ -365,6 +365,8 @@ def question_new(request, material_id):
 def question_detail(request, question_id):
     try:
         data = services.question_detail(request.user, question_id)
+        if data['material'] is None:
+            return redirect('knowledge:question_detail', entity_id=data['question'].pk)
         page_cache = {}
         source_links = [_source_card(request.user, source, page_cache) for source in data["sources"]]
         for revision in data["history"]:
@@ -409,6 +411,8 @@ def question_detail(request, question_id):
 def question_edit(request, question_id):
     try:
         data = services.question_detail(request.user, question_id)
+        if data['material'] is None:
+            return redirect('knowledge:question_detail', entity_id=data['question'].pk)
         page_cards = _page_cards(request.user, services.material_detail(request.user, str(data["material"].id))["pages"])
     except PersistenceError as exc:
         return _failure(request, exc)

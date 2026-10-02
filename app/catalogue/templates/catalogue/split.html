@@ -1,0 +1,26 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}拆分题目 {{ number }}{% endblock %}
+{% block content %}
+  <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
+  <nav class="breadcrumbs"><a href="{% url 'catalogue:index' %}?household_id={{ household.pk }}">题目拆分与合题</a><span aria-hidden="true">/</span><a href="{% url 'catalogue:question_detail' entity_id=entity.pk %}">题目 {{ number }}</a><span aria-hidden="true">/</span><span>拆分</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 原题保持不变</p><h1>拆分题目 {{ number }}</h1><p class="muted">子题引用原题的精确修订版本，并复制其来源区域；每个子题都作为待审核草稿建立。</p></div></div>
+  <section class="panel"><h2>原题 r{{ entity.head_revision.revision_no }}</h2>
+    {% if current.printed_text %}<div class="long-text">{{ current.printed_text|linebreaksbr }}</div>{% else %}<p class="muted">原题题干待补。</p>{% endif %}
+    {% include "knowledge/_sources.html" with cards=source_cards only %}
+  </section>
+  <form method="post" class="panel knowledge-form">{% csrf_token %}{{ form.request_key }}{{ form.household_id }}{{ form.source_revision_id }}{{ form.context_token }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <h2>子题 1</h2><div class="field"><label for="id_child_1_number">原资料题号</label>{{ form.child_1_number }}{{ form.child_1_number.errors }}</div>
+    <div class="field"><label for="id_child_1_text">印刷题干</label>{{ form.child_1_text }}<span class="help-text">可留空，空白会保留为待补草稿。</span>{{ form.child_1_text.errors }}</div>
+    <h2>子题 2</h2><div class="field"><label for="id_child_2_number">原资料题号</label>{{ form.child_2_number }}{{ form.child_2_number.errors }}</div>
+    <div class="field"><label for="id_child_2_text">印刷题干</label>{{ form.child_2_text }}<span class="help-text">可留空，空白会保留为待补草稿。</span>{{ form.child_2_text.errors }}</div>
+    <details><summary>添加更多子题（可选）</summary>
+      <h3>子题 3</h3><div class="field"><label for="id_child_3_number">原资料题号</label>{{ form.child_3_number }}{{ form.child_3_number.errors }}</div><div class="field"><label for="id_child_3_text">印刷题干</label>{{ form.child_3_text }}{{ form.child_3_text.errors }}</div>
+      <h3>子题 4</h3><div class="field"><label for="id_child_4_number">原资料题号</label>{{ form.child_4_number }}{{ form.child_4_number.errors }}</div><div class="field"><label for="id_child_4_text">印刷题干</label>{{ form.child_4_text }}{{ form.child_4_text.errors }}</div>
+      <h3>子题 5</h3><div class="field"><label for="id_child_5_number">原资料题号</label>{{ form.child_5_number }}{{ form.child_5_number.errors }}</div><div class="field"><label for="id_child_5_text">印刷题干</label>{{ form.child_5_text }}{{ form.child_5_text.errors }}</div>
+    </details>
+    <div class="field"><label for="id_reason">拆题说明</label>{{ form.reason }}{{ form.reason.errors }}</div>
+    <div class="form-actions"><button type="submit" class="primary-button">建立待审核子题</button><a class="secondary-button link-button" href="{% url 'catalogue:question_detail' entity_id=entity.pk %}">取消</a></div>
+  </form>
+{% endblock %}

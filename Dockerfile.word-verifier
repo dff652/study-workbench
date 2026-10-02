@@ -1,0 +1,11 @@
+# Optional offline Word pagination verifier, separate from the service image.
+FROM python:3.12.14-slim-bookworm@sha256:d5ae74acb8026b32a2f6deea45003c5bd4e2880700c19c44bda54670ad3eff90
+ARG SWB_RESOURCE_OWNER
+LABEL com.study-workbench.resource-owner=${SWB_RESOURCE_OWNER}
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        libreoffice-writer=4:7.4.7-1+deb12u14 \
+        libreoffice-math=4:7.4.7-1+deb12u14 \
+        fonts-noto-cjk=1:20220127+repack1-1 \
+        fonts-dejavu-core=2.37-6 \
+    && rm -rf /var/lib/apt/lists/*

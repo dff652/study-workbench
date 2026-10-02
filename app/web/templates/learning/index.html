@@ -1,0 +1,36 @@
+{% extends "web/base.html" %}
+{% block title %}学习档案 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>学习档案</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">逐次证据</p><h1>学习者档案</h1><p class="muted">观察、实际作答与评价分开保存。未知信息会保留为未知。</p></div>{% if household_id and writable %}<div class="button-row"><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">新增来源观察</a></div>{% endif %}</div>
+  {% if households %}
+    <section class="panel">
+      <form method="get" class="inline-form">
+        <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>{{ member.household_id }}</option>{% endfor %}</select></div>
+        <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>
+      </form>
+    </section>
+    {% if writable %}
+      <section class="panel">
+        <h2>新建学习者档案</h2>
+        <form method="post" action="{% url 'learning:profile_new' %}" class="stack-form">
+          {% csrf_token %}{{ form.request_key }}{{ form.household_id }}
+          <div class="field"><label for="id_display_name">学习者称呼</label>{{ form.display_name }}{{ form.display_name.errors }}<span class="help-text">可使用昵称，不需要真实姓名。</span></div>
+          <div class="field"><label for="id_grade">年级（可选）</label>{{ form.grade }}{{ form.grade.errors }}</div>
+          {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+          <button class="primary-button" type="submit">创建档案</button>
+        </form>
+      </section>
+    {% else %}<p class="notice">当前家庭为只读成员，不能新建或修改学习记录。</p>{% endif %}
+  {% else %}<section class="panel"><p>当前账号尚未加入可访问的家庭。</p></section>{% endif %}
+  <section class="panel">
+    <h2>已有档案</h2>
+    {% if profiles %}<ul class="material-list">{% for profile in profiles %}<li><a href="{% url 'learning:profile_detail' profile.learner_id %}"><strong>{{ profile.display_name }}</strong></a><span class="muted">{{ profile.grade|default:"年级未填写" }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted">此家庭还没有学习者档案。</p>{% endif %}
+  </section>
+  <section class="panel">
+    <h2>来源观察</h2>
+    {% if observations %}<ul class="history-list">{% for observation in observations %}<li><a href="{% url 'learning:observation_detail' observation.observation_id %}">来源观察 {{ observation.observation_id }}</a><span class="muted">{{ observation.revisions.0.actual_date|default:"发生日期未知" }} · {{ observation.revisions.0.legibility.value }} · {{ observation.revisions.0.notes|truncatechars:100 }}</span></li>{% endfor %}</ul>
+    {% else %}<p class="muted">还没有来源观察。看不清、空白或作者不明的笔迹可以先单独记录。</p>{% endif %}
+  </section>
+{% endblock %}

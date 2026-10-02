@@ -1,0 +1,50 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{% if is_edit %}修订{% else %}新建{% endif %}{{ kind_label }} · 知识库{% endblock %}
+{% block content %}
+  <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
+  <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识库与题目地图</a><span aria-hidden="true">/</span><span>{% if is_edit %}修订{% else %}新建{% endif %}{{ kind_label }}</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 人工录入</p><h1>{% if is_edit %}修订{{ kind_label }}{% else %}新建{{ kind_label }}{% endif %}</h1><p class="muted">保存会追加一个待审核修订，旧内容与审核记录仍可回看。</p></div></div>
+  {% if source_warning %}<div class="notice warning-notice" role="status">当前没有关联原资料。此条目会标记为人工来源不足；可从下方 B1 原图选区添加定义来源。</div>{% endif %}
+  <form method="post" class="knowledge-form" id="knowledge-form">
+    {% csrf_token %}{{ form.request_key }}{{ form.household_id }}{{ form.context_token }}{{ form.sources }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <section class="panel"><h2>条目内容</h2>
+      {% if kind == "knowledge" %}
+        <div class="field"><label for="id_definition">定义、公式与例题</label>{{ form.definition }}<span class="help-text">{{ form.definition.help_text }}</span>{{ form.definition.errors }}</div>
+        <div class="field"><label for="id_conditions">适用条件</label>{{ form.conditions }}<span class="help-text">{{ form.conditions.help_text }}</span>{{ form.conditions.errors }}</div>
+        <div class="field"><label for="id_common_errors">易错点</label>{{ form.common_errors }}<span class="help-text">{{ form.common_errors.help_text }}</span>{{ form.common_errors.errors }}</div>
+      {% elif kind == "method" %}
+        <div class="field"><label for="id_name">方法名称</label>{{ form.name }}{{ form.name.errors }}</div>
+        <div class="field"><label for="id_parent_revision_id">上级方法</label>{{ form.parent_revision_id }}<span class="help-text">选择具体修订作为父级；以后父级更新不会改写这里固定的旧关系。</span>{{ form.parent_revision_id.errors }}</div>
+        <div class="field"><label for="id_conditions">适用条件</label>{{ form.conditions }}{{ form.conditions.errors }}</div>
+        <div class="field"><label for="id_steps">步骤</label>{{ form.steps }}<span class="help-text">{{ form.steps.help_text }}</span>{{ form.steps.errors }}</div>
+        <div class="field"><label for="id_notes">备注</label>{{ form.notes }}{{ form.notes.errors }}</div>
+      {% else %}
+        <div class="field"><label for="id_name">题型名称</label>{{ form.name }}{{ form.name.errors }}</div>
+        <div class="field"><label for="id_structural_features">结构特征</label>{{ form.structural_features }}<span class="help-text">{{ form.structural_features.help_text }}</span>{{ form.structural_features.errors }}</div>
+        <div class="field"><label for="id_conditions">适用条件</label>{{ form.conditions }}{{ form.conditions.errors }}</div>
+      {% endif %}
+      <div class="field"><label for="id_reason">修订说明</label>{{ form.reason }}<span class="help-text">创建时记录人工整理依据；修订时说明本次变化。</span>{{ form.reason.errors }}</div>
+    </section>
+    {% if is_edit and source_cards %}<section class="panel"><h2>当前修订的来源</h2><p class="muted">默认保留这些精确引用；下方新选区域会追加。勾选替换时，当前来源将由本次选择取代。</p>{% include "knowledge/_sources.html" with cards=source_cards only %}</section>{% endif %}
+    <section class="panel region-editor knowledge-region-editor" data-storage-key="swb-knowledge-sources-{{ household.pk }}" {% if is_edit %}data-edit="true"{% endif %}>
+      <div class="section-heading"><div><h2>原图定义来源</h2><p class="muted">从 B1 的资料页框选支持此定义、公式或示例的区域。保存时按 `EvidencePurpose.DEFINITION` 记录。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
+      {% if source_pages %}<div class="source-page-grid">{% for card in source_pages %}
+        <article class="region-card" data-page-id="{{ card.page_id }}" data-page-label="{{ card.label }}" data-rotation="{{ card.preview.rotation }}" data-preview-sha="{{ card.preview.sha256 }}" data-width="{{ card.preview.width }}" data-height="{{ card.preview.height }}">
+          <div class="section-heading compact-heading"><div><h3><a href="{{ card.page_url }}">{{ card.label }}</a></h3><p class="muted">{{ card.original_name }}</p></div>
+            <label class="rotation-row">旋转 <select class="rotation-select" aria-label="{{ card.label }}旋转角度">{% for option in card.preview_options %}<option value="{{ option.rotation }}" data-url="{{ option.url }}" data-width="{{ option.width }}" data-height="{{ option.height }}" data-sha="{{ option.sha256 }}" {% if option.rotation == card.preview.rotation %}selected{% endif %}>{{ option.rotation }}°</option>{% endfor %}</select></label>
+          </div>
+          <div class="image-wrap"><img class="region-image" src="{{ card.preview_url }}" width="{{ card.preview.width }}" height="{{ card.preview.height }}" alt="{{ card.label }}原图"><canvas class="region-canvas" aria-label="拖动框选{{ card.label }}上的定义来源"></canvas></div>
+          <button type="button" class="secondary-button add-region">加入定义来源</button>
+          <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend><label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button></fieldset>
+        </article>
+      {% endfor %}</div>{% else %}<p class="muted">当前家庭还没有 B1 人工资料页；条目可先保存为来源不足的草稿。</p>{% endif %}
+      <div class="selected-regions"><h3>本次选择的区域</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">还没有新选区域。编辑时现有来源默认保留。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
+      {% if form.sources.errors %}<div class="notice error" role="alert">{{ form.sources.errors }}</div>{% endif %}
+      {% if is_edit %}<div class="field checkbox-field">{{ form.replace_sources }}<label for="id_replace_sources">用本次选择替换当前来源（没有选择时会清空来源）</label>{{ form.replace_sources.errors }}</div>{% endif %}
+    </section>
+    <div class="form-actions"><button type="submit" class="primary-button">{% if is_edit %}保存新修订{% else %}保存为待审核草稿{% endif %}</button>{% if cancel_url %}<a class="secondary-button link-button" href="{{ cancel_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">取消</a>{% endif %}</div>
+  </form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

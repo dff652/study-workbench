@@ -1,0 +1,23 @@
+{% extends "web/base.html" %}
+{% block title %}题目拆分与合题{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><span>题目拆分与合题</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">人工整理 · 精确版本</p><h1>题目拆分与合题</h1><p class="muted">原题和旧修订保持不变；新题均为待审核草稿，并记录精确来源题目版本。</p></div></div>
+  {% if not has_households %}<section class="panel"><p>当前账号尚未加入家庭，无法查看题目。</p></section>{% else %}
+    <form method="post" class="panel knowledge-filters">{% csrf_token %}
+      <div class="field"><label for="id_household_id">家庭</label>{{ form.household_id }}{{ form.household_id.errors }}</div>
+      <div class="form-actions"><button class="primary-button" type="submit">查看题目</button></div>
+    </form>
+    {% if home %}<section class="panel"><div class="section-heading"><div><h2>当前题目</h2><p class="muted">{{ home.questions|length }} 条；旧索引和缺失题干/框会显式标注。</p></div><a class="primary-button link-button" href="{% url 'catalogue:merge' %}?household_id={{ home.household.pk }}">合并题目</a></div>
+      {% if home.questions %}<div class="table-scroll"><table class="knowledge-table"><thead><tr><th>题号</th><th>题目</th><th>状态</th><th>来源</th><th>操作</th></tr></thead><tbody>
+        {% for row in home.questions %}<tr>
+          <td>{{ row.number }}{% if row.legacy %}<span class="status-badge warning">旧索引</span>{% endif %}</td>
+          <td><a href="{% url 'catalogue:question_detail' entity_id=row.entity.pk %}">{{ row.title|truncatechars:100 }}</a></td>
+          <td>{{ row.state }}</td>
+          <td>{% if row.missing %}<span class="status-badge warning">题干或来源区域待补</span>{% else %}有原图区域{% endif %}</td>
+          <td><a href="{% url 'catalogue:question_split' entity_id=row.entity.pk %}">拆分</a></td>
+        </tr>{% endfor %}
+      </tbody></table></div>{% else %}<p class="muted">当前家庭没有题目版本。</p>{% endif %}
+    </section>{% endif %}
+  {% endif %}
+{% endblock %}

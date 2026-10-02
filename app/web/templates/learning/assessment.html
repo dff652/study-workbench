@@ -1,0 +1,17 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}作答评价 · 学习档案{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{{ profile_url }}">学习者档案</a><span aria-hidden="true">/</span><a href="{{ attempt_url }}">作答记录</a><span aria-hidden="true">/</span><span>评价</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">结构化评价</p><h1>一次评价的版本历史</h1><p class="muted">评价身份 {{ assessment.assessment_id }} · 作答 {{ attempt.attempt_id }}</p></div><div class="button-row"><a class="secondary-button" href="{{ edit_url }}">追加评价修订</a><a class="secondary-button" href="{{ attempt_url }}">返回作答</a></div></div>
+  <section class="panel"><h2>当前评价修订 {{ current_revision.header.revision_no }}</h2><p>实际审核状态：<span class="status-badge status-{{ current_state }}">{{ current_state_label }}</span></p><p>固定作答版本：{{ current_revision.attempt_revision_id }} · 题目版本：{{ current_revision.question_revision_id }}</p>
+    <div class="dimension-grid">
+      {% for row in dimensions %}{% with dimension=row.dimension %}<article class="dimension-result"><h3>{{ row.dimension_label }}</h3><p><strong>{{ row.judgment_label }}</strong> · {{ row.basis_label }}</p>{% if dimension.rationale %}<p>{{ dimension.rationale }}</p>{% endif %}{% if dimension.unknown_reason %}<p class="notice">未知原因：{{ dimension.unknown_reason }}</p>{% endif %}{% if dimension.evidence_refs %}<div class="history-source-grid">{% for source in row.sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% else %}<p class="muted small-text">本维度没有直接来源区域。</p>{% endif %}</article>{% endwith %}{% endfor %}
+    </div>
+    {% if current_revision.context_erratum_revision_ids %}<p>讲义勘误修订：{{ current_revision.context_erratum_revision_ids|join:", " }}</p>{% endif %}
+    {% if sources %}<h3>作答原图来源</h3><div class="history-source-grid">{% for source in sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% endif %}
+  </section>
+  {% if can_review_current %}<section class="panel"><h2>人工审核</h2><p class="muted">接受、退回和撤回分别保留审核决定。编辑只会追加新版本。</p><form method="post" action="{% url 'learning:assessment_review' assessment.assessment_id %}" class="stack-form">{% csrf_token %}{{ review_form.request_key }}{{ review_form.revision_id }}{{ review_form.context_token }}{% if review_form.non_field_errors %}<div class="notice error">{{ review_form.non_field_errors }}</div>{% endif %}<div class="field"><label for="id_action">审核操作</label>{{ review_form.action }}{{ review_form.action.errors }}</div><div class="field"><label for="id_reason">审核依据</label>{{ review_form.reason }}{{ review_form.reason.errors }}</div><button class="primary-button" type="submit">记录审核决定</button></form></section>{% endif %}
+  <section class="panel"><h2>评价修订历史</h2><ol class="history-list">{% for item in history %}<li><h3>修订 {{ item.revision.header.revision_no }} · {{ item.revision.header.recorded_at }}</h3><p>{{ item.revision.header.change_reason }} · 实际审核：{{ item.state_label }}{% if item.published %} · 当前发布{% endif %}</p><p>作答版本：{{ item.revision.attempt_revision_id }}</p><ul class="dimension-summary">{% for dimension in item.dimension_labels %}<li>{{ dimension.dimension }}：{{ dimension.judgment }} · {{ dimension.basis }}</li>{% endfor %}</ul></li>{% endfor %}</ol></section>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

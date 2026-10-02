@@ -78,4 +78,6 @@ PDF 保留 A4、原边距、字号、重点颜色、表格表头、地图尺寸�
 
 主代理查看全部 29 页预览，并放大核对五处非零正文图像差异：24 页正文像素完全相同，5 页因富文本 run 规范化有局部字距／位置差异，数学符号及文字内容保留，无裁切、遮挡或意外换页。页脚因新增状态／版本标记单独处理。62 个公式结构及数学内容已人工核对；8 道复测题独立重算、220 个有限取值恒等式检查及新定义 G 的迭代样例通过，这些检查不等同自动证明系统或孩子掌握评价。
 
-当前无 LibreOffice／Office，未在独立办公软件中重排 Word，因此不宣称 Word 实际页数及打印布局通过；以已核验的 PDF 为本轮打印依据。B1 人工上传及审核页面已另行验证，见[人工 Web 契约](manual-web-contract.md)；Web 打印用途选择、数据库修订绑定、原图隐藏提示和完整恢复仍待 B2／D1 验收。
+A2 当时尚未运行办公软件。2026-10-03 主代理另用隔离的 LibreOffice 7.4.7.2 Writer＋Math 验收五份 Word：8／12／5／2／2 页，共 29 页；原生分式 canary、字界及逐页目视均通过，原文件未改写。私有报告为 `artifacts/word-verification/59d1c17391f64dbfbdef946983b178b7/verification.local.json`。Microsoft Word 尚未实测，接收端字体替代仍可影响分页。Web 打印、数据库修订及用途隔离见[业务契约](business-web-contract.md)，联合恢复见[容器说明](container-deployment.md)。
+
+可复验环境由 [Dockerfile.word-verifier](../Dockerfile.word-verifier) 构建，仅用于离线重排，不进入服务镜像。运行 [verify_word_layout.py](../scripts/verify_word_layout.py) 时显式提供镜像标签、所有者和 A2 来源报告；网络关闭、输入只读、输出使用新私有目录。Writer 的 Math 组件必须安装：验收曾发现缺失时 OMML 被静默留空，已用原生分式 canary 阻止此类误通过。工具不自动批准目视检查，报告先标 pending。

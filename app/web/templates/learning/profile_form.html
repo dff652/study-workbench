@@ -1,0 +1,15 @@
+{% extends "web/base.html" %}
+{% block title %}新建档案 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'learning:index' %}">学习档案</a><span aria-hidden="true">/</span><span>新建</span></nav>
+  <h1>新建学习者档案</h1>
+  <p class="muted">使用家长设置的称呼即可；档案身份创建后保持稳定。</p>
+  <form method="post" class="panel stack-form">
+    {% csrf_token %}{{ form.request_key }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="field"><label for="id_household_id">家庭</label>{{ form.household_id }}{{ form.household_id.errors }}</div>
+    <div class="field"><label for="id_display_name">学习者称呼</label>{{ form.display_name }}{{ form.display_name.errors }}</div>
+    <div class="field"><label for="id_grade">年级（可选）</label>{{ form.grade }}{{ form.grade.errors }}</div>
+    <div class="form-actions"><button class="primary-button" type="submit">创建档案</button><a class="secondary-button link-button" href="{% url 'learning:index' %}">取消</a></div>
+  </form>
+{% endblock %}

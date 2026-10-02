@@ -1,0 +1,6 @@
+{% extends "web/base.html" %}
+{% block title %}选择家庭 · 题目拆分与合题{% endblock %}
+{% block content %}<section class="panel"><h1>选择家庭</h1>
+  {% if households %}<ul class="simple-list">{% for row in households %}<li><a href="{% url 'catalogue:merge' %}?household_id={{ row.household_id }}">{{ row.household.id }}</a></li>{% endfor %}</ul>
+  {% else %}<p>当前账号尚未加入家庭，无法维护题目。</p>{% endif %}
+</section>{% endblock %}

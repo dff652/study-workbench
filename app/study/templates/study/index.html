@@ -1,0 +1,19 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}复习安排与证据报告{% endblock %}
+{% block content %}
+  <div class="page-heading"><div><p class="eyebrow">学习跟踪</p><h1>复习安排与证据报告</h1><p class="muted">计划固定到当前已发布题目版本；复习完成和学习掌握分别呈现。</p></div></div>
+  {% if households %}<form method="get" class="study-household"><label for="id_household">家庭</label><select id="id_household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}"{% if household_id == member.household_id %} selected{% endif %}>{{ member.household.id }}</option>{% endfor %}</select></form>{% endif %}
+  {% if not household_id %}<section class="panel"><p>还没有可访问的家庭。</p></section>{% else %}
+    <section class="panel"><h2>学习者</h2>
+      {% if profile_links %}<ul class="study-profile-list">{% for row in profile_links %}<li><div><strong>{{ row.profile.display_name }}</strong><span>{{ row.profile.grade|default:"年级未填写" }}</span></div><div class="button-row"><a class="secondary-button" href="{{ row.report_url }}">查看证据报告</a>{% if writable %}<a class="primary-button" href="{{ row.schedule_new_url }}">安排复习</a>{% endif %}</div></li>{% endfor %}</ul>{% else %}<p class="muted">此家庭还没有学习者档案。请先在<a href="/learning/">学习档案</a>中建立。</p>{% endif %}
+    </section>
+    <section class="panel"><h2>复习计划</h2>
+      {% if schedules %}<ul class="study-plan-list">{% for row in schedules %}<li><a href="{{ row.detail_url }}"><strong>{{ row.learner.display_name|default:"学习者档案不可用" }} · {{ row.target_question.printed_text|default:row.target_question.working_text|default:"题干待补"|truncatechars:90 }}</strong></a><span>计划日期：{{ row.latest.due_date }} · {{ row.latest.get_action_display }}</span><span>目标：{{ row.latest.goal }}</span>{% if row.target_stale %}<p class="study-stale">计划仍指向题目修订 {{ row.target_question_revision_id }}；当前发布版本已变化。</p>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="muted">当前没有复习计划。</p>{% endif %}
+    </section>
+    <section class="panel"><h2>已生成的变式</h2><p class="muted">变式以 AI 草稿显示。父题原图只代表生成依据，不表示新题出现在原图中；审核状态读取实际审核投影。</p>
+      {% if variants %}<ul class="study-variant-list">{% for row in variants %}<li><a href="{{ row.question_url }}"><strong>{{ row.generated_text }}</strong></a><span>父题版本：{{ row.provenance.parent_question_revision_id }} · {{ row.parent_text }}</span><span>目标方法：{{ row.provenance.target_method_revision_id }} · {{ row.method_name }}</span><span>运行 ID：{{ row.provenance.run_id }} · 审核：{{ row.review_state }}{% if row.current %} · 当前已发布{% else %} · 尚未发布为当前版本{% endif %}</span><span>来源修订：{{ row.provenance.source_revision_ids|join:", " }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">暂无已生成变式。</p>{% endif %}
+    </section>
+  {% endif %}
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'study/study.css' %}">{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{{ profile.display_name }} · 学习档案{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'learning:index' %}?household={{ household_id|urlencode }}">学习档案</a><span aria-hidden="true">/</span><span>{{ profile.display_name }}</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">学习者档案</p><h1>{{ profile.display_name }}</h1><p class="muted">{{ profile.grade|default:"年级未填写" }} · {{ profile.learner_id }}</p></div><div class="button-row"><a class="primary-button" href="{% url 'learning:attempt_new' profile.learner_id %}">新增作答</a><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">记录来源观察</a></div></div>
+  <section class="panel"><h2>筛选历史</h2><form method="get" class="learning-filter">
+    <div class="field"><label for="filter-from">实际日期从</label><input id="filter-from" type="date" name="from" value="{{ filters.from }}"></div>
+    <div class="field"><label for="filter-to">至</label><input id="filter-to" type="date" name="to" value="{{ filters.to }}"></div>
+    <div class="field"><label for="filter-question">题目</label><select id="filter-question" name="question"><option value="">全部</option>{% for item in question_options %}<option value="{{ item.question_id }}" {% if filters.question == item.question_id %}selected{% endif %}>{{ item.label|truncatechars:90 }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="filter-knowledge">知识点</label><select id="filter-knowledge" name="knowledge"><option value="">全部</option>{% for item in knowledge_options %}<option value="{{ item }}" {% if filters.knowledge == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="filter-type">题型</label><select id="filter-type" name="type"><option value="">全部</option>{% for item in type_options %}<option value="{{ item }}" {% if filters.type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="filter-review">评价审核状态</label><select id="filter-review" name="review"><option value="">全部</option>{% for item in review_options %}<option value="{{ item }}" {% if filters.review == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="filter-error">已有错误判断</label><select id="filter-error" name="error"><option value="">全部</option><option value="yes" {% if filters.error == "yes" %}selected{% endif %}>包含部分或错误判断</option></select></div>
+    <button class="secondary-button" type="submit">应用筛选</button><a class="quiet-button" href="{% url 'learning:profile_detail' profile.learner_id %}">清除</a>
+  </form></section>
+  <section class="panel"><h2>逐次作答与评价</h2>
+    {% if attempts %}<ol class="learning-attempt-list">{% for item in attempts %}<li class="attempt-card">
+      <div class="history-heading"><div><h3><a href="{{ item.detail_url }}">{{ item.question_label }}</a></h3><p class="muted">{{ item.revision.actual_date|default:"实际日期未知" }} · {{ item.attempt_kind_label }} · {{ item.source_kind_label }}</p></div>
+        {% if item.independent_success %}<span class="status-badge status-accepted">有已审核的独立成功证据</span>{% else %}<span class="status-badge">证据不足，暂不判断掌握</span>{% endif %}
+      </div>
+      <p>独立性：{{ item.independence_label }} · 提示：{{ item.prompt_status_label }} · 可读性：{{ item.legibility_label }}</p>
+      {% if item.revision.answer_text %}<p><strong>答案记录：</strong>{{ item.revision.answer_text }}</p>{% endif %}
+      <p>已记录 {{ item.assessments|length }} 条评价版本。评价不会覆盖其他作答。</p>
+      {% for assessment in item.assessments %}<p class="small-text"><a href="{% url 'learning:assessment_detail' assessment.assessment.assessment_id %}">评价 {{ assessment.revision.header.revision_no }}</a> · 实际审核：{{ assessment.state_label }}{% if assessment.current and assessment.published %} · 当前已发布{% endif %}</p>{% for dimension in assessment.dimension_labels %}<span class="small-text">{{ dimension.dimension }}：{{ dimension.judgment }}／{{ dimension.basis }}{% if not forloop.last %}；{% endif %}</span>{% endfor %}{% endfor %}
+      {% if item.knowledge_labels %}<p class="muted small-text">知识：{{ item.knowledge_labels|join:"、" }}</p>{% endif %}{% if item.type_labels %}<p class="muted small-text">题型：{{ item.type_labels|join:"、" }}</p>{% endif %}
+    </li>{% endfor %}</ol>{% else %}<p class="muted">没有符合筛选条件的作答记录。未知观察仍可在下方回看。</p>{% endif %}
+  </section>
+  <section class="panel"><h2>来源观察</h2>{% if observations %}<ol class="history-list">{% for item in observations %}<li><h3><a href="{% url 'learning:observation_detail' item.observation.observation_id %}">来源观察 {{ item.observation.observation_id }}</a></h3><p>{{ item.revision.actual_date|default:"实际发生日期未知" }} · 作者 {% if item.revision.author_state.value == "confirmed" %}{{ item.revision.author_learner_id }} 已确认{% else %}未知{% endif %} · {{ item.revision.legibility.value }}</p><p>{{ item.revision.notes }}</p>{% if item.sources %}<div class="history-source-grid">{% for source in item.sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% endif %}</li>{% endfor %}</ol>{% else %}<p class="muted">暂无来源观察。</p>{% endif %}</section>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

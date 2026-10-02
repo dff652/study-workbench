@@ -16,7 +16,8 @@
 body { margin: 0; color: var(--ink); background: var(--background); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--accent); text-underline-offset: .16em; }
 a:hover { color: var(--accent-dark); }
-button, input, select, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; max-width: 100%; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
 button, .link-button { min-height: 42px; }
 button { cursor: pointer; }
 :focus-visible { outline: 3px solid #d28a18; outline-offset: 2px; }
@@ -24,7 +25,10 @@ button { cursor: pointer; }
 .site-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 58px; padding: .6rem max(1rem, calc((100% - 1120px) / 2)); background: #153a50; color: #fff; }
 .brand { color: #fff; font-weight: 700; text-decoration: none; }
 .logout-form { margin: 0; }
-.page-shell { width: min(100% - 2rem, 1120px); margin: 1.5rem auto 3rem; }
+.page-shell { width: min(100% - 2rem, 1120px); margin: 1.5rem auto 3rem; overflow-wrap: anywhere; }
+.page-shell > form p { display: grid; grid-template-columns: minmax(0, 1fr); gap: .4rem; min-width: 0; }
+.page-shell > form select { width: 100%; min-width: 0; }
+.page-shell > form textarea { width: 100%; }
 .site-footer { padding: 1rem; color: var(--muted); text-align: center; font-size: .875rem; }
 .page-heading, .section-heading, .history-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 .page-heading { margin: 0 0 1rem; }

@@ -1,0 +1,41 @@
+{% extends "web/base.html" %}
+{% block title %}模型配置与草稿任务 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>模型草稿</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">明确选择 · 人工复核</p><h1>模型配置与任务</h1><p class="muted">模型输出只作为待复核草稿。只有当前家庭已发布来源和主动选择的图像区域会进入任务。</p></div></div>
+  {% if households %}
+    <section class="panel">
+      <form method="get" class="inline-form">
+        <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>{{ member.household_id }}</option>{% endfor %}</select></div>
+        <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>
+      </form>
+    </section>
+    {% if household_id %}
+      <section class="panel">
+        <h2>当前配置</h2>
+        {% if config %}
+          <p><strong>{{ config.provider_label }}</strong> · {{ config.model }} · {% if config.cloud_enabled %}已启用{% else %}未启用{% endif %}</p>
+          <p class="muted">外发范围：{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}；预算上限：{{ config.batch_budget }} USD。密钥只从服务端环境变量读取。</p>
+        {% else %}<p class="muted">尚未配置模型服务。默认状态下不会调用远程模型。</p>{% endif %}
+        {% if can_configure %}<a class="secondary-button" href="{% url 'ai:config' household_id=household_id %}">{% if config %}追加配置版本{% else %}配置模型服务{% endif %}</a>{% endif %}
+      </section>
+      {% if writable and config and config.cloud_enabled %}
+        <section class="panel">
+          <h2>新建待复核任务</h2>
+          <p class="muted">任务只会排队；需要后台 worker 执行。题目识别仅接受已选区域，作答评价仅使用指定作答。</p>
+          <ul class="material-list">
+            <li><a href="{% url 'ai:run_new' household_id=household_id task_kind='question' %}">题干识别草稿</a></li>
+            <li><a href="{% url 'ai:run_new' household_id=household_id task_kind='knowledge' %}">知识草稿</a></li>
+            <li><a href="{% url 'ai:run_new' household_id=household_id task_kind='assessment' %}">作答评价草稿</a></li>
+            <li><a href="{% url 'ai:run_new' household_id=household_id task_kind='variant' %}">变式题草稿</a></li>
+          </ul>
+        </section>
+      {% elif not writable %}<p class="notice">当前家庭为只读成员，不能创建、执行或应用模型任务。</p>{% endif %}
+      <section class="panel">
+        <h2>最近任务</h2>
+        {% if runs %}<ul class="history-list">{% for item in runs %}<li><a href="{% url 'ai:run_detail' run_id=item.pk %}"><strong>{{ item.task_label }}</strong> · {{ item.status_label }}</a><span class="muted">{{ item.created_at|date:"Y-m-d H:i" }}{% if item.error_code %} · {{ item.error_code }}{% endif %}</span></li>{% endfor %}</ul>
+        {% else %}<p class="muted">当前家庭还没有模型任务。</p>{% endif %}
+      </section>
+    {% endif %}
+  {% else %}<section class="panel"><p>当前账号尚未加入可访问的家庭。</p></section>{% endif %}
+{% endblock %}

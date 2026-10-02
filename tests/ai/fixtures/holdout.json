@@ -1,0 +1,88 @@
+{
+  "fixture_schema_version": "study-workbench.ai-baseline-fixture.v1",
+  "split": "holdout",
+  "synthetic_only": true,
+  "examples": [
+    {
+      "case_id": "holdout-question-blank-unknown-author",
+      "source_page_id": "synthetic-page-holdout-q-101",
+      "task": "question",
+      "source_revision_ids": ["synthetic-holdout-q-rev-101", "synthetic-holdout-region-rev-101"],
+      "region_revision_ids": ["synthetic-holdout-region-rev-101"],
+      "case_tags": ["blank", "unknown_author"],
+      "source_excerpt": "纯虚构题目页：印刷题干区域为空白，作者与来源标注均不存在。",
+      "source_unknowns": {"printed_text": "blank", "author": "unknown", "origin": "unknown"},
+      "expected_unknowns": {"printed_text_is_null": true, "missing_fields": ["题干空白", "作者来源不明"]},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "question",
+        "source_revision_ids": ["synthetic-holdout-q-rev-101", "synthetic-holdout-region-rev-101"],
+        "proposal": {"printed_text": null, "missing_fields": ["题干空白", "作者来源不明"], "classification_suggestion": null, "analysis_suggestion": null},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "holdout-knowledge-classroom-note-unknown-condition",
+      "source_page_id": "synthetic-page-holdout-k-101",
+      "task": "knowledge",
+      "source_revision_ids": ["synthetic-holdout-q-rev-102"],
+      "region_revision_ids": [],
+      "case_tags": ["classroom_notes", "incomplete_source"],
+      "source_excerpt": "纯虚构课堂笔记：例题标题存在，关键条件行被留空；笔记没有给出适用范围。",
+      "source_unknowns": {"conditions": "unknown", "scope": "missing"},
+      "expected_unknowns": {"conditions_empty": true, "definition_contains": "课堂笔记未说明适用条件，暂无法确定"},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "knowledge",
+        "source_revision_ids": ["synthetic-holdout-q-rev-102"],
+        "proposal": {"definition": "课堂笔记未说明适用条件，暂无法确定定义范围。", "conditions": [], "common_errors": []},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "holdout-assessment-readable-prompted-completion",
+      "source_page_id": "synthetic-page-holdout-a-101",
+      "task": "assessment",
+      "source_revision_ids": ["synthetic-holdout-q-rev-103", "synthetic-holdout-attempt-rev-101", "synthetic-holdout-region-rev-102"],
+      "region_revision_ids": ["synthetic-holdout-region-rev-102"],
+      "attempt_legibility": "readable",
+      "prompt_after_attempt": true,
+      "case_tags": ["prompted_after_completion", "independence_unknown"],
+      "source_excerpt": "纯虚构作答顺序：学生先留空，收到提示后补写“8”；该顺序不能证明初次独立作答。",
+      "source_unknowns": {"independence": "unknown", "initial_answer": "blank"},
+      "expected_unknowns": {"dimensions": ["answer", "method", "process", "calculation", "notation"], "judgment": "unknown", "basis": "undetermined"},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "assessment",
+        "source_revision_ids": ["synthetic-holdout-q-rev-103", "synthetic-holdout-attempt-rev-101", "synthetic-holdout-region-rev-102"],
+        "proposal": {"dimensions": [
+          {"dimension": "answer", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成顺序记录显示答案是在提示后补写。", "unknown_reason": "提示后完成不构成独立作答证据。"},
+          {"dimension": "method", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成来源未证明提示前的方法。", "unknown_reason": "独立方法过程未知。"},
+          {"dimension": "process", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "没有提示前的合成过程证据。", "unknown_reason": "独立过程未知。"},
+          {"dimension": "calculation", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "提示后的答案不能反推先前计算。", "unknown_reason": "独立计算未知。"},
+          {"dimension": "notation", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "提示后的书写不能证明初次表达。", "unknown_reason": "独立符号表达未知。"}
+        ]},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "holdout-variant-method-condition-unrecorded",
+      "source_page_id": "synthetic-page-holdout-v-101",
+      "task": "variant",
+      "source_revision_ids": ["synthetic-holdout-q-rev-104", "synthetic-holdout-method-rev-101"],
+      "region_revision_ids": [],
+      "case_tags": ["classroom_notes", "incomplete_source"],
+      "source_excerpt": "纯虚构课堂笔记中的变式记录：原方法只保留名称，前提条件和完整步骤都未记载。",
+      "source_unknowns": {"method_conditions": "unknown", "method_steps": "incomplete"},
+      "expected_unknowns": {"manual_review_fields": ["method_conditions", "method_steps"]},
+      "manual_review_note": "方法前提和步骤不完整；结构探针不代表模型质量或答案通过验证。",
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "variant",
+        "source_revision_ids": ["synthetic-holdout-q-rev-104", "synthetic-holdout-method-rev-101"],
+        "proposal": {"text": "合成变式：9 - 4 = ?", "answer_expression": "9 - 4", "check_expression": "5", "target_method_revision_id": "synthetic-holdout-method-rev-101"},
+        "tool_calls": []
+      }
+    }
+  ]
+}

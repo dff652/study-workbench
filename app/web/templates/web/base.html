@@ -16,6 +16,9 @@
       </form>
     {% endif %}
   </header>
+  {% if request.user.is_authenticated %}<nav class="page-shell" aria-label="工作台导航">
+    <a href="/">资料</a> · <a href="/knowledge/">知识与题库</a> · <a href="/catalogue/">拆分与合题</a> · <a href="/learning/">学习档案</a> · <a href="/prints/">打印</a> · <a href="/ai/">模型配置与任务</a> · <a href="/study/">复习与报告</a> · <a href="/operations/">保留规则与用时</a>
+  </nav>{% endif %}
   <main class="page-shell">
     {% block content %}{% endblock %}
   </main>

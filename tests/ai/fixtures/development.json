@@ -1,0 +1,88 @@
+{
+  "fixture_schema_version": "study-workbench.ai-baseline-fixture.v1",
+  "split": "development",
+  "synthetic_only": true,
+  "examples": [
+    {
+      "case_id": "dev-question-unreadable-unknown-author",
+      "source_page_id": "synthetic-page-dev-q-001",
+      "task": "question",
+      "source_revision_ids": ["synthetic-dev-q-rev-001", "synthetic-dev-region-rev-001"],
+      "region_revision_ids": ["synthetic-dev-region-rev-001"],
+      "case_tags": ["unreadable", "unknown_author"],
+      "source_excerpt": "纯虚构练习页：□□ + 2 = 5。字迹占位符表示不可辨认；作者标注为未知。",
+      "source_unknowns": {"printed_text": "unreadable", "author": "unknown"},
+      "expected_unknowns": {"printed_text_is_null": true, "missing_fields": ["题干部分不可辨", "作者来源不明"]},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "question",
+        "source_revision_ids": ["synthetic-dev-q-rev-001", "synthetic-dev-region-rev-001"],
+        "proposal": {"printed_text": null, "missing_fields": ["题干部分不可辨", "作者来源不明"], "classification_suggestion": null, "analysis_suggestion": null},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "dev-knowledge-classroom-notes-incomplete",
+      "source_page_id": "synthetic-page-dev-k-001",
+      "task": "knowledge",
+      "source_revision_ids": ["synthetic-dev-q-rev-002"],
+      "region_revision_ids": [],
+      "case_tags": ["classroom_notes", "incomplete_source"],
+      "source_excerpt": "纯虚构课堂笔记：先看方框中的符号，再按课上例子处理。适用条件没有记录。",
+      "source_unknowns": {"conditions": "unknown", "example_reference": "missing"},
+      "expected_unknowns": {"conditions_empty": true, "definition_contains": "暂无法从合成课堂笔记确认"},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "knowledge",
+        "source_revision_ids": ["synthetic-dev-q-rev-002"],
+        "proposal": {"definition": "暂无法从合成课堂笔记确认完整定义。", "conditions": [], "common_errors": []},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "dev-assessment-unreadable-prompted-completion",
+      "source_page_id": "synthetic-page-dev-a-001",
+      "task": "assessment",
+      "source_revision_ids": ["synthetic-dev-q-rev-003", "synthetic-dev-attempt-rev-001", "synthetic-dev-region-rev-002"],
+      "region_revision_ids": ["synthetic-dev-region-rev-002"],
+      "attempt_legibility": "unreadable",
+      "prompt_after_attempt": true,
+      "case_tags": ["unreadable", "prompted_after_completion", "unknown_author"],
+      "source_excerpt": "纯虚构作答记录：原答案无法辨认；另有一条“提示后完成”的合成记录。不能据此判定独立完成。",
+      "source_unknowns": {"answer": "unreadable", "independence": "unknown", "author": "unknown"},
+      "expected_unknowns": {"dimensions": ["answer", "method", "process", "calculation", "notation"], "judgment": "unknown", "basis": "undetermined"},
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "assessment",
+        "source_revision_ids": ["synthetic-dev-q-rev-003", "synthetic-dev-attempt-rev-001", "synthetic-dev-region-rev-002"],
+        "proposal": {"dimensions": [
+          {"dimension": "answer", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "仅有合成的不可辨作答与提示后记录。", "unknown_reason": "原答案不可辨，且提示后完成不能证明独立作答。"},
+          {"dimension": "method", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成记录未留下可辨的方法步骤。", "unknown_reason": "方法过程无法从来源确认。"},
+          {"dimension": "process", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成记录未留下可辨的解题过程。", "unknown_reason": "过程证据不足。"},
+          {"dimension": "calculation", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成计算痕迹不可辨。", "unknown_reason": "计算过程无法确认。"},
+          {"dimension": "notation", "judgment": "unknown", "basis": "undetermined", "source_region_revision_ids": [], "rationale": "合成符号痕迹不可辨。", "unknown_reason": "符号表达无法确认。"}
+        ]},
+        "tool_calls": []
+      }
+    },
+    {
+      "case_id": "dev-variant-classroom-method-unknowns",
+      "source_page_id": "synthetic-page-dev-v-001",
+      "task": "variant",
+      "source_revision_ids": ["synthetic-dev-q-rev-004", "synthetic-dev-method-rev-001"],
+      "region_revision_ids": [],
+      "case_tags": ["classroom_notes", "incomplete_source", "unknown_author"],
+      "source_excerpt": "纯虚构变式依据：课堂笔记只记下“按上课方法试做”，方法条件和记录者均未知。",
+      "source_unknowns": {"method_conditions": "unknown", "author": "unknown"},
+      "expected_unknowns": {"manual_review_fields": ["method_conditions", "author"]},
+      "manual_review_note": "方法条件与来源作者未知；本结构探针不判定变式内容正确，须人工核对。",
+      "contract_probe": {
+        "schema_version": "study-workbench.ai.v1",
+        "task": "variant",
+        "source_revision_ids": ["synthetic-dev-q-rev-004", "synthetic-dev-method-rev-001"],
+        "proposal": {"text": "合成变式：5 + 2 = ?", "answer_expression": "5 + 2", "check_expression": "7", "target_method_revision_id": "synthetic-dev-method-rev-001"},
+        "tool_calls": []
+      }
+    }
+  ]
+}

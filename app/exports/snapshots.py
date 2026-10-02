@@ -68,7 +68,7 @@ def verify_snapshot(directory):
     return manifest
 
 
-def export_document(document, output_root, fonts, font_manifest, *, asset_root=None):
+def export_document(document, output_root, fonts, font_manifest, *, asset_root=None, forbidden_export_ids=()):
     """An unchanged input reuses verified artifacts; corrupted outputs never overwrite."""
     from .renderer import render_document
     validate_document(document)
@@ -83,6 +83,8 @@ def export_document(document, output_root, fonts, font_manifest, *, asset_root=N
     source = json.loads(canonical(document_dict(document)))
     inputs = {"document": source, "runtime": runtime, "font_profile": font_manifest}
     export_id = digest(canonical(inputs))
+    if export_id in forbidden_export_ids:
+        raise ExportError("snapshot_retired", "此导出已退役，不能重新创建原快照；请调整内容或标题后另行导出。")
     root = private_directory(output_root)
     destination = root / f"{document.document_id}-{export_id[:24]}"
     lock_fd = os.open(root / ".export.lock", os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)

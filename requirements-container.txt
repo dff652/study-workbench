@@ -1,0 +1,3 @@
+# PyPI release metadata checked 2026-10-03; see docs/container-deployment.md.
+gunicorn==26.2.0
+whitenoise==6.12.0

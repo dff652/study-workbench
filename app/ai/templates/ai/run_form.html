@@ -1,0 +1,15 @@
+{% extends "web/base.html" %}
+{% block title %}{{ task_title }} · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ context.household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><span>{{ task_title }}</span></nav>
+  <section class="panel narrow-panel">
+    <p class="eyebrow">只使用以下明确选择的版本</p><h1>{{ task_title }}</h1>
+    <p class="muted">提交只会建立排队任务，不会立即访问模型服务。创建后需由受控后台 worker 执行。</p>
+    <form method="post" action="{% url 'ai:run_create' household_id=context.household_id task_kind=context.task_kind %}" class="stack-form">
+      {% csrf_token %}{{ form.task_kind }}{{ form.selection_token }}{{ form.request_key }}
+      {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.name == "selected_region_revision_ids" %}<span class="help-text">图像仅发送此处主动选择的区域；区域使用原图坐标裁切。</span>{% endif %}{% if field.name == "include_attempt_text" %}<span class="help-text">默认不发送手工录入答案文本。笔迹图片需在上方单独选择。</span>{% endif %}</div>{% endfor %}
+      <div class="button-row"><button class="primary-button" type="submit">排队生成待复核草稿</button><a class="quiet-button" href="{% url 'ai:index' %}?household={{ context.household_id|urlencode }}">取消</a></div>
+    </form>
+  </section>
+{% endblock %}

@@ -1,0 +1,7 @@
+<figure class="history-source">
+  {% if source.missing %}<span class="history-image-placeholder">{{ source.label }}</span>
+  {% else %}<a class="history-image-link" href="{{ source.page_url }}" aria-label="在资料页中查看原图来源">
+    <span class="history-image-wrap"><img src="{{ source.preview_url }}" alt="原图 {{ source.label }}">{% if source.region_style %}<span class="history-region-box" style="{{ source.region_style }}"></span>{% endif %}</span>
+  </a>{% endif %}
+  <figcaption><span>{{ source.label }}</span><span>{% if source.ref.region_id %}区域 {{ source.ref.region_id }}{% else %}整张原图{% endif %} · {{ source.purpose|default:source.ref.purpose.value }}</span>{% if source.ref.gaps %}<span>缺口：{{ source.ref.gaps|join:", " }}</span>{% endif %}</figcaption>
+</figure>

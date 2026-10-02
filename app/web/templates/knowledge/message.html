@@ -1,0 +1,6 @@
+{% extends "web/base.html" %}
+{% block title %}{{ title }} · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}">知识库与题目地图</a><span aria-hidden="true">/</span><span>{{ title }}</span></nav>
+  <section class="panel notice-panel"><h1>{{ title }}</h1><p role="alert">{{ message }}</p><p><a class="secondary-button link-button" href="{% url 'knowledge:index' %}">返回知识地图</a></p></section>
+{% endblock %}

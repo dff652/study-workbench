@@ -1,0 +1,8 @@
+{% for item in tree %}
+  <li class="method-tree-item {% if not item.current %}historical-method{% endif %}">
+    <a href="{% url 'knowledge:node_detail' entity_id=item.row.entity.pk %}#revision-{{ item.row.pk|urlencode }}">{{ item.row.payload.name }}</a>
+    <span class="muted">r{{ item.row.revision_no }} · {% if item.current %}当前修订{% else %}上级所引用的历史修订{% endif %}</span>
+    {% if item.parent_outdated %}<span class="status-badge warning">上级已有新修订</span>{% endif %}
+    {% if item.children %}<ul>{% include "knowledge/_method_tree.html" with tree=item.children only %}</ul>{% endif %}
+  </li>
+{% endfor %}

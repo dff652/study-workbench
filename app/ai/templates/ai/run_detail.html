@@ -1,0 +1,27 @@
+{% extends "web/base.html" %}
+{% block title %}模型任务 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><span>{{ task_label }}</span></nav>
+  <section class="panel">
+    <p class="eyebrow">待人工复核</p><h1>{{ task_label }}</h1>
+    <p><strong>状态：</strong>{{ run_status }}</p>
+    {% if run.error_code %}<p class="notice">任务状态码：{{ run.error_code }}</p>{% endif %}
+    <p class="muted">创建时间：{{ run.created_at|date:"Y-m-d H:i:s" }} · 配置版本：{{ config.revision_no }} · 输出版本：{{ run.schema_version }}</p>
+    {% if run.usage %}<p class="muted">已记录用量：输入 {{ run.usage.prompt_tokens }} token，输出 {{ run.usage.completion_tokens }} token；费用估算 {{ run.estimated_cost|default:"待确认" }} USD。</p>{% endif %}
+    {% if proposal %}<h2>模型建议（未经接受）</h2>
+      {% if run.task_kind == "question" %}<dl><dt>识别题干</dt><dd>{{ proposal.printed_text|default:"未识别" }}</dd><dt>待补内容</dt><dd>{% for item in proposal.missing_fields %}{{ item }}{% if not forloop.last %}、{% endif %}{% empty %}无{% endfor %}</dd><dt>分类建议</dt><dd>{{ proposal.classification_suggestion|default:"未提供" }}</dd><dt>解析建议</dt><dd>{{ proposal.analysis_suggestion|default:"未提供" }}</dd></dl>
+      {% elif run.task_kind == "knowledge" %}<dl><dt>定义</dt><dd>{{ proposal.definition }}</dd><dt>条件</dt><dd>{% for item in proposal.conditions %}<p>{{ item }}</p>{% empty %}未提供{% endfor %}</dd><dt>常见错误</dt><dd>{% for item in proposal.common_errors %}<p>{{ item }}</p>{% empty %}未提供{% endfor %}</dd></dl>
+      {% elif run.task_kind == "assessment" %}<ul class="history-list">{% for item in proposal.dimensions %}<li><strong>{{ item.dimension }}</strong> · {{ item.judgment }} · {{ item.basis }}<p>{{ item.rationale }}</p>{% if item.unknown_reason %}<p class="muted">未知原因：{{ item.unknown_reason }}</p>{% endif %}</li>{% endfor %}</ul>
+      {% elif run.task_kind == "variant" %}<dl><dt>变式题干</dt><dd>{{ proposal.text }}</dd><dt>答案表达式</dt><dd><code>{{ proposal.answer_expression }}</code></dd><dt>检验表达式</dt><dd><code>{{ proposal.check_expression }}</code></dd></dl>{% endif %}
+      <p class="notice">此建议尚未被接受或发布。应用后也只创建草稿，仍须人工复核。</p>
+    {% elif run.status == "queued" %}<p class="muted">此任务正在等待后台 worker。</p>
+    {% elif run.status == "running" %}<p class="muted">任务正在处理。离开页面不会取消任务。</p>
+    {% endif %}
+    {% if output_links %}<h2>已生成的待复核内容</h2><ul class="material-list">{% for item in output_links %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}</ul>{% endif %}
+    {% if writable %}<div class="button-row">
+      {% if can_execute %}<form method="post" action="{% url 'ai:run_execute' run_id=run.pk %}">{% csrf_token %}<button class="secondary-button" type="submit">请求后台执行</button></form>{% endif %}
+      {% if can_apply %}<form method="post" action="{% url 'ai:run_apply' run_id=run.pk %}">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><button class="primary-button" type="submit">应用为待复核草稿</button></form>{% endif %}
+      {% if can_cancel %}<form method="post" action="{% url 'ai:run_cancel' run_id=run.pk %}">{% csrf_token %}<button class="quiet-button" type="submit">取消任务</button></form>{% endif %}
+    </div>{% endif %}
+  </section>
+{% endblock %}

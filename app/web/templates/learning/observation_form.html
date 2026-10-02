@@ -1,0 +1,29 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{{ page_title }} · 学习档案{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'learning:index' %}">学习档案</a><span aria-hidden="true">/</span><span>{{ page_title }}</span></nav>
+  <h1>{{ page_title }}</h1>
+  <p class="muted">观察可以先独立保存，不会自动成为作答。空白、看不清、作者不明和日期未知都按原样记录。</p>
+  <form method="post" class="question-form" id="learning-observation-form">
+    {% csrf_token %}{{ form.request_key }}{{ form.household_id }}{{ form.context_token }}{{ form.sources }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <section class="panel">
+      <h2>观察信息</h2>
+      <div class="field"><label for="id_profile_context_id">档案上下文</label>{{ form.profile_context_id }}{{ form.profile_context_id.errors }}<span class="help-text">将观察放在档案下便于回看；这不表示确认作者。</span></div>
+      <div class="field"><label for="id_legibility">可读性</label>{{ form.legibility }}{{ form.legibility.errors }}</div>
+      <div class="field"><label for="id_author_state">笔迹作者</label>{{ form.author_state }}{{ form.author_state.errors }}</div>
+      <div class="field"><label for="id_author_learner_id">确认的学习者</label>{{ form.author_learner_id }}{{ form.author_learner_id.errors }}</div>
+      <div class="field"><label for="id_confirmation_basis">作者确认依据</label>{{ form.confirmation_basis }}{{ form.confirmation_basis.errors }}<span class="help-text">作者未知时，这些字段会保持空白。</span></div>
+      <div class="field"><label for="id_actual_date_state">实际发生日期</label>{{ form.actual_date_state }}{{ form.actual_date_state.errors }}</div>
+      <div class="field"><label for="id_actual_date">已确认日期</label>{{ form.actual_date }}{{ form.actual_date.errors }}<span class="help-text">录入时间和上传时间不能替代实际发生日期。</span></div>
+      <div class="field"><label for="id_notes">观察说明／证据缺口</label>{{ form.notes }}{{ form.notes.errors }}</div>
+    </section>
+    {% if is_edit and existing_sources %}<section class="panel"><h2>当前修订引用的来源</h2><p class="muted">不选新区域会保留这些引用。选了新区域时，新修订使用新选区；历史版本仍保留旧区域。</p><div class="history-source-grid">{% for source in existing_sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div></section>{% endif %}
+    {% include "learning/_region_picker.html" with page_cards=page_cards storage_key=storage_key is_edit=is_edit form=form %}
+    {% if is_edit %}<section class="panel"><div class="field">{{ form.clear_sources }}<label for="id_clear_sources">{{ form.clear_sources.label }}</label>{{ form.clear_sources.errors }}<span class="help-text">仅勾选后才会清除此修订的来源区域，旧版本仍可回看。</span></div></section>{% endif %}
+    <section class="panel"><div class="field"><label for="id_reason">修订说明</label>{{ form.reason }}{{ form.reason.errors }}</div></section>
+    <div class="form-actions"><button class="primary-button" type="submit">{{ submit_label }}</button>{% if observation_url %}<a class="secondary-button link-button" href="{{ observation_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'learning:index' %}?household={{ household_id|urlencode }}">取消</a>{% endif %}</div>
+  </form>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}"><script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

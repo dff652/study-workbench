@@ -30,8 +30,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--legacy-package", type=Path)
     parser.add_argument("--browser", action="store_true", help="Run synthetic phone browser acceptance on loopback")
+    parser.add_argument("--business-browser", action="store_true", help="Run the knowledge, learning and print browser acceptance")
+    parser.add_argument("--skip-tests", action="store_true", help="Browser debugging only; does not constitute full acceptance")
     parser.add_argument("--data-root", type=Path)
     args = parser.parse_args()
+    if args.skip_tests and not (args.browser or args.business_browser):
+        parser.error("--skip-tests is restricted to a browser debugging run")
     if bool(args.legacy_package) != bool(args.data_root):
         parser.error("--legacy-package and --data-root must be supplied together")
     run(["docker", "image", "inspect", IMAGE], stdout=subprocess.DEVNULL)
@@ -76,12 +80,16 @@ def main():
             ["migrate", "--noinput"],
             ["test", "tests", "--noinput", "-v", "1"],
         ):
+            if command[0]=='test' and args.skip_tests:
+                continue
             run([sys.executable, "manage.py", *command], env=env)
-        if args.browser:
-            run([sys.executable, "scripts/verify_web.py", "--owner", owner], env=env)
         if args.legacy_package:
             run([sys.executable, "scripts/verify_legacy_import.py", "--package", str(args.legacy_package.resolve()),
                  "--data-root", str(args.data_root.resolve())], env=env)
+        if args.browser:
+            run([sys.executable, "scripts/verify_web.py", "--owner", owner], env=env)
+        if args.business_browser:
+            run([sys.executable, "scripts/verify_business.py", "--owner", owner], env=env)
     finally:
         # A failed docker run can still create a container. Verify the random
         # ownership label before removing either its ID or its unique name.

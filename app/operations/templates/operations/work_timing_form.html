@@ -1,0 +1,16 @@
+{% extends "web/base.html" %}
+{% block title %}记录题目处理用时 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="/">资料</a><span aria-hidden="true">/</span><span>记录题目处理用时</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 人工估计</p><h1>记录题目处理用时</h1><p class="muted">只记录明确说明的估计秒数，可精确关联题目版本和当前作答版本；不自动推算精确耗时。</p></div></div>
+  <section class="panel"><h2>新增记录</h2>
+    {% if not question_choices %}<div class="notice">当前家庭没有可选择的已发布题目版本。先审核发布题目，再记录用时。</div>{% endif %}
+    <form method="post" class="knowledge-form">{% csrf_token %}{{ form.request_key }}{{ form.context_token }}
+      {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<span class="help-text">{{ field.help_text }}</span>{% endif %}{{ field.errors }}</div>{% endfor %}
+      <div class="form-actions"><button type="submit" class="primary-button" {% if not question_choices %}disabled{% endif %}>追加估计记录</button><a class="secondary-button link-button" href="/">返回资料</a></div>
+    </form>
+  </section>
+  <section class="panel"><h2>最近记录</h2>{% if history %}<ol>{% for row in history %}<li><strong>{% firstof row.question_revision.payload.working_text row.question_revision.payload.printed_text "题干待补" %}</strong> · 题目版本 {{ row.question_revision.revision_no }} · {% if row.attempt_revision_id %}作答版本 {{ row.attempt_revision.revision_no }}{% else %}整体题目{% endif %} · {% if row.kind == "manual_entry" %}手工录入{% else %}模型结果人工修订{% endif %} · 估计 {{ row.seconds }} 秒<br><span class="muted">{{ row.reason }} · {{ row.recorded_at|date:"Y-m-d H:i" }}</span></li>{% endfor %}</ol>{% else %}<p class="muted">尚无耗时记录。</p>{% endif %}</section>
+  <section class="panel"><h2>解释记录类型</h2><ul><li>手工录入：记录者对人工处理用时的明确估计。</li><li>模型结果人工修订：记录者明确估计人工修订模型结果所用时间；后台模型运行耗时保存在独立模型任务记录中。</li></ul></section>
+{% endblock %}

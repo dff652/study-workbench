@@ -1,6 +1,6 @@
 # 组件与字体来源
 
-核对日期：2026-10-02（Asia/Shanghai）。版本及许可来自 `.venv` 已安装发行包元数据／许可文件及字体包版权文件；运行依赖固定在 [requirements.txt](../requirements.txt)。这份记录说明 A2 及 B1 验证使用的组件，不替代后续发布镜像的完整第三方清单。
+核对日期：2026-10-03（Asia/Shanghai）。版本及许可来自 `.venv` 已安装发行包元数据／许可文件及字体包版权文件；运行依赖固定在 [requirements.txt](../requirements.txt)。这份记录说明 A2 及 B1 验证使用的组件，不替代后续发布镜像的完整第三方清单。
 
 | 组件 | 当前版本 | 许可／用途 | 上游依据 |
 | --- | --- | --- | --- |
@@ -35,3 +35,10 @@ A1b 的 Django、psycopg 及既有依赖继续按原固定版本使用，本轮�
 字体输入、输出及许可文件 SHA 保存在 packet.json 的字体配置中；未修改系统文件，没有将字体二进制提交源码。许可文件来自已有系统包，本轮没有下载第三方字体。Word 使用 Noto Sans CJK SC 字体族声明，完整字体并未嵌入 Word。
 
 本机 Poppler 为 `24.02.0-1ubuntu9.9`，仅调用已有工具；没有把工具或系统包复制进项目。后续 D1 若分发镜像，需记录实际软件包和许可证、保留要求的声明，并确认字体／工具构建方式。候选应用的代码和图片均未复制，Smart Wrong Notebook 的授权未证实状态仍保留。
+
+
+## 容器与 Word 重排环境
+
+运行镜像另外固定 [Gunicorn 26.2.0](https://pypi.org/project/gunicorn/26.2.0/) 与 [WhiteNoise 6.12.0](https://pypi.org/project/whitenoise/6.12.0/)，两者发行元数据均为 MIT；安装包自带许可文件留在镜像 dist-info。容器 Debian Noto `1:20220127+repack1-1`／DejaVu `2.37-6` 与上列宿主包修订不同，构建时另复制实际包版权文件到 `/app/licenses/*-Debian-container.txt`，导出快照记录实际字体哈希。Python 基础镜像和 PostgreSQL 镜像固定 digest，完整实际包清单可由容器内 `dpkg-query -W`／`pip freeze` 复核；未发布镜像。
+
+可选 [Word 验收镜像](../Dockerfile.word-verifier) 固定 LibreOffice Writer＋[Math `4:7.4.7-1+deb12u14`](https://packages.debian.org/bookworm/libreoffice-math)、同版 Debian 字体及其系统版权文件，仅在网络关闭的验收容器中运行。没有向宿主机安装 LibreOffice，也不将其纳入 Web 服务镜像。它的包及传递依赖许可保留于镜像 `/usr/share/doc/*/copyright`，不把 LibreOffice 的结果等同于 Microsoft Word 兼容性。

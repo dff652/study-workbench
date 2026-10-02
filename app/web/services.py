@@ -223,10 +223,11 @@ def question_detail(actor,question_id):
     question=EntityRecord.objects.select_related('household','head_revision').get(kind='question',stable_id=question_id,household__memberships__user=actor,household__memberships__user__is_active=True)
     _household(actor,question.household_id)
     row=question.head_revision
-    metadata=QuestionSource.objects.select_related('material').get(revision=row)
-    return {'question':question,'material':metadata.material,'original_number':metadata.original_number,
+    metadata=QuestionSource.objects.select_related('material').filter(revision=row).first()
+    return {'question':question,'material':metadata.material if metadata else None,
+        'original_number':metadata.original_number if metadata else '派生题目',
         'current':row.payload,'history':list(question.revisions.select_related('review_projection').order_by('-revision_no')),
-        'sources':metadata.sources,'edit_context':_edit_context(row),
+        'sources':metadata.sources if metadata else [],'edit_context':_edit_context(row),
         'review_context':core.review_context(actor,question.household_id,row.pk)}
 
 
@@ -290,8 +291,12 @@ def save_question(actor,material_id,*,printed_text,original_number,sources,reque
         source.update(region_revision_id=region.header.revision_id,sequence=sequence)
         refs.append(EvidenceRef(material.household_id,page.image.stable_id,page.image.sha256,Granularity.REGION,
             region_id,region.header.revision_id,False,EvidencePurpose.QUESTION,sequence))
-    revision=seal_revision(QuestionRevision(_header(actor,question_id,reason,previous),ReviewState.DRAFT,None,
-        text or None,text or None,() if text else ('printed_text','working_text'),tuple(refs)))
+    parent_revision=previous.payload.get('parent_question_revision_id') if previous else None
+    unchanged_print=bool(previous and text==previous.payload.get('printed_text'))
+    working_text=previous.payload.get('working_text') if unchanged_print else (text or None)
+    erratum_ids=tuple(previous.payload.get('erratum_revision_ids',())) if unchanged_print else ()
+    revision=seal_revision(QuestionRevision(_header(actor,question_id,reason,previous),ReviewState.DRAFT,parent_revision,
+        text or None,working_text,() if text else ('printed_text','working_text'),tuple(refs),erratum_ids))
     questions=tuple(replace(q,revisions=(*q.revisions,revision)) if q.question_id==question_id else q for q in existing.questions)
     if previous is None: questions=(*questions,Question(question_id,material.household_id,None,(revision,)))
     bundle=replace(existing,regions=(*existing.regions,*regions),questions=questions)

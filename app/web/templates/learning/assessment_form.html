@@ -1,0 +1,25 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}五维作答评价 · 学习档案{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'learning:profile_detail' attempt.learner_id %}">学习档案</a><span aria-hidden="true">/</span><a href="{% url 'learning:attempt_detail' attempt.attempt_id %}">本次作答</a><span aria-hidden="true">/</span><span>{% if is_edit %}追加评价修订{% else %}新建评价{% endif %}</span></nav>
+  <h1>{% if is_edit %}追加评价修订{% else %}评价本次作答{% endif %}</h1>
+  <p class="notice">答案、方法、过程、计算和符号分别评价。每个维度单独记录观察依据或未知原因；答案正确不会自动推出过程正确或掌握。</p>
+  {% if source_cards %}<section class="panel"><h2>本次作答证据</h2><div class="history-source-grid">{% for source in source_cards %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div></section>{% endif %}
+  <form method="post" class="learning-assessment-form">
+    {% csrf_token %}{{ form.request_key }}{{ form.context_token }}
+    {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for dimension in dimensions %}<section class="panel dimension-panel">
+      <h2>{{ dimension.label }}维度</h2>
+      <div class="field"><label for="{{ dimension.judgment.id_for_label }}">判断</label>{{ dimension.judgment }}{{ dimension.judgment.errors }}</div>
+      <div class="field"><label for="{{ dimension.basis.id_for_label }}">依据类型</label>{{ dimension.basis }}{{ dimension.basis.errors }}</div>
+      <div class="field"><label>{{ dimension.evidence.label }}</label>{{ dimension.evidence }}{{ dimension.evidence.errors }}<span class="help-text">选取与本维度判断直接对应的已存原图区域。</span></div>
+      <div class="field"><label for="{{ dimension.rationale.id_for_label }}">判断依据</label>{{ dimension.rationale }}{{ dimension.rationale.errors }}</div>
+      <div class="field"><label for="{{ dimension.unknown_reason.id_for_label }}">未知原因</label>{{ dimension.unknown_reason }}{{ dimension.unknown_reason.errors }}</div>
+    </section>{% endfor %}
+    {% if errata_choices %}<section class="panel"><h2>讲义勘误背景</h2><p class="muted">只可引用已有且实际审核通过的勘误。讲义错误与学习者错误分别记录。</p>{{ form.context_errata }}{{ form.context_errata.errors }}</section>{% endif %}
+    <section class="panel"><div class="field"><label for="id_reason">评价说明</label>{{ form.reason }}{{ form.reason.errors }}</div></section>
+    <div class="form-actions"><button class="primary-button" type="submit">保存为待审核评价</button><a class="secondary-button link-button" href="{% url 'learning:attempt_detail' attempt.attempt_id %}">取消</a></div>
+  </form>
+{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

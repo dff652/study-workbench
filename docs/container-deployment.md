@@ -131,7 +131,7 @@ Do not use `down --volumes` unless permanent deletion of both PostgreSQL records
 
 ## 36 LAN test instance
 
-The authorized test runs on `192.168.2.36:18080` as Compose project `study-workbench-36`, with dedicated database/private volumes. This is LAN HTTP testing, not a public HTTPS deployment. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); the account is `parent`, and its password stays in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
+The authorized test runs on host 36 as Compose project `study-workbench-36`, with dedicated database/private volumes. Its exact LAN listener is recorded only in the ignored `data/runtime-36/deployment.local.json`. This is LAN HTTP testing, not a public HTTPS deployment. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); account details stay in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
 
 Use the existing configuration without displaying its contents:
 

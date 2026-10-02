@@ -6,13 +6,7 @@
 
 ## 1. 来源位置与校验
 
-本机历史工作目录：
-
-```text
-/home/dff652/.codex/visualizations/2026/10/01/01a0f74f-5274-7193-af32-9b89287fadf8
-```
-
-其下 `sources/` 保存 23 张照片，`documents/v2/` 与 `documents/v3/` 保存脚本、结构化内容和生成结果。v3 为当前重点标注版。
+本机历史工作目录由私有 `docs/source-inventory.local.json` 指定，不在公开文档中登记绝对路径。其下 `sources/` 保存 23 张照片，`documents/v2/` 与 `documents/v3/` 保存脚本、结构化内容和生成结果。v3 为当前重点标注版。
 
 本机另有 `docs/source-inventory.local.json`，记录完整来源路径、NAS 归档位置、文件大小和 SHA-256。它含个人资料路径，已加入 Git 忽略规则；克隆项目不会自动得到此文件，后续迁移需在本机提供或重新生成清单。清单记录版本和校验值，不代替文件备份。
 

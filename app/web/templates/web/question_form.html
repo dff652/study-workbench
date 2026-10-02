@@ -1,0 +1,47 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{{ page_title }} · {{ material.title }}{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><a href="{% url 'web:material_detail' material.id %}">{{ material.title }}</a><span aria-hidden="true">/</span><span>{{ page_title }}</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">人工整理</p><h1>{{ page_title }}</h1><p class="muted">原图、印刷题干与手写作答分开记录。</p></div></div>
+  <form method="post" class="question-form" id="question-form">
+    {% csrf_token %}{{ form.request_key }}{{ form.sources }}{{ form.context_token }}
+    <section class="panel">
+      <h2>题目内容</h2>
+      {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="field"><label for="id_original_number">原资料题号</label>{{ form.original_number }}{{ form.original_number.errors }}</div>
+      <div class="field"><label for="id_printed_text">印刷题干</label>{{ form.printed_text }}<span class="help-text">{{ form.printed_text.help_text }}</span>{{ form.printed_text.errors }}</div>
+      <div class="field"><label for="id_reason">修订说明</label>{{ form.reason }}<span class="help-text">创建时说明录入来源；修订时说明本次改动。</span>{{ form.reason.errors }}</div>
+    </section>
+    <section class="panel region-editor" data-material-id="{{ material.id }}" data-storage-key="swb-question-sources-{{ material.id }}" {% if is_edit %}data-edit="true"{% endif %}>
+      <div class="section-heading"><div><h2>原图与区域</h2><p class="muted">可从多页各框选一个或多个区域；拖动后选择“加入题目来源”。题目不自动推断答案或笔迹作者。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
+      {% if page_cards %}
+        <div class="source-page-grid">
+          {% for card in page_cards %}
+            {% if card.preview %}
+              <article class="region-card" data-page-id="{{ card.page_id }}" data-page-label="第 {{ card.position }} 页" data-rotation="{{ card.preview.rotation }}" data-preview-sha="{{ card.preview.sha256 }}" data-width="{{ card.preview.width }}" data-height="{{ card.preview.height }}">
+                <div class="section-heading compact-heading"><div><h3><a href="{{ card.page_url }}">第 {{ card.position }} 页</a></h3><p class="muted">{{ card.original_name }}</p></div>
+                  <label class="rotation-row">旋转
+                    <select class="rotation-select" aria-label="第 {{ card.position }} 页旋转角度">
+                      {% for option in card.preview_options %}<option value="{{ option.rotation }}" data-url="{{ option.url }}" data-width="{{ option.width }}" data-height="{{ option.height }}" data-sha="{{ option.sha256 }}" {% if option.rotation == card.preview.rotation %}selected{% endif %}>{{ option.rotation }}°</option>{% endfor %}
+                    </select>
+                  </label>
+                </div>
+                <div class="image-wrap"><img class="region-image" src="{{ card.preview_url }}" width="{{ card.preview.width }}" height="{{ card.preview.height }}" alt="第 {{ card.position }} 页原图"><canvas class="region-canvas" aria-label="拖动以框选第 {{ card.position }} 页区域"></canvas></div>
+                <button type="button" class="secondary-button add-region">加入题目来源</button>
+                <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend>
+                  <label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button>
+                </fieldset>
+                {% if card.questions %}<p class="muted small-text">已关联 {{ card.questions|length }} 道题</p>{% endif %}
+              </article>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}<p class="muted">先上传照片，再从原图框选题目区域。</p>{% endif %}
+      <div class="selected-regions"><h3>已选来源区域</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">还没有选择区域。缺失题干但有区域时，仍可保存待补草稿。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
+      {% if form.sources.errors %}<div class="notice error" role="alert">{{ form.sources.errors }}</div>{% endif %}
+    </section>
+    <div class="form-actions"><button class="primary-button" type="submit">{{ submit_label }}</button>{% if is_edit %}<a class="secondary-button link-button" href="{{ question_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'web:material_detail' material.id %}">取消</a>{% endif %}</div>
+  </form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

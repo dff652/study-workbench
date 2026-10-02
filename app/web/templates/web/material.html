@@ -1,0 +1,46 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}{{ material.title }} · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>{{ material.title }}</span></nav>
+  <div class="page-heading">
+    <div><p class="eyebrow">资料入库</p><h1>{{ material.title }}</h1><p class="muted">{{ material.household.id }}</p></div>
+    <a class="primary-button link-button" href="{{ question_new_url }}">录入题目</a>
+  </div>
+  {% if upload_result == "saved" %}<p class="notice success" role="status">照片已加入资料集。</p>{% endif %}
+  {% if upload_result == "duplicate" %}<p class="notice" role="status">检测到相同原图，已复用文件并关联到资料集。</p>{% endif %}
+  <section class="panel">
+    <h2>上传照片</h2>
+    <p class="muted">支持 JPEG、PNG。原图会保持不变；上传文件逐张处理。</p>
+    <form id="upload-form" method="post" enctype="multipart/form-data" action="{% url 'web:material_detail' material.id %}" class="inline-form">
+      {% csrf_token %}{{ upload_form.request_key }}
+      <div class="field grow"><label for="id_image">选择照片</label>{{ upload_form.image }}{{ upload_form.image.errors }}</div>
+      <button class="primary-button" id="upload-submit" type="submit">上传</button>
+    </form>
+    <p id="upload-status" class="muted" aria-live="polite"></p>
+    <ul id="upload-results" class="upload-results" aria-live="polite"></ul>
+    <button type="button" class="secondary-button" id="refresh-after-upload" hidden>刷新资料页列表</button>
+  </section>
+  <section class="panel">
+    <div class="section-heading"><div><h2>原图顺序</h2><p class="muted">使用上移、下移调整资料页顺序。</p></div><span class="count-badge">{{ pages|length }} 页</span></div>
+    {% if pages %}
+      <form method="post" action="{% url 'web:reorder_pages' material.id %}" id="order-form">
+        {% csrf_token %}{{ order_form.request_key }}{{ order_form.ids }}
+        <ol id="page-order" class="page-list">
+          {% for page in pages %}
+            <li data-page-id="{{ page.id }}">
+              <span class="page-number">{{ page.position }}</span>
+              <a class="page-title" href="{% url 'web:page_detail' page.id %}">{{ page.original_name|default:"原图" }}</a>
+              <div class="move-buttons"><button type="button" class="quiet-button move-up" aria-label="上移第 {{ page.position }} 页">上移</button><button type="button" class="quiet-button move-down" aria-label="下移第 {{ page.position }} 页">下移</button></div>
+            </li>
+          {% endfor %}
+        </ol>
+        <button type="submit" class="secondary-button">保存顺序</button>
+      </form>
+      <div class="button-row"><a class="secondary-button link-button" href="{{ question_new_url }}">整理题目和原图区域</a></div>
+    {% else %}
+      <p class="muted">上传第一张照片后，可以打开原图框选题目区域。</p>
+    {% endif %}
+  </section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'web/uploads.js' %}" defer></script><script src="{% static 'web/order.js' %}" defer></script>{% endblock %}

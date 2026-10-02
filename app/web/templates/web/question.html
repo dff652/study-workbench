@@ -1,0 +1,55 @@
+{% extends "web/base.html" %}
+{% block title %}{{ original_number|default:"未编号题目" }} · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><a href="{% url 'web:material_detail' material.id %}">{{ material.title }}</a><span aria-hidden="true">/</span><span>题目</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">题目审核</p><h1>{{ original_number|default:"未编号题目" }}</h1><p class="muted">资料集：{{ material.title }}</p></div><span class="status-badge status-{{ current_state }}">{% if current_state == "accepted" %}已审核{% elif current_state == "rejected" %}已退回{% elif current_state == "stale" %}版本过期{% elif current_state == "withdrawn" %}审核已撤回{% else %}待审核{% endif %}</span></div>
+  <section class="panel">
+    <div class="section-heading"><h2>当前题目</h2><a class="secondary-button link-button" href="{{ edit_url }}">修订题目</a></div>
+    {% if current.printed_text %}<div class="printed-text">{{ current.printed_text|linebreaksbr }}</div>{% else %}<p class="notice">缺少印刷题干，仍需人工补录，不能审核通过。</p>{% endif %}
+    <p><strong>原资料题号：</strong>{{ original_number|default:"未填写" }}</p>
+    {% if current.working_text %}<div class="subtle-box"><strong>工作稿文本</strong><p>{{ current.working_text|linebreaksbr }}</p></div>{% endif %}
+    <p class="muted small-text">当前修订：第 {{ current_revision_no }} 版</p>
+  </section>
+  <section class="panel">
+    <h2>原图来源</h2>
+    {% if source_links %}
+      <ol class="source-list">{% for source in source_links %}<li><a href="{{ source.page_url }}">第 {{ source.page_position }} 页{% if source.page_name %} · {{ source.page_name }}{% endif %}</a><span>第 {{ source.sequence }} 区域 · 旋转 {{ source.rotation }}° · 坐标 {{ source.display_bbox }}</span></li>{% endfor %}</ol>
+    {% else %}<p class="notice">当前修订没有区域来源；录入时请补充可追溯的原图区域。</p>{% endif %}
+  </section>
+  <section class="panel">
+    <h2>审核历史</h2>
+    <ol class="history-list">
+      {% for revision in history %}
+        <li>
+          <div class="history-heading"><strong>修订 {{ revision.revision_no }}</strong><span class="status-badge status-{{ revision.web_review_state }}">{% if revision.web_review_state == "accepted" %}已审核{% elif revision.web_review_state == "rejected" %}已退回{% elif revision.web_review_state == "stale" %}已过期{% elif revision.web_review_state == "withdrawn" %}已撤回{% else %}草稿{% endif %}</span></div>
+          <p class="muted small-text">题号：{{ revision.web_original_number|default:"未编号题目" }} · 修订说明：{{ revision.payload.header.reason }}</p>
+          {% if revision.web_printed_text %}<div class="history-printed-text">{{ revision.web_printed_text|linebreaksbr }}</div>{% else %}<p class="muted">此版本缺少印刷题干。</p>{% endif %}
+          <div class="history-source-grid">
+            {% for source in revision.web_history_sources %}
+              <figure class="history-source">
+                <a href="{{ source.page_url }}" class="history-image-link" aria-label="打开第 {{ source.page_position }} 页原图">
+                  {% if source.preview_url %}<span class="history-image-wrap"><img src="{{ source.preview_url }}" width="{{ source.preview_width }}" height="{{ source.preview_height }}" loading="lazy" alt="第 {{ source.page_position }} 页题目来源"><span class="history-region-box" style="{{ source.region_style }}"></span></span>{% else %}<span class="history-image-placeholder">预览不可用，点击打开原图</span>{% endif %}
+                </a>
+                <figcaption><a href="{{ source.page_url }}">第 {{ source.page_position }} 页{% if source.page_name %} · {{ source.page_name }}{% endif %}</a><span>第 {{ source.sequence }} 区域 · 旋转 {{ source.rotation }}° · 坐标 {{ source.display_bbox }}</span></figcaption>
+              </figure>
+            {% empty %}<p class="muted">此版本没有记录来源区域。</p>{% endfor %}
+          </div>
+          {% if revision.web_review_decisions %}
+            <ul class="decision-list">{% for decision in revision.web_review_decisions %}<li><strong>{% if decision.action == "accept" %}审核通过{% elif decision.action == "reject" %}退回修改{% else %}撤回审核{% endif %}</strong> · {{ decision.actor.get_username }} · {{ decision.recorded_at|date:"Y-m-d H:i" }}<p>{{ decision.reason }}</p></li>{% endfor %}</ul>
+          {% else %}<p class="muted">尚无审核决定。</p>{% endif %}
+        </li>
+      {% empty %}<li class="muted">暂无修订历史。</li>{% endfor %}
+    </ol>
+  </section>
+  <section class="panel">
+    <h2>家长审核</h2>
+    <p class="muted">审核决定会追加到历史。确认题干和原图区域后再通过。</p>
+    <form method="post" action="{% url 'web:question_review' question.stable_id %}" class="stack-form">
+      {% csrf_token %}{{ review_form.request_key }}{{ review_form.revision_id }}{{ review_form.context_token }}
+      <div class="field"><label for="id_action">审核操作</label>{{ review_form.action }}</div>
+      <div class="field"><label for="id_reason">审核说明</label>{{ review_form.reason }}</div>
+      {{ review_form.errors }}
+      <button class="primary-button" type="submit">记录审核决定</button>
+    </form>
+  </section>
+{% endblock %}

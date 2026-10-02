@@ -1,0 +1,35 @@
+{% extends "web/base.html" %}
+{% load static %}
+{% block title %}第 {{ page.position }} 页 · {{ page.material.title }}{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><a href="{% url 'web:material_detail' page.material_id %}">{{ page.material.title }}</a><span aria-hidden="true">/</span><span>第 {{ page.position }} 页</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">原图</p><h1>第 {{ page.position }} 页</h1><p class="muted">{{ page.original_name }}</p></div></div>
+  <section class="panel">
+    <div class="section-heading"><div><h2>框选印刷题目区域</h2><p class="muted">拖动图片框选。坐标记录在所选旋转版本上，并可反查回原图。</p></div></div>
+    <div class="region-editor single-region-editor" data-material-id="{{ page.material_id }}" data-storage-key="swb-question-sources-{{ page.material_id }}" data-page-editor data-page-label="第 {{ page.position }} 页">
+      {% if preview_links %}
+        <div class="region-card" data-page-id="{{ page.id }}" data-rotation="{{ default_preview.rotation }}" data-preview-sha="{{ default_preview.sha256 }}" data-width="{{ default_preview.width }}" data-height="{{ default_preview.height }}">
+          <div class="rotation-row"><label for="rotation-{{ page.id }}">显示方向</label>
+            <select id="rotation-{{ page.id }}" class="rotation-select">
+              {% for option in preview_links %}<option value="{{ option.rotation }}" data-url="{{ option.url }}" data-width="{{ option.width }}" data-height="{{ option.height }}" data-sha="{{ option.sha256 }}" {% if option.rotation == default_preview.rotation %}selected{% endif %}>旋转 {{ option.rotation }}°</option>{% endfor %}
+            </select>
+          </div>
+          <div class="image-wrap"><img class="region-image" src="{{ default_preview_url }}" width="{{ default_preview.width }}" height="{{ default_preview.height }}" alt="资料原图第 {{ page.position }} 页"><canvas class="region-canvas" aria-label="拖动以框选原图区域"></canvas></div>
+          <button type="button" class="secondary-button add-region">加入题目来源</button>
+          <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend>
+            <label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button>
+          </fieldset>
+        </div>
+      {% else %}<p class="muted">暂无可用预览。</p>{% endif %}
+      <div class="selected-regions"><h3>本次选择</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">还没有选择区域。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
+      <a class="primary-button link-button continue-question" href="{{ question_new_url }}">用所选区域录入题目</a>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>关联题目</h2>
+    {% if questions %}
+      <ul class="linked-questions">{% for question in question_cards %}<li id="question-{{ question.question_id }}">{% if question.url %}<a href="{{ question.url }}">{{ question.original_number }}</a><span class="muted">关联题目</span>{% else %}<span>{{ question.original_number }}</span>{% endif %}</li>{% endfor %}</ul>
+    {% else %}<p class="muted">此原图尚未关联题目。</p>{% endif %}
+  </section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

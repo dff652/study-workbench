@@ -1,0 +1,1 @@
+"""Study Workbench application package."""

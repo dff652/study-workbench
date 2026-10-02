@@ -1,0 +1,35 @@
+{% extends "web/base.html" %}
+{% block title %}资料集 · 学习资料工作台{% endblock %}
+{% block content %}
+  <div class="page-heading">
+    <div><p class="eyebrow">资料入库</p><h1>资料集</h1></div>
+  </div>
+  <section class="panel">
+    <h2>新建资料集</h2>
+    {% if households %}
+      <form method="post" action="{% url 'web:material_new' %}" class="stack-form">
+        {% csrf_token %}{{ new_form.request_key }}
+        <div class="field"><label for="id_household_id">家庭</label>{{ new_form.household_id }}{{ new_form.household_id.errors }}</div>
+        <div class="field"><label for="id_title">资料集名称</label>{{ new_form.title }}{{ new_form.title.errors }}</div>
+        <button class="primary-button" type="submit">创建资料集</button>
+      </form>
+    {% else %}
+      <p class="muted">当前账号尚未加入可访问的家庭。</p>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <h2>已有资料集</h2>
+    {% if materials %}
+      <ul class="material-list">
+        {% for material in materials %}
+          <li>
+            <a href="{% url 'web:material_detail' material.id %}"><strong>{{ material.title }}</strong></a>
+            <span class="muted">{{ material.pages.count }} 页 · {{ material.household.id }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">还没有资料集。创建后可以上传照片并整理题目。</p>
+    {% endif %}
+  </section>
+{% endblock %}

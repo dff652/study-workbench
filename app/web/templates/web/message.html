@@ -1,0 +1,9 @@
+{% extends "web/base.html" %}
+{% block title %}{{ title }} · 学习资料工作台{% endblock %}
+{% block content %}
+  <section class="panel narrow-panel">
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    <a class="primary-button link-button" href="{% url 'web:index' %}">返回资料集</a>
+  </section>
+{% endblock %}

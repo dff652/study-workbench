@@ -1,0 +1,32 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.local.json
+
+# Private source material, runtime data and generated artifacts
+/data/
+/media/
+/artifacts/
+/exports/
+/backups/
+/logs/
+*.sqlite3
+*.sqlite3-*
+
+# Python and frontend caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+node_modules/
+/dist/
+
+# Editor and OS metadata
+.DS_Store
+Thumbs.db

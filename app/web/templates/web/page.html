@@ -26,10 +26,27 @@
     </div>
   </section>
   <section class="panel">
+    <h2>本机派生处理</h2>
+    <p class="muted">原图保持原样。裁切、手动遮白和对比度增强分别保存新文件及来源。遮白会抹掉所选矩形内的所有像素，不能自动恢复印刷文字；派生图不能代替原始作答证据。</p>
+    <form method="post" action="{% url 'web:derivative_create' page.id %}" id="derivative-form" data-page-id="{{ page.id }}" data-storage-key="swb-question-sources-{{ page.material_id }}">
+      {% csrf_token %}{{ derivative_form.as_p }}
+      <button type="button" class="secondary-button" id="use-derivative-region">使用最后加入的区域</button>
+      <p id="derivative-feedback" role="status"></p>
+      <button type="submit" class="primary-button">生成新的派生记录</button>
+    </form>
+    {% for derivative in derivatives %}
+      <article><p><a href="{% url 'web:derivative_file' derivative.id %}">{{ derivative.get_operation_display }} · {{ derivative.created_at }}</a></p>
+        <p>{{ derivative.lossy_description }}</p>
+        <details><summary>来源与参数</summary><p>原图 SHA：{{ derivative.original_sha256 }}</p><p>派生 SHA：{{ derivative.sha256 }}</p><pre>{{ derivative.parameters }}</pre></details>
+        <img src="{% url 'web:derivative_file' derivative.id %}" alt="{{ derivative.get_operation_display }}派生图" loading="lazy" style="max-width:100%;height:auto">
+      </article>
+    {% empty %}<p class="muted">尚无派生记录。</p>{% endfor %}
+  </section>
+  <section class="panel">
     <h2>关联题目</h2>
     {% if questions %}
       <ul class="linked-questions">{% for question in question_cards %}<li id="question-{{ question.question_id }}">{% if question.url %}<a href="{{ question.url }}">{{ question.original_number }}</a><span class="muted">关联题目</span>{% else %}<span>{{ question.original_number }}</span>{% endif %}</li>{% endfor %}</ul>
     {% else %}<p class="muted">此原图尚未关联题目。</p>{% endif %}
   </section>
 {% endblock %}
-{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}
+{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script><script src="{% static 'web/derivatives.js' %}" defer></script>{% endblock %}

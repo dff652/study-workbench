@@ -16,6 +16,8 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from app.persistence.services import PersistenceError
 from . import services
 from .forms import MaterialForm, QuestionForm, ReorderPagesForm, ReviewForm, UploadPageForm
+from .derivative_forms import DerivativeForm
+from . import derivatives
 
 
 LOGIN_URL = "/accounts/login/"
@@ -302,6 +304,10 @@ def page_detail(request, page_id):
         "default_preview_url": reverse("web:page_preview", kwargs={"page_id": str(page.id), "rotation": default_preview.rotation}) if default_preview else "",
         "question_cards": question_cards,
         "question_new_url": reverse("web:question_new", kwargs={"material_id": str(page.material_id)}),
+        "derivatives": page.derivatives.order_by('-created_at'),
+        "derivative_form": DerivativeForm(initial={'request_key':uuid4(),'rotation':0,
+            'preview_sha256':default_preview.sha256 if default_preview else '',
+            'display_bbox':[0,0,page.image.payload['width'],page.image.payload['height']]}),
     })
 
 
@@ -326,6 +332,33 @@ def page_preview(request, page_id, rotation):
 
 @_not_found
 @login_required(login_url=LOGIN_URL)
+@require_POST
+@never_cache
+def derivative_create(request,page_id):
+    form=DerivativeForm(request.POST)
+    if not form.is_valid():return _failure(request,PersistenceError('invalid_input','请检查派生处理参数。'))
+    try:
+        derivatives.create_derivative(request.user,page_id,**form.cleaned_data)
+    except (PersistenceError,ValueError,TypeError) as exc:
+        return _failure(request,exc)
+    return redirect('web:page_detail',page_id=page_id)
+
+
+@_not_found
+@login_required(login_url=LOGIN_URL)
+@require_GET
+@never_cache
+def derivative_file(request,derivative_id):
+    try:row,path=derivatives.derivative_file(request.user,derivative_id)
+    except (PersistenceError,OSError,ValueError) as exc:return _failure(request,exc)
+    response=FileResponse(path.open('rb'),content_type='image/png')
+    response['Cache-Control']='private, no-store'
+    response['X-Content-Type-Options']='nosniff'
+    return response
+
+
+@_not_found
+@login_required(login_url=LOGIN_URL)
 @require_http_methods(["GET", "POST"])
 def question_new(request, material_id):
     try:
@@ -342,6 +375,8 @@ def question_new(request, material_id):
                 result = services.save_question(
                     request.user, material_id,
                     printed_text=form.cleaned_data["printed_text"],
+                    display_markup=form.cleaned_data["display_markup"] or None,
+                    image_print_confirmed=form.cleaned_data['image_print_confirmed'],
                     original_number=form.cleaned_data["original_number"],
                     sources=form.cleaned_data["sources"],
                     request_key=str(form.cleaned_data["request_key"]),
@@ -425,6 +460,7 @@ def question_edit(request, question_id):
             "request_key": uuid4(),
             "original_number": data["original_number"],
             "printed_text": current.get("printed_text", ""),
+            "display_markup": current.get("display_markup", ""),
             "sources": json.dumps(sources),
             "reason": "",
             "context_token": _issue_context(question_id, revision_id, data["edit_context"], "edit"),
@@ -440,6 +476,8 @@ def question_edit(request, question_id):
                 result = services.save_question(
                     request.user, str(data["material"].id),
                     printed_text=form.cleaned_data["printed_text"],
+                    display_markup=form.cleaned_data["display_markup"] or None,
+                    image_print_confirmed=form.cleaned_data['image_print_confirmed'],
                     original_number=form.cleaned_data["original_number"],
                     sources=form.cleaned_data["sources"],
                     request_key=str(form.cleaned_data["request_key"]),

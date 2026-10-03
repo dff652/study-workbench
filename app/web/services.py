@@ -238,7 +238,7 @@ def _header(actor,owner_id,reason,previous=None):
 
 @transaction.atomic
 def save_question(actor,material_id,*,printed_text,original_number,sources,request_key,reason,
-                  question_id=None,expected_context=None):
+                  question_id=None,expected_context=None,display_markup=None,image_print_confirmed=None):
     material=_material(actor,material_id,True)
     text=_text(printed_text,20000,blank=True);number=_text(original_number,80,blank=True);reason=_text(reason,1000)
     if not isinstance(sources,list) or not 1<=len(sources)<=30:
@@ -257,7 +257,13 @@ def save_question(actor,material_id,*,printed_text,original_number,sources,reque
         box=original_bbox(source['display_bbox'],page.image.payload['width'],page.image.payload['height'],source['rotation'])
         normalized.append({'page_id':str(page.pk),'rotation':source['rotation'],'preview_sha256':preview.sha256,
             'display_bbox':list(source['display_bbox']),'original_bbox':list(box)})
+    display_markup=_text(display_markup,24000,blank=True) if display_markup else None
+    if image_print_confirmed is not None and type(image_print_confirmed) is not bool:
+        raise core.PersistenceError('invalid_input','打印图片需要明确的人工核对。')
+    image_print_confirmed=True if image_print_confirmed is True else None
     fingerprint=core._digest({'material':str(material.pk),'question':question_id,'text':text,'number':number,
+        **({'display_markup':display_markup} if display_markup is not None else {}),
+        **({'image_print_confirmed':True} if image_print_confirmed else {}),
         'sources':normalized,'reason':reason,'context':expected_context})
     previous_request=core._replay(material.household,actor,request_key,'web_question',fingerprint)
     if previous_request: return previous_request
@@ -295,8 +301,13 @@ def save_question(actor,material_id,*,printed_text,original_number,sources,reque
     unchanged_print=bool(previous and text==previous.payload.get('printed_text'))
     working_text=previous.payload.get('working_text') if unchanged_print else (text or None)
     erratum_ids=tuple(previous.payload.get('erratum_revision_ids',())) if unchanged_print else ()
+    from app.domain.presentation import validate_display
+    try:
+        validate_display(display_markup,working_text,refs)
+    except ValueError as exc:
+        raise core.PersistenceError('invalid_display',str(exc)) from exc
     revision=seal_revision(QuestionRevision(_header(actor,question_id,reason,previous),ReviewState.DRAFT,parent_revision,
-        text or None,working_text,() if text else ('printed_text','working_text'),tuple(refs),erratum_ids))
+        text or None,working_text,() if text else ('printed_text','working_text'),tuple(refs),erratum_ids,display_markup,image_print_confirmed))
     questions=tuple(replace(q,revisions=(*q.revisions,revision)) if q.question_id==question_id else q for q in existing.questions)
     if previous is None: questions=(*questions,Question(question_id,material.household_id,None,(revision,)))
     bundle=replace(existing,regions=(*existing.regions,*regions),questions=questions)

@@ -74,15 +74,24 @@ class AIWorkflowTests(TransactionTestCase):
         self.config = self.make_config()
         self.published = self.make_question("原始题干：3 + 4 = ?")
 
-    def make_config(self, *, budget="10", reserved="0.1", scope="selected_regions"):
-        return ai.create_model_config(self.owner, self.household.pk, data={
+    def config_data(self, *, budget="10", reserved="0.1", scope="selected_regions",
+                    cloud_enabled=True, confirm=True):
+        return {
             "provider_label": "合成兼容服务", "base_url": "http://127.0.0.1:1/v1",
-            "model": "fabricated-model", "cloud_enabled": True, "outbound_scope": scope,
+            "model": "fabricated-model", "connection_route": "gateway",
+            "upstream_state": "unknown", "known_upstream_providers": "",
+            "retention_state": "unknown", "retention_description": "",
+            "confirm_external_processing": confirm,
+            "cloud_enabled": cloud_enabled, "outbound_scope": scope,
             "timeout_seconds": 2, "max_output_tokens": 100, "max_input_chars": 2000,
             "max_calls": 4, "batch_budget": budget, "input_price_per_million": "1",
             "output_price_per_million": "1", "reserved_per_call": reserved,
             "non_billable_gateway": False,
-        })
+        }
+
+    def make_config(self, *, budget="10", reserved="0.1", scope="selected_regions"):
+        return ai.create_model_config(self.owner, self.household.pk,
+            data=self.config_data(budget=budget, reserved=reserved, scope=scope))
 
     def make_question(self, text):
         saved = materials.save_question(self.owner, self.material.pk, printed_text=text,
@@ -115,6 +124,190 @@ class AIWorkflowTests(TransactionTestCase):
             "source_revision_ids": allowed_ids, "proposal": {"printed_text": printed_text,
                 "missing_fields": [], "classification_suggestion": None, "analysis_suggestion": None},
             "tool_calls": []}, ensure_ascii=False)
+
+    def test_external_configuration_requires_manual_confirmation_and_auditable_unknowns(self):
+        from app.ai.forms import ModelConfigForm
+
+        state_fields = ("connection_route", "upstream_state", "retention_state")
+        unconfigured_form = ModelConfigForm()
+        for field in state_fields:
+            self.assertTrue(unconfigured_form.fields[field].required)
+            self.assertEqual(unconfigured_form.fields[field].choices[0], ("", "请选择"))
+            self.assertIsNone(unconfigured_form[field].value())
+        blank_data = self.config_data()
+        for field in state_fields:
+            blank_data[field] = ""
+        blank_form = ModelConfigForm(data=blank_data)
+        self.assertFalse(blank_form.is_valid())
+        for field in state_fields:
+            self.assertIn(field, blank_form.errors)
+            self.assertIsNone(ModelConfigForm(initial={field: None})[field].value())
+        saved_form = ModelConfigForm(initial={field: getattr(self.config, field) for field in state_fields})
+        self.assertEqual([saved_form[field].value() for field in state_fields],
+            [self.config.connection_route, self.config.upstream_state, self.config.retention_state])
+
+        form = ModelConfigForm(data=self.config_data(confirm=False))
+        self.assertFalse(form.is_valid())
+        self.assertIn("confirm_external_processing", form.errors)
+        with self.assertRaises(core.PersistenceError) as missing_confirmation:
+            ai.create_model_config(self.owner, self.household.pk,
+                data=self.config_data(confirm=False))
+        self.assertEqual(missing_confirmation.exception.code, "model_consent_required")
+        self.assertEqual(ModelConfig.objects.count(), 1)
+
+        for changes in (
+                {"upstream_state": "known", "known_upstream_providers": ""},
+                {"retention_state": "known", "retention_description": ""},
+                {"connection_route": ""}, {"upstream_state": ""}, {"retention_state": ""}):
+            data = self.config_data()
+            data.update(changes)
+            with self.assertRaises(core.PersistenceError):
+                ai.create_model_config(self.owner, self.household.pk, data=data)
+
+        self.assertEqual(self.config.connection_route, ModelConfig.ConnectionRoute.GATEWAY)
+        self.assertEqual(self.config.upstream_state, ModelConfig.DeclarationState.UNKNOWN)
+        self.assertEqual(self.config.retention_state, ModelConfig.DeclarationState.UNKNOWN)
+        self.assertEqual(self.config.outbound_confirmation_by_id, self.owner.pk)
+        self.assertIsNotNone(self.config.outbound_confirmation_at)
+
+    def test_task_binds_complete_consent_snapshot_and_scope_expansion_requires_new_confirmation(self):
+        run = self.queue_question(self.published)
+        self.assertEqual(run.config_snapshot, ai.config_snapshot(self.config))
+        self.assertEqual(run.config_snapshot["config_id"], str(self.config.pk))
+        self.assertEqual(run.config_snapshot["upstream_state"], "unknown")
+        self.assertEqual(run.config_snapshot["retention_state"], "unknown")
+        self.assertEqual(run.config_snapshot["outbound_confirmation_by"], str(self.owner.pk))
+        self.assertEqual(run.config_snapshot["outbound_scope"], self.config.outbound_scope)
+
+        changed = self.config_data(confirm=False, scope=ModelConfig.OutboundScope.SELECTED_REGIONS)
+        changed.update(upstream_state="known", known_upstream_providers="Synthetic upstream")
+        changed.update(retention_state="known", retention_description="供应商说明：留存期限未知")
+        with self.assertRaises(core.PersistenceError) as missing_reconfirmation:
+            ai.create_model_config(self.owner, self.household.pk, data=changed)
+        self.assertEqual(missing_reconfirmation.exception.code, "model_consent_required")
+        self.assertEqual(ModelConfig.objects.count(), 1)
+
+        changed["confirm_external_processing"] = True
+        expanded = ai.create_model_config(self.owner, self.household.pk, data=changed)
+        self.assertEqual(expanded.revision_no, 2)
+        self.assertEqual(expanded.known_upstream_providers, "Synthetic upstream")
+        self.assertEqual(expanded.retention_description, "供应商说明：留存期限未知")
+        self.assertEqual(expanded.outbound_confirmation_by_id, self.owner.pk)
+        self.assertIsNotNone(expanded.outbound_confirmation_at)
+
+    def test_pre_migration_configuration_and_task_cannot_reach_provider(self):
+        base_run = self.queue_question(self.published)
+        legacy = ModelConfig.objects.create(household=self.household, revision_no=2,
+            created_by=self.owner, provider_label="旧合成服务", base_url="http://127.0.0.1:1/v1",
+            model="legacy-model", cloud_enabled=True, outbound_scope=ModelConfig.OutboundScope.REVIEWED_TEXT,
+            timeout_seconds=2, max_output_tokens=100, max_input_chars=2000, max_calls=4,
+            batch_budget="10", input_price_per_million="1", output_price_per_million="1",
+            reserved_per_call="0", non_billable_gateway=False)
+        self.assertIsNone(legacy.connection_route)
+        self.assertIsNone(legacy.outbound_confirmation_at)
+        selection = ai.selection_context(self.owner, self.household.pk, "question")
+        with self.assertRaises(core.PersistenceError) as queue_error:
+            ai.queue_run(self.owner, self.household.pk, task_kind="question",
+                source_revision_ids=[self.published["revision_id"]],
+                question_revision_ids=[self.published["revision_id"]],
+                selection_token=selection["token"], request_key=key())
+        self.assertEqual(queue_error.exception.code, "model_consent_required")
+
+        old_snapshot = ai.config_snapshot(legacy)
+        for name in ("config_id", "connection_route", "upstream_state", "known_upstream_providers",
+                "retention_state", "retention_description", "outbound_confirmation_by",
+                "outbound_confirmation_at"):
+            old_snapshot.pop(name)
+        run = ModelRun.objects.create(household=self.household, actor=self.owner, config=legacy,
+            config_snapshot=old_snapshot, task_kind=ModelRun.TaskKind.QUESTION,
+            question_revision_ids=base_run.question_revision_ids,
+            source_revision_ids=base_run.source_revision_ids,
+            expected_heads=base_run.expected_heads, expected_dependencies=base_run.expected_dependencies,
+            review_pointers=base_run.review_pointers, request_key=key(), fingerprint="a" * 64)
+        ai.request_execution(self.owner, run.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False), \
+                patch("app.ai.services.chat_completion") as provider_call:
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "model_consent_required")
+        self.assertFalse(provider_call.called)
+        self.assertFalse(ModelBudgetReservation.objects.filter(run=run).exists())
+
+    def test_closed_configuration_is_rechecked_immediately_before_provider_call(self):
+        run = self.queue_question(self.published)
+        ai.request_execution(self.owner, run.pk)
+        original_claim = ai._claim
+
+        def claim_then_close(run_id):
+            claim = original_claim(run_id)
+            self.assertIsNotNone(claim)
+            disabled = self.config_data(cloud_enabled=False, confirm=False,
+                scope=ModelConfig.OutboundScope.REVIEWED_TEXT)
+            ai.create_model_config(self.owner, self.household.pk, data=disabled)
+            return claim
+
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False), \
+                patch("app.ai.services._claim", side_effect=claim_then_close), \
+                patch("app.ai.services.chat_completion") as provider_call:
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "model_disabled")
+        self.assertFalse(provider_call.called)
+        reservation = ModelBudgetReservation.objects.get(run=run)
+        self.assertEqual(reservation.state, ModelBudgetReservation.State.RELEASED)
+
+    def test_cancel_between_claim_and_first_send_gate_releases_its_budget(self):
+        self.config = self.make_config(budget="0.04")
+        run = self.queue_question(self.published)
+        ai.request_execution(self.owner, run.pk)
+        original_claim = ai._claim
+        state_at_cancel = []
+
+        def claim_then_cancel(run_id):
+            claim = original_claim(run_id)
+            self.assertIsNotNone(claim)
+            self.assertEqual(ModelBudgetReservation.objects.get(run_id=run_id).state,
+                ModelBudgetReservation.State.HELD)
+            ai.cancel_run(self.owner, run_id)
+            state_at_cancel.append(ModelBudgetReservation.objects.get(run_id=run_id).state)
+            return claim
+
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False), \
+                patch("app.ai.services._claim", side_effect=claim_then_cancel), \
+                patch("app.ai.services.chat_completion") as provider_call:
+            cancelled = ai.execute_run(run.pk)
+        self.assertFalse(provider_call.called)
+        self.assertEqual(state_at_cancel, [ModelBudgetReservation.State.RELEASED])
+        self.assertEqual(cancelled.status, ModelRun.Status.CANCELLED)
+        reservation = ModelBudgetReservation.objects.get(run=run)
+        self.assertEqual(reservation.state, ModelBudgetReservation.State.RELEASED)
+        self.assertEqual(reservation.actual_calls, 0)
+
+        second_run = self.queue_question(self.published)
+        ai.request_execution(self.owner, second_run.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False):
+            self.assertIsNotNone(ai._claim(second_run.pk))
+
+    def test_actor_membership_is_rechecked_at_external_send_gate(self):
+        run = self.queue_question(self.published)
+        ai.request_execution(self.owner, run.pk)
+        original_claim = ai._claim
+
+        def claim_then_remove_actor(run_id):
+            claim = original_claim(run_id)
+            self.assertIsNotNone(claim)
+            HouseholdMember.objects.filter(household=self.household, user=self.owner).delete()
+            return claim
+
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False), \
+                patch("app.ai.services._claim", side_effect=claim_then_remove_actor), \
+                patch("app.ai.services.chat_completion") as provider_call:
+            rejected = ai.execute_run(run.pk)
+        self.assertEqual(rejected.status, ModelRun.Status.FAILED)
+        self.assertEqual(rejected.error_code, "actor_not_authorized")
+        self.assertFalse(provider_call.called)
+        self.assertEqual(ModelBudgetReservation.objects.get(run=run).state,
+            ModelBudgetReservation.State.RELEASED)
 
     def run_with_response(self, run, response):
         ai.request_execution(self.owner, run.pk)
@@ -287,6 +480,8 @@ class AIWorkflowTests(TransactionTestCase):
 
         def late_result(_config, _messages, **_kwargs):
             ai.cancel_run(self.owner, run.pk)
+            self.assertEqual(ModelBudgetReservation.objects.get(run=run).state,
+                ModelBudgetReservation.State.UNKNOWN)
             return response, {"prompt_tokens": 30, "completion_tokens": 20}
 
         with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "fabricated-test-secret"}, clear=False), \
@@ -297,8 +492,43 @@ class AIWorkflowTests(TransactionTestCase):
         self.assertEqual(done.error_code, "cancelled_late_result")
         self.assertEqual(done.response["proposal"]["printed_text"], "晚到的模型建议")
         self.assertEqual(reservation.state, ModelBudgetReservation.State.SETTLED)
+        self.assertEqual(reservation.actual_calls, 1)
+        self.assertEqual(reservation.actual_cost, Decimal("0.000050"))
         with self.assertRaises(core.PersistenceError):
             ai.apply_run(self.owner, run.pk, request_key=key())
+
+    def test_cancel_of_legacy_running_held_reservation_keeps_unknown(self):
+        base_run = self.queue_question(self.published)
+        legacy = ModelConfig.objects.create(household=self.household, revision_no=2,
+            created_by=self.owner, provider_label="旧合成服务", base_url="http://127.0.0.1:1/v1",
+            model="legacy-model", cloud_enabled=True, outbound_scope=ModelConfig.OutboundScope.REVIEWED_TEXT,
+            timeout_seconds=2, max_output_tokens=100, max_input_chars=2000, max_calls=4,
+            batch_budget="10", input_price_per_million="1", output_price_per_million="1",
+            reserved_per_call="0", non_billable_gateway=False)
+        old_snapshot = ai.config_snapshot(legacy)
+        for name in ("config_id", "connection_route", "upstream_state", "known_upstream_providers",
+                "retention_state", "retention_description", "outbound_confirmation_by",
+                "outbound_confirmation_at"):
+            old_snapshot.pop(name)
+        run = ModelRun.objects.create(household=self.household, actor=self.owner, config=legacy,
+            config_snapshot=old_snapshot, task_kind=ModelRun.TaskKind.QUESTION,
+            question_revision_ids=base_run.question_revision_ids,
+            source_revision_ids=base_run.source_revision_ids,
+            expected_heads=base_run.expected_heads, expected_dependencies=base_run.expected_dependencies,
+            review_pointers=base_run.review_pointers, request_key=key(), fingerprint="b" * 64)
+        started_at = timezone.now()
+        reserved_cost = Decimal("0.1")
+        ModelRun.objects.filter(pk=run.pk).update(status=ModelRun.Status.RUNNING,
+            started_at=started_at, call_started_at=started_at,
+            lease_expires_at=started_at + timedelta(seconds=30), reserved_cost=reserved_cost)
+        reservation = ModelBudgetReservation.objects.create(run=run, config=legacy,
+            reserved_calls=1, reserved_cost=reserved_cost)
+
+        cancelled = ai.cancel_run(self.owner, run.pk)
+        reservation.refresh_from_db()
+        self.assertEqual(cancelled.status, ModelRun.Status.CANCELLED)
+        self.assertEqual(reservation.state, ModelBudgetReservation.State.UNKNOWN)
+        self.assertEqual(reservation.actual_calls, 0)
 
     def test_unknown_tool_fails_closed_after_settling_known_usage(self):
         run = self.queue_question(self.published)

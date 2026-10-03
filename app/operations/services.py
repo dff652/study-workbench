@@ -26,6 +26,24 @@ logger = logging.getLogger(__name__)
 TIMING_CONTEXT_SALT = "study-workbench.work-timing.v1"
 MAX_TIMING_SECONDS = 604800
 LEDGER_ID_RE = re.compile(r"^[0-9a-f]{64}$")
+DATA_LIFECYCLE_POLICY = (
+    {"kind": "原始照片", "default": "私有资料卷内原样保存；无自动归档或退役。",
+        "archive_retire": "配套备份会包含原图；应用不自动删除，也不随导出退役。"},
+    {"kind": "派生文件与预览", "default": "旋转预览、裁切、手动遮白和增强结果与原图分开保存，记录来源及处理信息。",
+        "archive_retire": "随私有资料卷备份；当前不自动归档或退役派生文件，不能覆盖原图。"},
+    {"kind": "领域历史", "default": "题目、知识、作答和评价修订历史追加保留。",
+        "archive_retire": "随数据库配套备份；应用不自动归档或退役领域历史。"},
+    {"kind": "AI 响应", "default": "任务响应、工具结果、用量和状态保存在本机数据库。",
+        "archive_retire": "随数据库配套备份；应用不自动归档或退役响应历史。供应商副本另按配置说明或标记未知。"},
+    {"kind": "运行日志", "default": "worker 输出任务编号、状态和错误码，不写响应正文或密钥。",
+        "archive_retire": "项目未配置日志轮转期限；由主机或容器运行环境管理，当前保留期限未知。"},
+    {"kind": "备份", "default": "每份数据库与私有资料卷配套备份写入独立新目录，不覆盖已有目录。",
+        "archive_retire": "本应用不自动归档或删除旧备份；备份位置、保留期限和退役由运维者单独管理。"},
+    {"kind": "导出", "default": "导出快照文件和历史元数据默认保留，不自动归档或退役。",
+        "archive_retire": "所有者可追加策略；执行须显式操作。退役前校验并保留归档副本及账本，只移除指定导出目录。"},
+    {"kind": "供应商侧副本", "default": "供应商留存按每版配置记录；没有说明时明确为未知。",
+        "archive_retire": "本应用没有供应商删除接口；外部删除状态未知，不把本机退役记作供应商删除成功。"},
+)
 
 
 def _is_digest(value):
@@ -74,7 +92,8 @@ def retention_policy_detail(actor, household_id):
     return {"household": household, "current": current,
         "archive_after_days": current.archive_after_days if current else None,
         "delete_after_days": current.delete_after_days if current else None,
-        "history": history, "default_policy": current is None}
+        "history": history, "default_policy": current is None,
+        "data_lifecycle_policy": DATA_LIFECYCLE_POLICY}
 
 
 @transaction.atomic

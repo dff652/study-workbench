@@ -1,10 +1,20 @@
 # 需求与实现核查：2026-10-03
 
-本次对照[需求 v0.2](requirements.md)的 18 FR、6 NFR 和 24 AC，检查当前源码、实际页面入口、测试及私有运行报告。源码检查点为 `92d0ec5`；36 运行镜像仍对应 `4f145ef`，两者之间只有文档变化。241 个此前验收的源码／测试／构建文件 SHA 均未变化。本次不开发功能、不迁移真实资料、不调用模型或更新部署。
+原只读核查对照[需求 v0.2](requirements.md)的 18 FR、6 NFR 和 24 AC，检查当前源码、实际页面入口、测试及私有运行报告。源码检查点为 `92d0ec5`；当时 36 运行镜像对应 `4f145ef`，两者之间只有文档变化。241 个此前验收的源码／测试／构建文件 SHA 均未变化。原核查未开发功能、迁移真实资料、调用模型或更新部署。
 
-结论：两条核心主线已具备可试用的人工流程，但仍有题目公式打印、检索、手机放大、外发配置和派生处理缺口。不能把此前测试通过数或验收覆盖表等同于全部需求通过，也不能把真实模型延期当作全部剩余工作的解释。M1a 仍需补齐相应人工路径；M1b／整体 M1 尚未完成。
+当前结论：用户同意按 T-01～T-07 推进后，G-01～G-05 的工程能力已补齐并独立验证。T-06 已冻结两页四题并在隔离实例验证 12 条派生及双向追溯，T-07 准备完成；真实家庭学习／耗时、实体手机及真实模型未执行，M1a 不判全部通过，M1b／整体 M1 未完成。原要求与 18 FR／6 NFR／24 AC 未减少；[补齐记录](gap-closure-20261003.md)记录最终契约与证据。
 
-## 状态口径与证据
+| 任务 | 当前结果 | 剩余实际条件 |
+| --- | --- | --- |
+| T-01／G-01 | 题目／知识公式、粗体／标记、精确图片回退贯通 PDF／Word；旧哈希兼容，新 PDF 字体回归通过 | MS Word 尚未实测 |
+| T-02／G-04 | 图片内放大／移动／旋转后框选已通过 390×844 Chromium 业务验证 | 实体 iOS／Android 试用 |
+| T-03／G-02 | 资料、主辅方法角色和档案稳定节点 ID 筛选；历史／同名／跨家庭反例通过 | 家庭数据试用待进行 |
+| T-04／G-03 | 上游／留存明确声明、确认人／时间、完整配置快照、发送门槛和分类生命周期已实现 | 供应商真实留存／删除／费用只能由实际配置和证据核实 |
+| T-05／G-05 | 可追溯裁切、人工遮白、对比度增强；追加约束、失败清理及容器恢复通过 | 有损结果需人工选择，不自动恢复原文 |
+| T-06／D-01 | 整页隔离冻结两页四题，12 派生、知识↔题目↔原图本机隔离验收；保留未知 | 家长核定、孩子实际首次／订正／复测／评价历史及耗时待填写 |
+| T-07／V-01 | 离线基准及手动测试条件已准备，模型默认关闭 | 用户手动供应商配置与真实调用，尚无效果／账单证据 |
+
+## 原核查的状态口径与证据
 
 - **工程已验**：存在实际入口和相关运行证据；只覆盖表中明确列出的能力。
 - **人工已验／AI 待实测**：人工业务与离线 AI 门槛存在，真实内容质量未验。
@@ -17,36 +27,36 @@
 
 独立 verifier 随后核对八份文档、全部需求映射、241 份源码 SHA 和五项缺口的直接源码，另运行领域 30 项、AI schema 7 项及导出 21 项均通过，结论为 `PASS`。报告为 `artifacts/requirements-audit/20261003/independent-verifier.local.json`。此结论表示核查准确，不能解释为应用未完成项已修复。
 
-## 逐条对照
+## 当前逐条对照
 
 | 需求／场景 | 当前判定 | 源码及验证入口 | 覆盖与剩余边界 |
 | --- | --- | --- | --- |
 | FR-01／AC-01 | 工程已验 | [上传服务](../app/web/services.py)、[逐文件上传](../app/web/static/web/uploads.js)、[Web 服务测试](../tests/web/test_services.py) | 多图逐项状态、页序、哈希去重及跨资料复用；验证图片为虚构样本 |
-| FR-02／AC-02 | 部分实现 | [区域与旋转](../app/web/services.py)、[合拆谱系](../app/catalogue/services.py)、[谱系测试](../tests/catalogue/test_lineage.py) | 多页／多区域、原图坐标、追加修订和合拆已验；需求第 3 节的去笔迹／增强未提供，持久裁切派生文件也未形成通用管理入口，见 G-05 |
-| FR-03／AC-03 | 工程已验，公式排版边界另列 | [题目服务](../app/web/services.py)、[旧导入](../app/imports/services.py)、[导入测试](../tests/imports/test_import_service.py) | 题号、父子、文本、修订／审核、81 条旧索引和缺口；题干中的公式目前按文本保存，原生公式输出缺口见 FR-08／G-01 |
+| FR-02／AC-02 | 工程已验 | [区域与旋转](../app/web/services.py)、[合拆谱系](../app/catalogue/services.py)、[谱系测试](../tests/catalogue/test_lineage.py) | 多页／多区域、合拆、原图坐标及裁切／遮白／增强追加记录已验；原图不变，有损和失败清理见补齐记录，恢复含三类派生 |
+| FR-03／AC-03 | 工程已验 | [题目服务](../app/web/services.py)、[旧导入](../app/imports/services.py)、[导入测试](../tests/imports/test_import_service.py) | 题号、父子、文本、修订／审核、81 条旧索引和缺口；可选排版保持正文一致并进入新版本哈希，公式／重点实际输出见 FR-08 |
 | FR-04／AC-04 | 人工已验／AI 待实测 | [来源观察与作答](../app/web/learning_services.py)、[学习测试](../tests/web/test_learning.py)、[AI 草稿服务](../app/ai/services.py) | 印刷、课堂、提示、独立、未知来源分别记录；模型差异进入勘误草稿，真实混排识别未验 |
 | FR-05／AC-05 | 人工已验／AI 待实测 | [知识关系](../app/web/knowledge_services.py)、[知识测试](../tests/web/test_knowledge_services.py)、[AI schema](../app/ai/schema.py) | 主／辅助方法、开放分类、旧索引覆盖和精确发布关系；生成知识总结的真实内容及修订成本待测 |
 | FR-06／AC-06 | 离线已验／真实供应商待测 | [provider](../app/ai/provider.py)、[schema](../app/ai/schema.py)、[AI 测试](../tests/ai/test_services.py) | 可选文本／区域、结构／引用门槛、草稿应用；分类和解析是建议文本，不自动成为正式方法关系或已审核家长答案；真实 OCR／分类／解析未验 |
 | FR-07／AC-07 | 人工及确定性工具已验／AI 待实测 | [算术工具](../app/domain/arithmetic.py)、[勘误服务](../app/printing/services.py)、[打印测试](../tests/printing/test_services.py) | 有理数四则与有限整数幂、勘误／原文分离、修订审核；非全面数学证明，真实模型勘误质量待测 |
-| FR-08／AC-08 | 部分实现 | [业务打印](../app/printing/services.py)、[答案表单](../app/printing/views.py)、[渲染器](../app/exports/renderer.py)、[打印测试](../tests/printing/test_services.py) | 四用途、无提示练习、答案隔离、家长答案原生公式／图片回退、PDF／Word 快照已验；题目／知识公式及重点标注尚未贯通，见 G-01；MS Word 未测 |
+| FR-08／AC-08 | 工程已验 | [业务打印](../app/printing/services.py)、[答案表单](../app/printing/views.py)、[渲染器](../app/exports/renderer.py)、[打印测试](../tests/printing/test_services.py) | 四用途、答案隔离、题目／知识／家长答案原生公式、重点及精确图片回退已验；独立图片须本版本人工确认，旧快照不变；三份新 PDF／Writer 实际版式已验，MS Word 未测 |
 | FR-09／AC-09 | 工程已验 | [逐次作答](../app/web/learning_services.py)、[学习测试](../tests/web/test_learning.py) | 首次、订正、重做、复测及评价分别保存；课堂／提示／未知不计独立成功，后一次不覆盖前一次 |
-| FR-10／AC-10 | 部分实现 | [知识筛选](../app/web/knowledge_services.py)、[档案筛选](../app/web/learning_views.py)、[档案页面](../app/web/templates/learning/profile.html) | 知识、方法、题型、题号／审核及档案日期／错误筛选、精确来源反查存在；资料及主辅角色筛选未贯通，见 G-02 |
+| FR-10／AC-10 | 工程已验 | [知识筛选](../app/web/knowledge_services.py)、[档案筛选](../app/web/learning_views.py)、[档案页面](../app/web/templates/learning/profile.html) | 资料、知识／方法／题型 ID、主辅角色、题号／审核及档案日期／错误筛选已贯通；同名、历史、撤回和跨家庭反例通过，资料沿精确区域修订查找 |
 | FR-11／AC-11 | 离线已验／真实费用待测 | [配置及任务](../app/ai/services.py)、[AI 模型](../app/ai/models.py)、[AI 测试](../tests/ai/test_services.py) | AI 关闭时人工可用，队列／取消／失败、版本、用量、并发预算及未知费用保留；估算不能代替实际账单 |
 | FR-12／AC-12 | 工程已验 | [导入](../app/imports/services.py)、[备份](../scripts/backup_service.sh)、[恢复](../scripts/restore_service.sh)、[恢复验证](../scripts/verify_container.py) | 旧包重复导入、配套数据库／文件清单、空实例关系／审核／哈希恢复及非空拒绝；通用恢复是运维流程，不能把旧索引包或退役账本当完整备份 |
 | FR-13／AC-13 | 人工计划已验／真实变式待测 | [复习及变式](../app/study/services.py)、[study 测试](../tests/study/test_services.py) | 变式来源／目标方法／数学及发布门槛、可调整计划和实际作答完成事件；不承诺自动排期或普遍变式质量 |
 | FR-14／AC-14 | 工程已验 | [证据报告](../app/study/services.py)、[报告打印](../app/printing/services.py)、[study 测试](../tests/study/test_services.py) | 独立作答、提示、实际日期、未知维度与重复错误证据；保留历史，未给掌握分数；家庭学习效果未观察 |
-| FR-15／AC-21 | 人工已验／AI 待实测 | [知识条目](../app/web/knowledge_services.py)、[知识表单](../app/web/knowledge_forms.py)、[知识测试](../tests/web/test_knowledge_services.py) | 知识定义／条件／易错点、方法步骤、题型、出处、版本、题目关联；公式／例题可录入正文，结构化输出见 G-01；AI 新建知识草稿存在，真实质量未验 |
+| FR-15／AC-21 | 人工已验／AI 待实测 | [知识条目](../app/web/knowledge_services.py)、[知识表单](../app/web/knowledge_forms.py)、[知识测试](../tests/web/test_knowledge_services.py) | 知识定义／条件／易错点、方法步骤、题型、出处、版本、题目关联；知识定义可用与正文一致的封闭排版输出公式／重点／来源图片；AI 新建知识草稿存在，真实质量未验 |
 | FR-16／AC-22 | 工程已验 | [节点与双向关系](../app/web/knowledge_services.py)、[知识页面](../app/web/templates/knowledge/index.html)、[知识测试](../tests/web/test_knowledge_services.py) | 三种独立 ID、多对多、方法分类树、关联列表及题目／原图反查；六组不是封闭分类；复杂课程图谱不属当前需求 |
 | FR-17／AC-23 | 人工已验／AI 待实测 | [五维评价](../app/web/learning_services.py)、[学习测试](../tests/web/test_learning.py)、[AI 评价 schema](../app/ai/schema.py) | 答案、方法、步骤、计算、表达五维及原图／依据／未知，评价修订审核；真实手写评价质量待测 |
-| FR-18／AC-24 | 工程已验 | [学习者与历史](../app/web/learning_services.py)、[学习页面](../app/web/learning_views.py)、[学习测试](../tests/web/test_learning.py) | 独立档案、按题目／知识／题型／实际日期回看、订正与评价链、未知观察；不以更新覆盖旧题／旧作答；筛选身份问题见 G-02 |
+| FR-18／AC-24 | 工程已验 | [学习者与历史](../app/web/learning_services.py)、[学习页面](../app/web/learning_views.py)、[学习测试](../tests/web/test_learning.py) | 独立档案、按题目／知识／题型／实际日期回看、订正与评价链、未知观察；不以更新覆盖旧题／旧作答；筛选已改为稳定节点 ID，保留历史版本关系 |
 | NFR-01／AC-15 | 工程已验 | [版本与审核](../app/persistence/services.py)、[AI 过期控制](../app/ai/services.py)、[持久化测试](../tests/persistence/test_services.py) | 精确依赖／审核上下文、并发版本冲突、旧结果过期而不覆盖正式内容；保存旧运行配置和来源 |
 | NFR-02／AC-16 | 工程已验 | [私有文件服务](../app/web/services.py)、[边界测试](../tests/web/test_boundaries.py)、[权限测试](../tests/web/test_http.py) | 登录／家庭／角色、CSRF、实际解码、字节／像素上限、哈希／路径授权、no-store；公网上线与 TLS 未验 |
 | NFR-03／AC-17 | 工程已验 | [任务状态](../app/ai/services.py)、[provider 测试](../tests/ai/test_provider.py)、[AI 服务测试](../tests/ai/test_services.py) | 模拟超时／429／无效结构／中断／迟到／取消、幂等及未知预留；不自动重试未知结果，不宣称避免全部重复计费 |
 | NFR-04／AC-18 | 工程已验 | [封闭工具及预算](../app/ai/services.py)、[schema 测试](../tests/ai/test_schema.py)、[AI 服务测试](../tests/ai/test_services.py) | 一次外部请求，最多四次后端来源查询／算术工具；服务端拒绝越权／未知工具／超预算，模型无批准能力；非多轮自治 agent |
-| NFR-05／AC-19 | 部分实现 | [配置模型](../app/ai/models.py)、[配置表单](../app/ai/forms.py)、[本地策略](../app/operations/services.py)、[退役说明](local-data-policy.md) | 密钥保护、允许主机、外发范围版本、发送前复查、精确区域及导出退役账本已验；上游／留存确认和分类型生命周期仍有缺口，见 G-03 |
-| NFR-06／AC-20 | 部分实现 | [手机区域页面](../app/web/templates/web/page.html)、[区域交互](../app/web/static/web/regions.js)、[人工耗时](../app/operations/services.py)、[浏览器验证](../scripts/verify_business.py) | 手机上传／框选／编辑、任务状态与取消、耗时记录已验；图片放大核对未通过本次模拟探针，见 G-04；人工耗时为填写估计 |
+| NFR-05／AC-19 | 工程已验／供应商行为待核实 | [配置模型](../app/ai/models.py)、[配置表单](../app/ai/forms.py)、[本地策略](../app/operations/services.py)、[退役说明](local-data-policy.md) | 密钥保护、允许主机、外发范围版本、发送前复查、精确区域及导出退役账本已验；新版本明确上游／留存声明或未知、确认人／时间，任务保存完整快照，八类数据生命周期已说明；供应商行为不由本机删除推断 |
+| NFR-06／AC-20 | 模拟工程已验／实体试用待验 | [手机区域页面](../app/web/templates/web/page.html)、[区域交互](../app/web/static/web/regions.js)、[人工耗时](../app/operations/services.py)、[浏览器验证](../scripts/verify_business.py) | 手机上传／框选／编辑、任务状态与取消、耗时记录已验；图片内放大、移动及旋转后坐标已通过最终模拟验证；实体手机和家庭实际耗时待人工记录 |
 
-## 具体缺口
+## 原只读核查发现的缺口（工程修复结果见上表）
 
 | 编号 | 缺口及影响 | 证据／边界 |
 | --- | --- | --- |
@@ -58,9 +68,9 @@
 | V-01 | 真实模型效果和费用未验证 | OCR、分类、解析、知识草稿、评价、变式仍只有虚构样本与离线／mock 证据；真实供应商尚未手动配置，模型保持关闭 |
 | D-01 | 真实资料与学习价值未完成验证 | 23 张旧照片／81 条索引尚缺完整题干、逐题区域和独立作答来源；当前 36 示例为虚构数据。缺失来源不由程序猜测，家庭整理耗时与学习跟踪收益需人工试用记录 |
 
-## 后续任务与完成条件
+## 获授权任务及原完成条件
 
-以下是任务顺序，不代表本次已经实现或自动启用收费服务。实施前由主代理固定共享契约及文件所有权；可将互不重叠的界面／模块任务交给 luna6-worker，主代理审查完整实际 diff 并独立验收。
+以下保留原任务的范围和验收条件，当前完成程度以本文首表为准；不自动启用收费服务。实施前由主代理固定共享契约及文件所有权；可将互不重叠的界面／模块任务交给 luna6-worker，主代理审查完整实际 diff 并独立验收。
 
 | 顺序／任务 | 输入与文件范围 | 输出与验收条件 |
 | --- | --- | --- |

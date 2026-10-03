@@ -6,6 +6,7 @@ from datetime import date, datetime
 import math
 import re
 from typing import Iterable
+from .presentation import validate_display
 
 from .contracts import (
     ActualDateState, Assessment, AssessmentDimension, AssessmentRevision, Attempt,
@@ -311,6 +312,10 @@ def validate_bundle(bundle: Bundle, *, check_snapshot_reviews: bool = True) -> N
             _household(entity, bundle.household_id, p)
             _enum(revision.review_state, ReviewState, f"{p}.review_state")
             if isinstance(revision, KnowledgeRevision):
+                try:
+                    validate_display(revision.display_markup, revision.definition, revision.source_refs)
+                except ValueError as exc:
+                    _fail("invalid_display", p, str(exc))
                 _text(revision.definition, f"{p}.definition", (check_snapshot_reviews and revision.review_state is ReviewState.ACCEPTED))
                 _strings(revision.conditions, f"{p}.conditions")
                 _strings(revision.common_errors, f"{p}.common_errors")
@@ -336,6 +341,12 @@ def validate_bundle(bundle: Bundle, *, check_snapshot_reviews: bool = True) -> N
                 _fail("missing_parent_question", f"{p}.parent_question_id", "parent question does not exist")
         for revision in question.revisions:
             rp = f"question_revision.{revision.header.revision_id}"
+            if revision.image_print_confirmed is not None and type(revision.image_print_confirmed) is not bool:
+                _fail("invalid_boolean", rp, "image print confirmation must be explicit boolean or unknown")
+            try:
+                validate_display(revision.display_markup, revision.working_text, revision.evidence_refs)
+            except ValueError as exc:
+                _fail("invalid_display", rp, str(exc))
             _enum(revision.review_state, ReviewState, f"{rp}.review_state")
             if revision.printed_text is not None:
                 _text(revision.printed_text, f"{rp}.printed_text", False)

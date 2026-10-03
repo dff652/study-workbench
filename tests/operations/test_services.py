@@ -50,6 +50,21 @@ class OperationsServiceTests(TransactionTestCase):
         with self.assertRaises(DatabaseError), transaction.atomic():
             RetentionPolicyRevision.objects.filter(pk=first.pk).update(reason="覆盖历史")
 
+    def test_retention_page_exposes_each_data_type_lifecycle_and_unknown_provider_deletion(self):
+        data = operations.retention_policy_detail(self.owner, self.household.pk)
+        kinds = [item["kind"] for item in data["data_lifecycle_policy"]]
+        self.assertEqual(kinds, ["原始照片", "派生文件与预览", "领域历史", "AI 响应",
+            "运行日志", "备份", "导出", "供应商侧副本"])
+        provider = data["data_lifecycle_policy"][-1]
+        self.assertIn("未知", provider["default"])
+        self.assertIn("没有供应商删除接口", provider["archive_retire"])
+        self.client.force_login(self.owner)
+        response = self.client.get(reverse("operations:retention_policy",
+            kwargs={"household_id": self.household.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("运行日志", response.content.decode())
+        self.assertIn("不把本机退役记作供应商删除成功", response.content.decode())
+
     def test_manual_timing_binds_exact_question_and_current_attempt(self):
         attempt = self.create_attempt()
         context = operations.work_timing_context(self.owner, self.household.pk)

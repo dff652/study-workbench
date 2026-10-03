@@ -1,4 +1,5 @@
 """Synthetic acceptance for B2a knowledge nodes and exact typed links."""
+from dataclasses import replace
 import tempfile
 import uuid
 
@@ -8,15 +9,22 @@ from django.test import TransactionTestCase, override_settings
 from PIL import Image
 from io import BytesIO
 
-from app.domain.contracts import EvidencePurpose
+from app.catalogue import services as catalogue
+from app.catalogue.models import QuestionLabel
+from app.domain import ReviewState, seal_revision
+from app.domain.contracts import EvidencePurpose, EvidenceRef, Granularity
 from app.imports.models import LegacyIndexEntry
 from app.imports.package import prepare_legacy_import
 from app.imports.services import import_prepared
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
 from app.persistence.models import EntityRecord, EvidenceRecord, HouseholdMember, RevisionRecord
+from app.printing import services as printing
 from app.web import knowledge_services as knowledge
+from app.web import records
 from app.web import services as materials
+from app.web.knowledge_forms import IndexForm
+from app.web.models import QuestionSource
 from tests.imports.fixtures import source_fixture
 
 
@@ -45,16 +53,18 @@ class KnowledgeServicesTests(TransactionTestCase):
         self.addCleanup(self.settings.disable)
         self.material = materials.create_material(self.owner, self.household.pk, "合成来源", request_key())
 
-    def source(self):
-        page = materials.upload_page(self.owner, self.material.pk,
+    def source(self, material=None):
+        material = material or self.material
+        page = materials.upload_page(self.owner, material.pk,
             SimpleUploadedFile("synthetic.png", synthetic_png(), content_type="image/png"), request_key())["page_id"]
         preview = materials.preview_file(self.owner, page, 0)
         return {"page_id": page, "rotation": 0, "preview_sha256": preview.sha256,
             "display_bbox": [5, 5, 60, 45]}
 
-    def question(self):
-        return materials.save_question(self.owner, self.material.pk, printed_text="2 + 3 = ?",
-            original_number="J1-1", sources=[self.source()], request_key=request_key(), reason="合成题目")
+    def question(self, material=None, *, printed_text="2 + 3 = ?", original_number="J1-1"):
+        material = material or self.material
+        return materials.save_question(self.owner, material.pk, printed_text=printed_text,
+            original_number=original_number, sources=[self.source(material)], request_key=request_key(), reason="合成题目")
 
     def save_node(self, kind, values, *, stable_id=None, expected_context=None):
         return knowledge.save_node(self.owner, self.household.pk, kind, data={
@@ -77,12 +87,15 @@ class KnowledgeServicesTests(TransactionTestCase):
     def test_all_node_kinds_keep_native_revisions_and_definition_source_refs(self):
         source = self.source()
         created = self.save_node("knowledge", {"definition": "圆面积 $A=\\pi r^2$\n例：r=2",
+            "display_markup": "**圆面积** $A=\\pi r^2$\n例：r=2",
             "conditions": "半径已知\n单位一致", "common_errors": "忘记平方", "sources": [source]})
         knowledge_row = EntityRecord.objects.get(household=self.household, kind="knowledge",
             stable_id=created["stable_id"])
         self.assertEqual(knowledge_row.head_revision.payload["definition"], "圆面积 $A=\\pi r^2$\n例：r=2")
         self.assertEqual(knowledge_row.head_revision.payload["conditions"], ["半径已知", "单位一致"])
         self.assertEqual(knowledge_row.head_revision.payload["common_errors"], ["忘记平方"])
+        self.assertEqual(knowledge_row.head_revision.payload["display_markup"],
+            "**圆面积** $A=\\pi r^2$\n例：r=2")
         evidence = EvidenceRecord.objects.get(source=knowledge_row.head_revision)
         self.assertEqual(evidence.purpose, EvidencePurpose.DEFINITION.value)
         self.assertEqual(len(knowledge.node_detail(self.owner,knowledge_row.pk)['current_sources']),1)
@@ -109,6 +122,7 @@ class KnowledgeServicesTests(TransactionTestCase):
         self.assertEqual(knowledge_row.revisions.count(), 2)
         self.assertEqual(knowledge_row.revisions.get(pk=created["revision_id"]).payload["definition"],
             "圆面积 $A=\\pi r^2$\n例：r=2")
+        self.assertIsNone(knowledge_row.head_revision.payload.get("display_markup"))
 
         old_context=knowledge.node_detail(self.owner,knowledge_row.pk)['edit_context']
         retry_key=request_key()
@@ -121,6 +135,34 @@ class KnowledgeServicesTests(TransactionTestCase):
         with self.assertRaises(core.PersistenceError):
             knowledge.save_node(self.viewer, self.household.pk, "knowledge", data={
                 "definition": "viewer cannot write", "sources": "[]"}, request_key=request_key(), reason="forbidden")
+
+    def test_knowledge_display_markup_is_validated_against_text_and_exact_source_sequence(self):
+        source = self.source()
+        valid = self.save_node("knowledge", {"definition": "参考\n图例",
+            "display_markup": "参考\n[[image:1|图例]]", "conditions": "", "common_errors": "",
+            "sources": [source]})
+        revision = EntityRecord.objects.get(household=self.household, kind="knowledge",
+            stable_id=valid["stable_id"]).head_revision
+        self.assertEqual(revision.payload["display_markup"], "参考\n[[image:1|图例]]")
+
+        for markup, definition in (("另一段正文", "原始正文"),
+                ("参考\n[[image:2|图例]]", "参考\n图例")):
+            with self.subTest(markup=markup), self.assertRaises(core.PersistenceError) as caught:
+                self.save_node("knowledge", {"definition": definition, "display_markup": markup,
+                    "conditions": "", "common_errors": "", "sources": [source]})
+            self.assertEqual(caught.exception.code, "invalid_input")
+
+    def test_knowledge_display_markup_is_part_of_request_fingerprint(self):
+        request_id = request_key()
+        data = {"definition": "同一正文", "display_markup": "**同一**正文",
+            "conditions": "", "common_errors": "", "sources": "[]"}
+        knowledge.save_node(self.owner, self.household.pk, "knowledge", data=data,
+            request_key=request_id, reason="排版幂等指纹")
+        changed = {**data, "display_markup": "==同一==正文"}
+        with self.assertRaises(core.PersistenceError) as caught:
+            knowledge.save_node(self.owner, self.household.pk, "knowledge", data=changed,
+                request_key=request_id, reason="排版幂等指纹")
+        self.assertEqual(caught.exception.code, "request_conflict")
 
     def test_exact_links_publish_only_with_published_endpoints_and_reverse_trace(self):
         question = self.question()
@@ -265,6 +307,9 @@ class KnowledgeServicesTests(TransactionTestCase):
                 filtered = knowledge.index_data(self.owner, self.household.pk,
                     {filter_key: node["stable_id"]})["questions"]
                 self.assertEqual(filtered, [])
+                if kind == "method":
+                    self.assertEqual(knowledge.index_data(self.owner, self.household.pk,
+                        {filter_key: node["stable_id"], "method_role": role})["questions"], [])
 
                 if kind == "method":
                     self.withdraw(link["revision_id"])
@@ -284,3 +329,187 @@ class KnowledgeServicesTests(TransactionTestCase):
                 filtered = knowledge.index_data(self.owner, self.household.pk,
                     {filter_key: node["stable_id"]})["questions"]
                 self.assertEqual(filtered, [])
+
+    def test_index_combines_material_node_number_review_and_method_role_filters(self):
+        question = self.question()
+        alternate = materials.create_material(self.owner, self.household.pk, self.material.title, request_key())
+        page_id = materials.upload_page(self.owner, alternate.pk,
+            SimpleUploadedFile("alternate.png", synthetic_png(), content_type="image/png"), request_key())["page_id"]
+        preview = materials.preview_file(self.owner, page_id, 0)
+        alternate_source = {"page_id": page_id, "rotation": 0, "preview_sha256": preview.sha256,
+            "display_bbox": [5, 5, 60, 45]}
+        other_question = materials.save_question(self.owner, alternate.pk, printed_text="6 + 7 = ?",
+            original_number="ALT-2", sources=[alternate_source], request_key=request_key(), reason="另一份合成题目")
+        question_entities = []
+        for saved in (question, other_question):
+            entity = EntityRecord.objects.get(household=self.household, kind="question",
+                stable_id=saved["question_id"])
+            self.accept(entity, saved["revision_id"])
+            question_entities.append(entity)
+
+        knowledge_node = self.save_node("knowledge", {"definition": "同名知识点",
+            "conditions": "", "common_errors": ""})
+        method = self.save_node("method", {"name": "同名方法", "conditions": "", "steps": "", "notes": ""})
+        question_type = self.save_node("question_type", {"name": "同名题型",
+            "structural_features": "", "conditions": ""})
+        for kind, saved in (("knowledge", knowledge_node), ("method", method), ("question_type", question_type)):
+            entity = EntityRecord.objects.get(household=self.household, kind=kind, stable_id=saved["stable_id"])
+            self.accept(entity, saved["revision_id"])
+        relations = (
+            ("knowledge", knowledge_node, question, "applies"),
+            ("question_type", question_type, question, "belongs"),
+            ("method", method, question, "primary"),
+            ("method", method, other_question, "auxiliary"),
+        )
+        for kind, node, target_question, role in relations:
+            link = knowledge.create_link(self.owner, self.household.pk, kind=kind,
+                node_revision_id=node["revision_id"], question_revision_id=target_question["revision_id"],
+                role=role, request_key=request_key(), reason="精确检索关系")
+            link_kind = {"knowledge": "knowledge_question", "method": "method_question",
+                "question_type": "question_type_link"}[kind]
+            self.accept(EntityRecord.objects.get(household=self.household, kind=link_kind,
+                stable_id=link["stable_id"]), link["revision_id"])
+
+        composite = {"material_id": str(self.material.pk), "knowledge_id": knowledge_node["stable_id"],
+            "method_id": method["stable_id"], "method_role": "primary",
+            "question_type_id": question_type["stable_id"], "number": "J1-1", "review": "accepted"}
+        rows = knowledge.index_data(self.owner, self.household.pk, composite)["questions"]
+        self.assertEqual([row["entity"].pk for row in rows], [question_entities[0].pk])
+        rows = knowledge.index_data(self.owner, self.household.pk,
+            {"material_id": str(alternate.pk), "method_id": method["stable_id"],
+                "method_role": "auxiliary", "number": "ALT-2", "review": "accepted"})["questions"]
+        self.assertEqual([row["entity"].pk for row in rows], [question_entities[1].pk])
+        self.assertEqual(knowledge.index_data(self.owner, self.household.pk,
+            {**composite, "material_id": str(alternate.pk)})["questions"], [])
+
+        home = knowledge.index_data(self.owner, self.household.pk)
+        form = IndexForm({"household_id": str(self.household.pk)},
+            households=[HouseholdMember.objects.get(household=self.household, user=self.owner)],
+            household_id=str(self.household.pk), nodes=home["nodes"], materials=home["materials"])
+        material_choices = dict(form.fields["material_id"].choices)
+        self.assertIn(str(self.material.pk), material_choices[str(self.material.pk)])
+        self.assertIn(str(alternate.pk), material_choices[str(alternate.pk)])
+        method_choices = dict(form.fields["method_id"].choices)
+        self.assertIn(method["stable_id"][-8:], method_choices[method["stable_id"]])
+
+        foreign_owner = get_user_model().objects.create_user(username=f"foreign-{uuid.uuid4().hex[:8]}")
+        foreign_household = core.create_household(foreign_owner, f"foreign-{uuid.uuid4().hex}")
+        foreign_material = materials.create_material(foreign_owner, foreign_household.pk, "同名资料", request_key())
+        with self.assertRaises(core.PersistenceError) as caught:
+            knowledge.index_data(self.owner, self.household.pk, {"material_id": str(foreign_material.pk)})
+        self.assertEqual(caught.exception.code, "not_found")
+        with self.assertRaises(core.PersistenceError) as caught:
+            knowledge.index_data(self.owner, self.household.pk, {"method_role": "primary"})
+        self.assertEqual(caught.exception.code, "invalid_input")
+
+    def test_material_filter_follows_region_anchor_after_reviewed_erratum_on_merge(self):
+        first = self.question()
+        second_material = materials.create_material(self.owner, self.household.pk, "勘误用的另一资料", request_key())
+        second = self.question(second_material, printed_text="另一题", original_number="J2-1")
+        merge_sources = [first["revision_id"], second["revision_id"]]
+        merge_context = catalogue.prepare_context(self.owner, self.household.pk, "merge", merge_sources)
+        merged = catalogue.merge_questions(self.owner, self.household.pk, source_revision_ids=merge_sources,
+            context_token=merge_context, original_number="J1-1+J2-1", printed_text="合题印刷错误",
+            reason="为勘误准备合成题", request_key=request_key())
+        question_revision = RevisionRecord.objects.get(pk=merged["target_revision_ids"][0])
+        self.assertTrue(QuestionLabel.objects.filter(revision=question_revision,
+            original_number="J1-1+J2-1").exists())
+        self.assertFalse(QuestionSource.objects.filter(revision=question_revision).exists())
+
+        erratum_result = printing.save_erratum(self.owner, self.household.pk, question_revision.pk,
+            corrected_text="合题订正后的题干", basis="核对两份合成资料", expected=records.edit_context(question_revision),
+            request_key=request_key())
+        erratum = RevisionRecord.objects.get(pk=erratum_result["revision_id"])
+        self.accept(erratum.entity, erratum.pk)
+        applied = printing.apply_erratum(self.owner, self.household.pk, erratum.pk,
+            expected=records.edit_context(question_revision), request_key=request_key())
+
+        current = RevisionRecord.objects.get(pk=applied["revision_id"])
+        self.assertEqual(current.payload["working_text"], "合题订正后的题干")
+        self.assertTrue(QuestionLabel.objects.filter(revision=current,
+            original_number="J1-1+J2-1").exists())
+        self.assertFalse(QuestionSource.objects.filter(revision=current).exists())
+        old_regions = set(EvidenceRecord.objects.filter(source=question_revision).values_list("region_id", flat=True))
+        current_regions = set(EvidenceRecord.objects.filter(source=current).values_list("region_id", flat=True))
+        self.assertEqual(current_regions, old_regions)
+
+        for material in (self.material, second_material):
+            rows = knowledge.index_data(self.owner, self.household.pk,
+                {"material_id": str(material.pk)})["questions"]
+            self.assertIn(current.entity_id, {row["entity"].pk for row in rows})
+
+    def test_material_filter_follows_split_and_mixed_material_merge_region_anchors(self):
+        first = self.question(original_number="J1-1")
+        second_material = materials.create_material(self.owner, self.household.pk, "另一合成资料", request_key())
+        second = self.question(second_material, printed_text="另一题", original_number="J2-1")
+
+        merge_sources = [first["revision_id"], second["revision_id"]]
+        merge_context = catalogue.prepare_context(self.owner, self.household.pk, "merge", merge_sources)
+        merged = catalogue.merge_questions(self.owner, self.household.pk, source_revision_ids=merge_sources,
+            context_token=merge_context, original_number="J1-1+J2-1", printed_text="两份资料合成题",
+            reason="合成跨资料合题", request_key=request_key())
+        merged_revision = RevisionRecord.objects.get(pk=merged["target_revision_ids"][0])
+        self.assertFalse(QuestionSource.objects.filter(revision=merged_revision).exists())
+        self.assertTrue(QuestionLabel.objects.filter(revision=merged_revision,
+            original_number="J1-1+J2-1").exists())
+
+        merged_entity_id = merged_revision.entity_id
+        split_context = catalogue.prepare_context(self.owner, self.household.pk, "split",
+            [merged_revision.pk])
+        split = catalogue.split_question(self.owner, self.household.pk, source_revision_id=merged_revision.pk,
+            context_token=split_context, children=[
+                {"original_number": "J1-1+J2-1(a)", "printed_text": "子题甲"},
+                {"original_number": "J1-1+J2-1(b)", "printed_text": "子题乙"},
+            ], reason="拆分无单一资料的合题", request_key=request_key())
+        self.assertFalse(QuestionSource.objects.filter(revision_id__in=split["target_revision_ids"]).exists())
+        split_question_entities = {EntityRecord.objects.get(household=self.household, kind="question",
+            stable_id=stable_id).pk for stable_id in split["target_question_ids"]}
+
+        for material in (self.material, second_material):
+            rows = knowledge.index_data(self.owner, self.household.pk,
+                {"material_id": str(material.pk)})["questions"]
+            self.assertIn(merged_entity_id, {row["entity"].pk for row in rows})
+            self.assertTrue(split_question_entities.issubset({row["entity"].pk for row in rows}))
+
+    def test_material_filter_does_not_infer_cross_material_match_from_shared_image(self):
+        first = self.question()
+        second_material = materials.create_material(self.owner, self.household.pk, "同图另一资料", request_key())
+        second = self.question(second_material, original_number="J2-1")
+        first_revision = RevisionRecord.objects.get(pk=first["revision_id"])
+        second_revision = RevisionRecord.objects.get(pk=second["revision_id"])
+        first_evidence = EvidenceRecord.objects.get(source=first_revision)
+        second_evidence = EvidenceRecord.objects.get(source=second_revision)
+        self.assertEqual(first_evidence.image.sha256, second_evidence.image.sha256)
+        self.assertNotEqual(first_evidence.region_id, second_evidence.region_id)
+
+        rows = knowledge.index_data(self.owner, self.household.pk,
+            {"material_id": str(self.material.pk)})["questions"]
+        self.assertEqual([row["entity"].stable_id for row in rows], [first["question_id"]])
+
+    def test_material_filter_keeps_whole_image_question_unknown_without_region_anchor(self):
+        saved = self.question()
+        bundle = core.read_snapshot_bundle(self.owner, self.household.pk)
+        question = next(item for item in bundle.questions if item.question_id == saved["question_id"])
+        previous = question.revisions[-1]
+        image = next(item for item in bundle.images if item.image_id == previous.evidence_refs[0].image_id)
+        whole_image = EvidenceRef(self.household.pk, image.image_id, image.sha256,
+            Granularity.WHOLE_IMAGE, None, None, True, EvidencePurpose.QUESTION, 1, ("region_missing",))
+        current = seal_revision(replace(previous,
+            header=records.header(self.owner, question.question_id, "来源区域仍未知",
+                RevisionRecord.objects.get(pk=previous.header.revision_id)),
+            review_state=ReviewState.DRAFT, evidence_refs=(whole_image,)))
+        updated_question = replace(question, revisions=(*question.revisions, current))
+        updated_bundle = replace(bundle, questions=tuple(updated_question if item.question_id == question.question_id
+            else item for item in bundle.questions))
+        core.stage_bundle(self.owner, updated_bundle, request_key=request_key(), expected_heads={
+            ObjectKey("question", question.question_id): previous.header.revision_id})
+
+        current_record = RevisionRecord.objects.get(pk=current.header.revision_id)
+        evidence = EvidenceRecord.objects.get(source=current_record)
+        self.assertIsNone(evidence.region_id)
+        self.assertEqual(evidence.image_id, EvidenceRecord.objects.get(source_id=saved["revision_id"]).image_id)
+        self.assertTrue(QuestionSource.objects.filter(material=self.material,
+            revision_id=saved["revision_id"]).exists())
+        rows = knowledge.index_data(self.owner, self.household.pk,
+            {"material_id": str(self.material.pk)})["questions"]
+        self.assertEqual(rows, [])

@@ -71,9 +71,33 @@ def create_model_config(actor, household_id, *, data):
     household = _owner_config(actor, household_id)
     current = latest_config(household_id)
     cloud_enabled = bool(data.get("cloud_enabled"))
+    confirmed = data.get("confirm_external_processing") is True
     scope = data.get("outbound_scope") or ModelConfig.OutboundScope.REVIEWED_TEXT
     if scope not in ModelConfig.OutboundScope.values:
         _error("invalid_input", "外发范围无效。")
+    route = data.get("connection_route")
+    upstream_state = data.get("upstream_state")
+    retention_state = data.get("retention_state")
+    if route not in ModelConfig.ConnectionRoute.values:
+        _error("invalid_input", "请明确选择直连、网关或未知链路。")
+    if upstream_state not in ModelConfig.DeclarationState.values:
+        _error("invalid_input", "请明确填写上游名单或标记未知。")
+    if retention_state not in ModelConfig.DeclarationState.values:
+        _error("invalid_input", "请填写供应商留存说明或标记未知。")
+    upstreams = data.get("known_upstream_providers") or ""
+    retention = data.get("retention_description") or ""
+    if upstream_state == ModelConfig.DeclarationState.KNOWN:
+        upstreams = _text(upstreams, 2000)
+    elif upstreams.strip():
+        _error("invalid_input", "上游未知时请清空名单，不能同时填写互相矛盾的信息。")
+    if retention_state == ModelConfig.DeclarationState.KNOWN:
+        retention = _text(retention, 2000)
+    elif retention.strip():
+        _error("invalid_input", "留存未知时请清空说明，不能同时填写互相矛盾的信息。")
+    if cloud_enabled and not confirmed:
+        _error("model_consent_required", "启用外发前必须手动勾选确认框。")
+    if confirmed and not cloud_enabled:
+        _error("invalid_input", "只有启用远程调用时才能确认外发。")
     def number(key, default, low, high):
         try:
             result = int(data.get(key, default))
@@ -92,7 +116,12 @@ def create_model_config(actor, household_id, *, data):
     values = dict(
         household=household, revision_no=(current.revision_no + 1 if current else 1), created_by=actor,
         provider_label=_text(data.get("provider_label"), 120), base_url=_text(data.get("base_url"), 500),
-        model=_text(data.get("model"), 160), cloud_enabled=cloud_enabled, outbound_scope=scope,
+        model=_text(data.get("model"), 160), connection_route=route,
+        upstream_state=upstream_state, known_upstream_providers=upstreams.strip(),
+        retention_state=retention_state, retention_description=retention.strip(),
+        outbound_confirmation_by=actor if confirmed else None,
+        outbound_confirmation_at=timezone.now() if confirmed else None,
+        cloud_enabled=cloud_enabled, outbound_scope=scope,
         timeout_seconds=number("timeout_seconds", 30, 1, 60),
         max_output_tokens=number("max_output_tokens", 1000, 1, 2000),
         max_input_chars=number("max_input_chars", 16000, 1, 16000),
@@ -117,16 +146,46 @@ def _text(value, limit):
 
 
 def config_snapshot(row):
-    return {"revision_no": row.revision_no, "provider_label": row.provider_label,
+    return {"config_id": str(row.pk), "revision_no": row.revision_no,
+        "provider_label": row.provider_label,
         "base_url": row.base_url, "model": row.model, "cloud_enabled": row.cloud_enabled,
+        "connection_route": row.connection_route, "upstream_state": row.upstream_state,
+        "known_upstream_providers": row.known_upstream_providers,
+        "retention_state": row.retention_state,
+        "retention_description": row.retention_description,
+        "outbound_confirmation_by": (str(row.outbound_confirmation_by_id)
+            if row.outbound_confirmation_by_id else None),
+        "outbound_confirmation_at": (row.outbound_confirmation_at.isoformat()
+            if row.outbound_confirmation_at else None),
         "outbound_scope": row.outbound_scope, "timeout_seconds": row.timeout_seconds,
         "max_output_tokens": row.max_output_tokens, "max_input_chars": row.max_input_chars,
-        "max_calls": row.max_calls, "batch_budget": str(row.batch_budget),
-        "input_price_per_million": str(row.input_price_per_million),
-        "output_price_per_million": str(row.output_price_per_million),
-        "reserved_per_call": str(row.reserved_per_call),
+        "max_calls": row.max_calls, "batch_budget": f"{Decimal(row.batch_budget):.6f}",
+        "input_price_per_million": f"{Decimal(row.input_price_per_million):.6f}",
+        "output_price_per_million": f"{Decimal(row.output_price_per_million):.6f}",
+        "reserved_per_call": f"{Decimal(row.reserved_per_call):.6f}",
         "non_billable_gateway": row.non_billable_gateway, "currency": "USD",
         "test_http_enabled": _is_test_owner(row.created_by)}
+
+
+def _has_explicit_outbound_confirmation(config, snapshot=None):
+    if (not config.provider_label.strip()
+            or not config.connection_route
+            or config.connection_route not in ModelConfig.ConnectionRoute.values
+            or not config.upstream_state or config.upstream_state not in ModelConfig.DeclarationState.values
+            or not config.retention_state or config.retention_state not in ModelConfig.DeclarationState.values
+            or config.outbound_confirmation_by_id is None
+            or config.outbound_confirmation_by_id != config.created_by_id
+            or config.outbound_confirmation_at is None):
+        return False
+    upstreams = (config.known_upstream_providers or "").strip()
+    retention = (config.retention_description or "").strip()
+    if (config.upstream_state == ModelConfig.DeclarationState.KNOWN and not upstreams) or (
+            config.upstream_state == ModelConfig.DeclarationState.UNKNOWN and upstreams):
+        return False
+    if (config.retention_state == ModelConfig.DeclarationState.KNOWN and not retention) or (
+            config.retention_state == ModelConfig.DeclarationState.UNKNOWN and retention):
+        return False
+    return snapshot is None or snapshot == config_snapshot(config)
 
 
 def _is_test_owner(user):
@@ -235,7 +294,9 @@ def home_context(actor, household_id=None):
     runs = list(ModelRun.objects.filter(household_id=household_id).select_related("config").order_by("-created_at")[:60])
     return {"households": households, "household_id": str(household_id), "config": config,
         "runs": runs, "writable": member.role in ("owner", "reviewer"),
-        "can_configure": member.role == "owner"}
+        "can_configure": member.role == "owner",
+        "external_ready": bool(config and config.cloud_enabled and
+            _has_explicit_outbound_confirmation(config))}
 
 
 @transaction.atomic
@@ -361,6 +422,8 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
         _error("stale_context", "模型配置已改变，请重新选择。")
     if not config or not config.cloud_enabled:
         _error("model_disabled", "请先由家庭所有者启用模型配置。")
+    if not _has_explicit_outbound_confirmation(config):
+        _error("model_consent_required", "当前配置缺少新的外发确认，请由所有者追加确认版本。")
     choice_context = selection["choice_context"]
     if any(x not in selection.get("choices", []) for x in sources):
         _error("stale_context", "所选来源不在当前已发布选项中。")
@@ -619,10 +682,12 @@ def _cost(config, usage, contains_images):
 
 @transaction.atomic
 def cancel_run(actor, run_id):
-    household_id = ModelRun.objects.filter(pk=run_id).values_list("household_id", flat=True).first()
-    if household_id is None:
+    reference = ModelRun.objects.filter(pk=run_id).values("household_id", "config_id").first()
+    if not reference:
         _error("not_found")
+    household_id = reference["household_id"]
     records.household(actor, household_id, write=True)
+    config = ModelConfig.objects.select_for_update().filter(pk=reference["config_id"]).first()
     run = ModelRun.objects.select_for_update().filter(pk=run_id, household_id=household_id).first()
     if not run:
         _error("not_found")
@@ -642,8 +707,17 @@ def cancel_run(actor, run_id):
         run.status = ModelRun.Status.CANCELLED
         run.completed_at = timezone.now()
         run.save(update_fields=("status", "completed_at"))
-        ModelBudgetReservation.objects.filter(run=run, state=ModelBudgetReservation.State.HELD).update(
-            state=ModelBudgetReservation.State.UNKNOWN, settled_at=timezone.now())
+        reservation = ModelBudgetReservation.objects.select_for_update().filter(
+            run=run, state=ModelBudgetReservation.State.HELD).first()
+        if reservation:
+            # Only current-consent runs can prove HELD has not crossed the send gate.
+            # Legacy RUNNING workers may have sent before this gate existed.
+            releasable = bool(config and _has_explicit_outbound_confirmation(
+                config, run.config_snapshot))
+            reservation.state = (ModelBudgetReservation.State.RELEASED if releasable
+                else ModelBudgetReservation.State.UNKNOWN)
+            reservation.settled_at = timezone.now()
+            reservation.save(update_fields=("state", "settled_at"))
     return run
 
 
@@ -651,6 +725,62 @@ def _provider_config(config):
     return {"base_url": config.base_url, "model": config.model,
         "timeout_seconds": config.timeout_seconds, "max_output_tokens": config.max_output_tokens,
         "test_http_enabled": _is_test_owner(config.created_by)}
+
+
+@transaction.atomic
+def _authorize_external_send(run_id, reservation_id):
+    reference = ModelRun.objects.filter(pk=run_id).values("household_id", "config_id").first()
+    if not reference:
+        return False
+    Household.objects.select_for_update().filter(pk=reference["household_id"]).first()
+    config = ModelConfig.objects.select_for_update().filter(pk=reference["config_id"]).first()
+    run = ModelRun.objects.select_for_update().filter(pk=run_id).first()
+    if not run:
+        return False
+    if run.status == ModelRun.Status.CANCELLED:
+        # This call is execute_run's unique pre-provider gate for the reservation
+        # returned by its claim. HELD proves the claim has not passed the send gate;
+        # a post-gate cancellation already moved this exact reservation to UNKNOWN.
+        reservation = ModelBudgetReservation.objects.select_for_update().filter(
+            pk=reservation_id, run=run, state=ModelBudgetReservation.State.HELD).first()
+        if reservation:
+            reservation.state = ModelBudgetReservation.State.RELEASED
+            reservation.settled_at = timezone.now()
+            reservation.save(update_fields=("state", "settled_at"))
+        return False
+    if run.status != ModelRun.Status.RUNNING or not config:
+        return False
+    latest = latest_config(run.household_id)
+    code = None
+    try:
+        records.household(run.actor, run.household_id, write=True)
+    except core.PersistenceError:
+        code = "actor_not_authorized"
+    if code is None and (not latest or latest.pk != config.pk or not config.cloud_enabled):
+        code = "model_disabled"
+    elif code is None and not _has_explicit_outbound_confirmation(config, run.config_snapshot):
+        code = "model_consent_required"
+    elif code is None and not _still_current(run):
+        code = "stale_context"
+    if code is None:
+        reservation = ModelBudgetReservation.objects.select_for_update().filter(
+            pk=reservation_id, run=run, state=ModelBudgetReservation.State.HELD).first()
+        if not reservation:
+            code = "budget_reservation_missing"
+    if code is None:
+        reservation.state = ModelBudgetReservation.State.UNKNOWN
+        reservation.settled_at = timezone.now()
+        reservation.save(update_fields=("state", "settled_at"))
+        return True
+    run.status, run.error_code, run.completed_at = ModelRun.Status.FAILED, code, timezone.now()
+    run.save(update_fields=("status", "error_code", "completed_at"))
+    reservation = ModelBudgetReservation.objects.select_for_update().filter(
+        pk=reservation_id, run=run, state=ModelBudgetReservation.State.HELD).first()
+    if reservation:
+        reservation.state = ModelBudgetReservation.State.RELEASED
+        reservation.settled_at = timezone.now()
+        reservation.save(update_fields=("state", "settled_at"))
+    return False
 
 
 @transaction.atomic
@@ -687,6 +817,11 @@ def _claim(run_id):
     latest = latest_config(run.household_id)
     if not latest or latest.pk != run.config_id or not run.config.cloud_enabled:
         run.status, run.error_code, run.completed_at = ModelRun.Status.FAILED, "model_disabled", timezone.now()
+        run.save(update_fields=("status", "error_code", "completed_at"))
+        return None
+    if not _has_explicit_outbound_confirmation(run.config, run.config_snapshot):
+        run.status, run.error_code, run.completed_at = (
+            ModelRun.Status.FAILED, "model_consent_required", timezone.now())
         run.save(update_fields=("status", "error_code", "completed_at"))
         return None
     try:
@@ -751,15 +886,18 @@ def _claim(run_id):
     run.lease_expires_at = run.started_at + timezone.timedelta(seconds=run.config.timeout_seconds + 30)
     run.reserved_cost = estimate
     run.save(update_fields=("status", "started_at", "call_started_at", "lease_expires_at", "reserved_cost"))
-    ModelBudgetReservation.objects.create(run=run, config=run.config, reserved_calls=1, reserved_cost=estimate)
-    return run.pk, provider_config, prepared_payload, contains_images
+    reservation = ModelBudgetReservation.objects.create(run=run, config=run.config,
+        reserved_calls=1, reserved_cost=estimate)
+    return run.pk, provider_config, prepared_payload, contains_images, reservation.pk
 
 
 def execute_run(run_id):
     claim = _claim(run_id)
     if not claim:
         return ModelRun.objects.filter(pk=run_id).first()
-    run_id, config, prepared_payload, contains_images = claim
+    run_id, config, prepared_payload, contains_images, reservation_id = claim
+    if not _authorize_external_send(run_id, reservation_id):
+        return ModelRun.objects.filter(pk=run_id).first()
     row = ModelRun.objects.select_related("attempt_revision", "config").get(pk=run_id)
     usage = {}
     try:

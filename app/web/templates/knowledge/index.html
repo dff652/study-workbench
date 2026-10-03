@@ -12,8 +12,10 @@
       <div class="filter-grid">
         <div class="field"><label for="id_household_id">家庭</label>{{ form.household_id }}{{ form.household_id.errors }}</div>
         {% if home %}
+          <div class="field"><label for="id_material_id">资料</label>{{ form.material_id }}{{ form.material_id.errors }}</div>
           <div class="field"><label for="id_knowledge_id">知识点关联</label>{{ form.knowledge_id }}{{ form.knowledge_id.errors }}</div>
           <div class="field"><label for="id_method_id">方法关联</label>{{ form.method_id }}{{ form.method_id.errors }}</div>
+          <div class="field"><label for="id_method_role">方法角色</label>{{ form.method_role }}{{ form.method_role.errors }}</div>
           <div class="field"><label for="id_question_type_id">题型关联</label>{{ form.question_type_id }}{{ form.question_type_id.errors }}</div>
           <div class="field"><label for="id_review">审核状态</label>{{ form.review }}{{ form.review.errors }}</div>
           <div class="field"><label for="id_number">题号文本</label>{{ form.number }}{{ form.number.errors }}</div>

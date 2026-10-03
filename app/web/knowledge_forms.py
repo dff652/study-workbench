@@ -13,8 +13,12 @@ NODE_KINDS = (
 
 class IndexForm(forms.Form):
     household_id = forms.ChoiceField(label="家庭", choices=())
+    material_id = forms.ChoiceField(label="资料", required=False, choices=(("", "全部资料"),))
     knowledge_id = forms.ChoiceField(label="知识点", required=False, choices=(("", "全部"),))
     method_id = forms.ChoiceField(label="方法", required=False, choices=(("", "全部"),))
+    method_role = forms.ChoiceField(label="方法角色", required=False, choices=(
+        ("", "主辅方法都包括"), ("primary", "主方法"), ("auxiliary", "辅助方法"),
+    ))
     question_type_id = forms.ChoiceField(label="题型", required=False, choices=(("", "全部"),))
     review = forms.ChoiceField(label="题目审核", required=False, choices=(
         ("", "全部"), ("draft", "待审核"), ("accepted", "已审核"),
@@ -22,17 +26,26 @@ class IndexForm(forms.Form):
     ))
     number = forms.CharField(label="题号文本", required=False, max_length=80)
 
-    def __init__(self, *args, households=(), household_id="", nodes=None, **kwargs):
+    def __init__(self, *args, households=(), household_id="", nodes=None, materials=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["household_id"].choices = [(str(row.household_id), str(row.household.id)) for row in households]
         if household_id:
+            self.fields["material_id"].choices = [("", "全部资料")] + [
+                (str(row.pk), f"{row.title} · {row.pk}") for row in materials
+            ]
             for kind, field in (("knowledge", "knowledge_id"), ("method", "method_id"),
                                 ("question_type", "question_type_id")):
                 rows = (nodes or {}).get(kind, ())
                 choices = [("", "全部")] + [
-                    (row["stable_id"], row["name"]) for row in rows
+                    (row["stable_id"], f"{row['name']} · …{row['stable_id'][-8:]}") for row in rows
                 ]
                 self.fields[field].choices = choices
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("method_role") and not cleaned.get("method_id"):
+            self.add_error("method_role", "请先选择方法，再筛选主方法或辅助方法。")
+        return cleaned
 
 
 class ScopedRequestForm(RequestForm):
@@ -44,6 +57,9 @@ class ScopedRequestForm(RequestForm):
 class KnowledgeForm(ScopedRequestForm):
     definition = forms.CharField(max_length=20000, label="定义、公式与例题", widget=forms.Textarea(attrs={"rows": 12}),
         help_text="完整写入定义、公式、示例和推导；数学表达式按原样保留。")
+    display_markup = forms.CharField(required=False, max_length=24000, label="公式与重点排版",
+        widget=forms.Textarea(attrs={"rows": 8}),
+        help_text="可留空。公式行写 [[math:1/2]]、重点可写 **重点** 或 ==重点==，图片行写 [[image:1|原文]]；公式和图片标记各占整行。去除标记后须与定义一致，图片序号只指本修订中有坐标的来源区域。")
     conditions = forms.CharField(required=False, max_length=6000, label="适用条件", widget=forms.Textarea(attrs={"rows": 5}),
         help_text="每行一项。")
     common_errors = forms.CharField(required=False, max_length=6000, label="易错点", widget=forms.Textarea(attrs={"rows": 5}),

@@ -12,6 +12,7 @@ from django.utils.html import strip_tags
 
 from app.persistence import services as core
 from app.persistence.models import EntityRecord, HouseholdMember, ReviewProjection
+from app.web import knowledge_services as knowledge
 from app.web import learning_services as learning
 from app.web import services as materials
 from tests.web.test_http import hidden_fields, synthetic_png
@@ -94,6 +95,58 @@ class LearningHTTPTests(TransactionTestCase):
                 payload.update({f"{dimension}_judgment": "unknown", f"{dimension}_basis": "undetermined",
                     f"{dimension}_rationale": "", f"{dimension}_unknown_reason": "此维度未评价"})
         return payload
+
+    def test_profile_filters_by_stable_node_ids_and_combines_date_review_and_error(self):
+        learner_id = self.create_profile()
+        self.create_confirmed_observation(learner_id)
+        attempt_id = self.create_attempt(learner_id)
+        question_revision_id = EntityRecord.objects.get(household=self.household, kind="question",
+            stable_id=self.question_id).published_revision_id
+
+        def accepted_node(kind, values):
+            node = knowledge.save_node(self.owner, self.household.pk, kind,
+                data={**values, "sources": "[]"}, request_key=key(), reason="建立档案筛选节点")
+            entity = EntityRecord.objects.get(household=self.household, kind=kind,
+                stable_id=node["stable_id"])
+            context = core.review_context(self.owner, self.household.pk, node["revision_id"])
+            core.review_revision(self.owner, self.household.pk, node["revision_id"], action="accept",
+                expected_head=context["expected_head"], expected_dependencies=context["expected_dependencies"],
+                expected_decision_id=context["expected_decision_id"], request_key=key(), reason="确认档案筛选节点")
+            return node
+
+        knowledge_node = accepted_node("knowledge", {"definition": "相同显示名称",
+            "conditions": "", "common_errors": ""})
+        type_node = accepted_node("question_type", {"name": "相同显示名称",
+            "structural_features": "", "conditions": ""})
+        for kind, node, role in (("knowledge", knowledge_node, "applies"),
+                ("question_type", type_node, "belongs")):
+            link = knowledge.create_link(self.owner, self.household.pk, kind=kind,
+                node_revision_id=node["revision_id"], question_revision_id=question_revision_id,
+                role=role, request_key=key(), reason="固定档案题目关系")
+            link_kind = "knowledge_question" if kind == "knowledge" else "question_type_link"
+            entity = EntityRecord.objects.get(household=self.household, kind=link_kind,
+                stable_id=link["stable_id"])
+            context = core.review_context(self.owner, self.household.pk, link["revision_id"])
+            core.review_revision(self.owner, self.household.pk, link["revision_id"], action="accept",
+                expected_head=context["expected_head"], expected_dependencies=context["expected_dependencies"],
+                expected_decision_id=context["expected_decision_id"], request_key=key(), reason="确认档案题目关系")
+
+        assessment_url = reverse("learning:assessment_new", kwargs={"attempt_id": attempt_id})
+        form = self.client.get(assessment_url)
+        self.assertEqual(form.status_code, 200)
+        payload = self.assessment_payload(form, attempt_id)
+        payload["answer_judgment"] = "incorrect"
+        payload["answer_rationale"] = "合成错误证据"
+        saved = self.client.post(assessment_url, payload)
+        self.assertEqual(saved.status_code, 302, saved.content.decode("utf-8"))
+
+        filters = {"knowledge": knowledge_node["stable_id"], "type": type_node["stable_id"],
+            "from": "2026-10-03", "to": "2026-10-03", "review": "draft", "error": "yes"}
+        profile = self.client.get(reverse("learning:profile_detail", kwargs={"learner_id": learner_id}), filters)
+        self.assertEqual(profile.status_code, 200)
+        self.assertEqual([item["attempt"].attempt_id for item in profile.context["attempts"]], [attempt_id])
+        self.assertEqual(profile.context["filters"]["knowledge"], knowledge_node["stable_id"])
+        self.assertEqual(profile.context["filters"]["type"], type_node["stable_id"])
 
     def test_profile_and_unknown_observation_http_keep_author_and_date_unknown(self):
         learner_id = self.create_profile()
@@ -267,6 +320,13 @@ class LearningHTTPTests(TransactionTestCase):
         foreign = self.client.get(reverse("learning:profile_detail", kwargs={
             "learner_id": foreign_profile["learner_id"]}))
         self.assertEqual(foreign.status_code, 404)
+        foreign_node = knowledge.save_node(foreign_owner, foreign_household.pk, "knowledge", data={
+            "definition": "另一家庭知识点", "conditions": "", "common_errors": "", "sources": "[]"},
+            request_key=key(), reason="跨家庭筛选边界")
+        local_profile = self.create_profile()
+        foreign_filter = self.client.get(reverse("learning:profile_detail", kwargs={
+            "learner_id": local_profile}), {"knowledge": foreign_node["stable_id"]})
+        self.assertEqual(foreign_filter.status_code, 404)
 
         assessment_url = reverse("learning:assessment_new", kwargs={"attempt_id": attempt_id})
         form = self.client.get(assessment_url)

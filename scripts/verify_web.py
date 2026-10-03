@@ -46,6 +46,7 @@ def main():
     from playwright.sync_api import sync_playwright, expect
     from app.persistence import services as core
     from app.persistence.models import EntityRecord, RevisionRecord, ReviewDecision
+    from app.web.images import original_bbox
     from app.web.models import MaterialPage, MaterialSet, QuestionSource
 
     password = secrets.token_urlsafe(24)
@@ -115,6 +116,54 @@ def main():
                     assert page.evaluate("document.documentElement.scrollWidth <= 391"), screen
                     checks.append(f"phone-width:{screen}")
 
+                def zoom_pan_select(card, rotation):
+                    card.locator(".rotation-select").select_option(str(rotation))
+                    image = card.locator(".region-image")
+                    page.wait_for_function("image => image.complete && image.naturalWidth > 0",
+                        arg=image.element_handle())
+                    tools = card.locator(".region-image-tools")
+                    expect(tools.locator(".region-zoom-in")).to_be_visible()
+                    tools.locator(".region-zoom-in").click()
+                    tools.locator(".region-zoom-in").click()
+                    expect(tools.locator(".region-zoom-status")).to_have_text("图片 200%")
+                    viewport = card.locator(".image-wrap")
+                    viewport.scroll_into_view_if_needed()
+                    before = card.locator(".region-stage").evaluate("stage => stage.getBoundingClientRect().left")
+                    tools.locator(".region-pan-mode").click()
+                    bounds = viewport.bounding_box()
+                    pan_x = round(bounds["x"] + bounds["width"] / 2)
+                    pan_y = round(bounds["y"] + bounds["height"] / 2)
+                    page.mouse.move(pan_x, pan_y)
+                    page.mouse.down()
+                    page.mouse.move(pan_x + 32, pan_y - 24, steps=4)
+                    page.mouse.up()
+                    after = card.locator(".region-stage").evaluate("stage => stage.getBoundingClientRect().left")
+                    assert after != before, f"rotation {rotation}: pan did not move the image"
+                    tools.locator(".region-select-mode").click()
+
+                    viewport.scroll_into_view_if_needed()
+                    bounds = viewport.bounding_box()
+                    points = [
+                        [round(bounds["x"] + bounds["width"] * .2), round(bounds["y"] + bounds["height"] * .2)],
+                        [round(bounds["x"] + bounds["width"] * .8), round(bounds["y"] + bounds["height"] * .8)],
+                    ]
+                    canvas = card.locator(".region-canvas")
+                    expected = canvas.evaluate("""(canvas, points) => {
+                        const box = canvas.getBoundingClientRect();
+                        const map = ([x, y]) => [
+                            Math.max(0, Math.min(canvas.width, (x - box.left) * canvas.width / box.width)),
+                            Math.max(0, Math.min(canvas.height, (y - box.top) * canvas.height / box.height)),
+                        ];
+                        const [a, b] = points.map(map);
+                        return [Math.min(a[0], b[0]), Math.min(a[1], b[1]),
+                            Math.max(a[0], b[0]), Math.max(a[1], b[1])].map(Math.round);
+                    }""", points)
+                    page.mouse.move(*points[0])
+                    page.mouse.down()
+                    page.mouse.move(*points[1], steps=5)
+                    page.mouse.up()
+                    return expected
+
                 page.goto(origin)
                 expect(page).to_have_url(origin + "/accounts/login/?next=/")
                 page.locator("#id_username").fill(user.username)
@@ -149,26 +198,34 @@ def main():
                 assert db(lambda: list(MaterialPage.objects.filter(material=material).order_by("position").values_list("pk", flat=True))) == [pages[1].pk, pages[0].pk]
                 fits("page-order")
                 page.goto(origin + f"/material/{material.pk}/question/new/")
+                expect(page.locator("#id_display_markup")).to_be_visible()
+                markup_help = page.locator(".field:has(#id_display_markup) .help-text").inner_text()
+                assert all(token in markup_help for token in ("[[math:1/2]]", "**重点**", "==标记==", "[[image:1|原文]]"))
                 page.locator("#id_original_number").fill("合成题 1")
                 page.locator("#id_printed_text").fill("1/3 + 1/6 = ?")
                 page.locator("#id_reason").fill("人工录入合成印刷题干")
                 first = page.locator(".region-card").first
-                first.locator(".rotation-select").select_option("90")
-                canvas = first.locator("canvas")
-                canvas.scroll_into_view_if_needed()
-                bounds = canvas.bounding_box()
-                page.mouse.move(bounds["x"] + bounds["width"] * 0.1, bounds["y"] + bounds["height"] * 0.2)
-                page.mouse.down()
-                page.mouse.move(bounds["x"] + bounds["width"] * 0.7, bounds["y"] + bounds["height"] * 0.6, steps=5)
-                page.mouse.up()
+                first_expected = zoom_pan_select(first, 90)
                 first.locator(".add-region").click()
                 sources = json.loads(page.locator("#id_sources").input_value())
                 assert len(sources) == 1 and sources[0]["rotation"] == 90
+                assert sources[0]["display_bbox"] == first_expected
+                first_original = original_bbox(first_expected, 600, 900, 90)
+                x0, y0, x1, y1 = first_expected
+                assert first_original == (y0, 900 - x1, y1, 900 - x0)
                 second = page.locator(".region-card").nth(1)
                 for selector, value in zip((".coord-x0", ".coord-y0", ".coord-x1", ".coord-y1"), (10, 20, 200, 300)):
                     second.locator(selector).fill(str(value))
                 second.locator(".add-coordinates").click()
-                assert len(json.loads(page.locator("#id_sources").input_value())) == 2
+                second_expected = zoom_pan_select(second, 270)
+                second.locator(".add-region").click()
+                sources = json.loads(page.locator("#id_sources").input_value())
+                assert len(sources) == 3
+                assert sources[1]["rotation"] == 0 and sources[2]["rotation"] == 270
+                assert sources[2]["display_bbox"] == second_expected
+                second_original = original_bbox(second_expected, 600, 900, 270)
+                x0, y0, x1, y1 = second_expected
+                assert second_original == (600 - y1, x0, 600 - y0, x1)
                 fits("region-editor")
                 page.locator("#question-form > .form-actions button").click()
                 expect(page.locator(".printed-text")).to_have_text("1/3 + 1/6 = ?")
@@ -177,10 +234,10 @@ def main():
                 entity = db(lambda: EntityRecord.objects.get(kind="question", stable_id=question_id))
                 old_id = entity.head_revision_id
                 old_sources = db(lambda: QuestionSource.objects.get(revision_id=old_id).sources)
-                assert len(old_sources) == 2 and old_sources[0]["rotation"] == 90
-                expect(page.locator(".source-list li")).to_have_count(2)
+                assert len(old_sources) == 3 and [source["rotation"] for source in old_sources] == [90, 0, 270]
+                expect(page.locator(".source-list li")).to_have_count(3)
                 source_url = page.locator(".source-list a").first.get_attribute("href")
-                checks.append("multi-page-source:drag-and-keyboard-and-original-coordinates")
+                checks.append("multi-page-source:zoom-pan-90-270-keyboard-and-original-coordinates")
                 page.locator("#id_action").select_option("accept")
                 page.locator("#id_reason").fill("核对合成题干与来源")
                 page.get_by_role("button", name="记录审核决定", exact=True).click()
@@ -189,7 +246,7 @@ def main():
                 stale = context.new_page()
                 stale.goto(question_url + "edit/")
                 page.goto(question_url + "edit/")
-                assert len(json.loads(page.locator("#id_sources").input_value())) == 2
+                assert len(json.loads(page.locator("#id_sources").input_value())) == 3
                 page.locator("#id_printed_text").fill("1/3 + 1/6 = ? 请写出过程。")
                 page.locator("#id_reason").fill("补充印刷指令；保留首次版本")
                 page.locator("#question-form > .form-actions button").click()
@@ -198,7 +255,7 @@ def main():
                 assert db(lambda: RevisionRecord.objects.get(pk=old_id).payload["printed_text"]) == "1/3 + 1/6 = ?"
                 assert db(lambda: QuestionSource.objects.get(revision_id=old_id).sources) == old_sources
                 expect(page.locator(".history-list")).to_contain_text("1/3 + 1/6 = ?")
-                expect(page.locator(".history-list .history-source")).to_have_count(4)
+                expect(page.locator(".history-list .history-source")).to_have_count(6)
                 stale.locator("#id_reason").fill("过期标签页不应覆盖")
                 with stale.expect_response(lambda response: response.request.method == "POST") as result:
                     stale.locator("#question-form > .form-actions button").click()
@@ -229,7 +286,7 @@ def main():
                 assert not errors, errors
                 browser.close()
         report = {"synthetic_only": True, "viewport": [390, 844], "checks": checks,
-            "question_revisions": 2, "source_regions_per_revision": 2, "javascript_errors": errors,
+            "question_revisions": 2, "source_regions_per_revision": 3, "javascript_errors": errors,
             "browser": "Playwright Chromium", "deployment": False}
         report_path = output / "verification.local.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

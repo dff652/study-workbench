@@ -214,7 +214,7 @@ def _question_revision_labels(household_id, bundle):
 def _profile_view(actor, household_id, bundle, profile, observations, attempts):
     question_options = _published_question_choices(actor, household_id, bundle)
     qlabels = _question_revision_labels(household_id, bundle)
-    knowledge_by_question, types_by_question = _published_node_labels(household_id, bundle)
+    knowledge_by_question, types_by_question = _published_node_labels(household_id)
     attempt_infos = []
     error_choices = set()
     review_states = set()
@@ -227,12 +227,16 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
                 error_choices.add("error")
         question_revision_id = current.question_revision_id
         question_label = qlabels.get(question_revision_id, attempt.question_id)
+        knowledge_nodes = knowledge_by_question.get(question_revision_id, ())
+        type_nodes = types_by_question.get(question_revision_id, ())
         attempt_infos.append({
             "attempt": attempt,
             "revision": current,
             "question_label": question_label,
-            "knowledge_labels": knowledge_by_question.get(question_revision_id, ()),
-            "type_labels": types_by_question.get(question_revision_id, ()),
+            "knowledge_labels": tuple(item["label"] for item in knowledge_nodes),
+            "knowledge_ids": frozenset(item["stable_id"] for item in knowledge_nodes),
+            "type_labels": tuple(item["label"] for item in type_nodes),
+            "type_ids": frozenset(item["stable_id"] for item in type_nodes),
             "assessments": assessment_rows,
             "independent_success": _independent_success(actor, household_id, bundle, attempt, assessment_rows),
             "sort_date": current.actual_date or current.header.recorded_at[:10],
@@ -243,20 +247,14 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
         obs_infos.append({"observation": observation, "revision": latest,
                           "sources": _source_cards(actor, household_id, bundle, latest.evidence_refs)})
     return {"household_id": str(household_id), "profile": profile, "observations": obs_infos,
-            "attempts": attempt_infos, "knowledge_options": sorted({label for values in knowledge_by_question.values() for label in values}),
-            "type_options": sorted({label for values in types_by_question.values() for label in values}),
+            "attempts": attempt_infos,
+            "knowledge_options": _profile_node_options(knowledge_by_question),
+            "type_options": _profile_node_options(types_by_question),
             "review_options": sorted(review_states), "error_options": sorted(error_choices),
             "question_options": question_options}
 
 
-def _published_node_labels(household_id, bundle):
-    names = {}
-    for item in bundle.knowledge_items:
-        for revision in item.revisions:
-            names[revision.header.revision_id] = (revision.definition[:100] or "未命名知识点")
-    for item in bundle.question_types:
-        for revision in item.revisions:
-            names[revision.header.revision_id] = revision.name
+def _published_node_labels(household_id):
     questions_for_knowledge, questions_for_type = {}, {}
     rows = (EntityRecord.objects.filter(household_id=household_id,
             kind__in=("knowledge_question", "question_type_link"), published_revision__isnull=False)
@@ -279,16 +277,40 @@ def _published_node_labels(household_id, bundle):
                 "entity", "review_projection").first()
         if target_revision is None:
             continue
-        label = names.get(target_id, "知识点/题型")
-        if (question_revision.entity.published_revision_id != question_revision.pk
+        node_id = target_revision.entity.stable_id
+        name = (target_revision.payload.get("definition", "")[:100] or "未命名知识点") if target_kind == "knowledge" else (
+            target_revision.payload.get("name", "未命名题型"))
+        label = f"{name} · …{node_id[-8:]} · r{target_revision.revision_no}"
+        historical = (question_revision.entity.published_revision_id != question_revision.pk
                 or question_revision.review_projection.state != "accepted"
                 or target_revision.entity.published_revision_id != target_revision.pk
-                or target_revision.review_projection.state != "accepted"):
+                or target_revision.review_projection.state != "accepted")
+        if historical:
             label += "（历史关系）"
         bucket = questions_for_knowledge if row.kind == "knowledge_question" else questions_for_type
-        bucket.setdefault(qrev_id, set()).add(label)
-    return ({key: tuple(sorted(value)) for key, value in questions_for_knowledge.items()},
-            {key: tuple(sorted(value)) for key, value in questions_for_type.items()})
+        bucket.setdefault(qrev_id, {})[(node_id, target_revision.pk)] = {
+            "stable_id": node_id, "name": name, "revision_no": target_revision.revision_no,
+            "label": label, "historical": historical,
+        }
+    return ({key: tuple(sorted(value.values(), key=lambda item: (item["name"].casefold(), item["stable_id"])))
+             for key, value in questions_for_knowledge.items()},
+            {key: tuple(sorted(value.values(), key=lambda item: (item["name"].casefold(), item["stable_id"])))
+             for key, value in questions_for_type.items()})
+
+
+def _profile_node_options(relationships_by_question):
+    nodes = {}
+    historical_ids = set()
+    for relationships in relationships_by_question.values():
+        for relationship in relationships:
+            if relationship["historical"]:
+                historical_ids.add(relationship["stable_id"])
+            current = nodes.get(relationship["stable_id"])
+            if current is None or relationship["revision_no"] > current["revision_no"]:
+                nodes[relationship["stable_id"]] = relationship
+    return [{"stable_id": stable_id,
+        "label": f"{row['name']} · …{stable_id[-8:]}" + ("（含历史关系）" if stable_id in historical_ids else "")}
+        for stable_id, row in sorted(nodes.items(), key=lambda item: (item[1]["name"].casefold(), item[0]))]
 
 
 def _actual_assessments(actor, household_id, bundle, attempt):

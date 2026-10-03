@@ -9,6 +9,15 @@ from app.persistence.models import EntityRecord, Household, RevisionRecord
 
 
 class ModelConfig(models.Model):
+    class ConnectionRoute(models.TextChoices):
+        DIRECT = "direct", "直连供应商"
+        GATEWAY = "gateway", "通过网关"
+        UNKNOWN = "unknown", "链路未知"
+
+    class DeclarationState(models.TextChoices):
+        KNOWN = "known", "已知"
+        UNKNOWN = "unknown", "未知"
+
     class OutboundScope(models.TextChoices):
         REVIEWED_TEXT = "reviewed_text", "仅外发已选的已发布文字"
         SELECTED_REGIONS = "selected_regions", "已选文字及主动选择的图像区域"
@@ -21,6 +30,17 @@ class ModelConfig(models.Model):
     provider_label = models.CharField(max_length=120)
     base_url = models.URLField(max_length=500)
     model = models.CharField(max_length=160)
+    connection_route = models.CharField(max_length=16, choices=ConnectionRoute.choices,
+        null=True, blank=True)
+    upstream_state = models.CharField(max_length=8, choices=DeclarationState.choices,
+        null=True, blank=True)
+    known_upstream_providers = models.TextField(null=True, blank=True)
+    retention_state = models.CharField(max_length=8, choices=DeclarationState.choices,
+        null=True, blank=True)
+    retention_description = models.TextField(null=True, blank=True)
+    outbound_confirmation_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.PROTECT, related_name="confirmed_ai_model_configs")
+    outbound_confirmation_at = models.DateTimeField(null=True, blank=True)
     cloud_enabled = models.BooleanField(default=False)
     outbound_scope = models.CharField(max_length=24, choices=OutboundScope.choices,
         default=OutboundScope.REVIEWED_TEXT)
@@ -59,6 +79,29 @@ class ModelConfig(models.Model):
                 name="ai_modelconfig_reserve_nonnegative"),
             models.CheckConstraint(condition=models.Q(outbound_scope__in=("reviewed_text", "selected_regions")),
                 name="ai_modelconfig_scope_valid"),
+            models.CheckConstraint(condition=(models.Q(connection_route__isnull=True) |
+                models.Q(connection_route__in=("direct", "gateway", "unknown"))),
+                name="ai_modelconfig_route_valid"),
+            models.CheckConstraint(condition=(models.Q(upstream_state__isnull=True) |
+                (models.Q(upstream_state="unknown") &
+                    (models.Q(known_upstream_providers__isnull=True) |
+                     models.Q(known_upstream_providers=""))) |
+                (models.Q(upstream_state="known") &
+                    models.Q(known_upstream_providers__gt=""))),
+                name="ai_modelconfig_upstream_valid"),
+            models.CheckConstraint(condition=(models.Q(retention_state__isnull=True) |
+                (models.Q(retention_state="unknown") &
+                    (models.Q(retention_description__isnull=True) |
+                     models.Q(retention_description=""))) |
+                (models.Q(retention_state="known") &
+                    models.Q(retention_description__gt=""))),
+                name="ai_modelconfig_retention_valid"),
+            models.CheckConstraint(condition=(
+                models.Q(outbound_confirmation_by__isnull=True,
+                    outbound_confirmation_at__isnull=True) |
+                models.Q(outbound_confirmation_by__isnull=False,
+                    outbound_confirmation_at__isnull=False)),
+                name="ai_modelconfig_confirmation_pair"),
             models.CheckConstraint(condition=models.Q(currency="USD"), name="ai_modelconfig_currency_fixed"),
         ]
 

@@ -11,6 +11,8 @@
       {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
       <div class="field"><label for="id_original_number">原资料题号</label>{{ form.original_number }}{{ form.original_number.errors }}</div>
       <div class="field"><label for="id_printed_text">印刷题干</label>{{ form.printed_text }}<span class="help-text">{{ form.printed_text.help_text }}</span>{{ form.printed_text.errors }}</div>
+      {% if form.display_markup %}<div class="field"><label for="id_display_markup">排版文本（可选）</label>{{ form.display_markup }}<span class="help-text">{{ form.display_markup.help_text }}</span>{{ form.display_markup.errors }}</div>{% endif %}
+      <div class="field">{{ form.image_print_confirmed }}<label for="id_image_print_confirmed">{{ form.image_print_confirmed.label }}</label><span class="help-text">{{ form.image_print_confirmed.help_text }}</span>{{ form.image_print_confirmed.errors }}</div>
       <div class="field"><label for="id_reason">修订说明</label>{{ form.reason }}<span class="help-text">创建时说明录入来源；修订时说明本次改动。</span>{{ form.reason.errors }}</div>
     </section>
     <section class="panel region-editor" data-material-id="{{ material.id }}" data-storage-key="swb-question-sources-{{ material.id }}" {% if is_edit %}data-edit="true"{% endif %}>

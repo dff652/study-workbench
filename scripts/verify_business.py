@@ -52,7 +52,7 @@ def main():
     from playwright.sync_api import expect, sync_playwright
     from app.persistence import services as core
     from app.persistence.models import EntityRecord, Household, ReviewDecision, RevisionRecord
-    from app.web.models import MaterialPage, MaterialSet, QuestionSource
+    from app.web.models import MaterialPage, MaterialSet, QuestionSource, ImageDerivative
     from app.ai.models import ModelConfig, ModelRun
     from app.catalogue.models import QuestionLineage
     from app.printing.models import AnswerDecision, ExportSnapshot, TeacherAnswerRevision
@@ -77,6 +77,7 @@ def main():
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, 0, 120, 120), fill="#b43525")
     draw.text((40, 160), "SYNTHETIC ONLY - 1/3 + 1/6 = ?", fill="black")
+    draw.text((40, 180), "(-2)^2 / (x^2)^3 / sqrt(x)", fill="black")
     stream = BytesIO()
     image.save(stream, format="PNG")
     raw_image = stream.getvalue()
@@ -88,6 +89,8 @@ def main():
     checks = []
     errors = []
     blocked_requests = []
+    office_documents=[]
+    region_control_surfaces = set()
     server = None
     database_worker = ThreadPoolExecutor(max_workers=1)
 
@@ -167,6 +170,24 @@ def main():
                 def add_region(card=None):
                     card = card or page.locator(".region-card").first
                     assert page.locator(".region-card").count() > 0, "synthetic source page is missing"
+                    tools = card.locator(".region-image-tools")
+                    assert tools.count() == 1, "shared image tools are missing"
+                    tools.locator(".region-zoom-in").click()
+                    expect(tools.locator(".region-zoom-status")).to_have_text("图片 150%")
+                    tools.locator(".region-pan-mode").click()
+                    expect(tools.locator(".region-pan-mode")).to_have_attribute("aria-pressed", "true")
+                    tools.locator(".region-select-mode").click()
+                    expect(tools.locator(".region-select-mode")).to_have_attribute("aria-pressed", "true")
+                    tools.locator(".region-zoom-out").click()
+                    expect(tools.locator(".region-zoom-status")).to_have_text("图片 100%")
+                    tools.locator(".region-reset-view").click()
+                    path = urlparse(page.url).path
+                    if "/question/" in path:
+                        region_control_surfaces.add("question")
+                    elif path.startswith("/knowledge/"):
+                        region_control_surfaces.add("knowledge")
+                    elif path.startswith("/learning/"):
+                        region_control_surfaces.add("learning")
                     for selector, value in zip((".coord-x0", ".coord-y0", ".coord-x1", ".coord-y1"),
                             (10, 20, 400, 500)):
                         card.locator(selector).fill(str(value))
@@ -201,14 +222,18 @@ def main():
                             "page_forms": page_forms})
                     return matches[0]
 
-                def create_question(number, printed_text):
+                def create_question(number, printed_text, markup=None):
                     goto(f"/material/{material.pk}/question/new/", "question-form")
                     page.locator("#id_original_number").fill(number)
                     page.locator("#id_printed_text").fill(printed_text)
+                    if markup:
+                        page.locator('#id_display_markup').fill(markup)
+                        assert not page.locator('#id_image_print_confirmed').is_checked()
+                        if '[[image:' in markup:page.locator('#id_image_print_confirmed').check()
                     page.locator("#id_reason").fill("录入合成印刷题目")
                     sources = add_region()
                     page.locator("#question-form > .form-actions button").click()
-                    expect(page.locator(".printed-text")).to_have_text(printed_text)
+                    expect(page.locator(".printed-text")).to_have_text(printed_text,use_inner_text=True)
                     question_url = page.url
                     stable_id = question_url.rstrip("/").split("/")[-1]
                     question = db(lambda: EntityRecord.objects.get(kind="question", stable_id=stable_id))
@@ -249,8 +274,12 @@ def main():
                 page.locator("#id_provider_label").fill("Synthetic placeholder")
                 page.locator("#id_base_url").fill("https://example.invalid/v1")
                 page.locator("#id_model").fill("synthetic-placeholder")
+                page.locator("#id_connection_route").select_option("unknown")
+                page.locator("#id_upstream_state").select_option("unknown")
+                page.locator("#id_retention_state").select_option("unknown")
                 page.locator("#id_outbound_scope").select_option("reviewed_text")
                 assert not page.locator("#id_cloud_enabled").is_checked()
+                assert not page.locator("#id_confirm_external_processing").is_checked()
                 page.get_by_role("button", name="追加配置", exact=True).click()
                 expect(page.locator("body")).to_contain_text("Synthetic placeholder")
                 expect(page.locator("body")).to_contain_text("未启用")
@@ -260,6 +289,9 @@ def main():
                     and not config_row.cloud_enabled and config_row.provider_label == "Synthetic placeholder"
                     and config_row.base_url == "https://example.invalid/v1"
                     and config_row.model == "synthetic-placeholder"
+                    and config_row.connection_route == "unknown"
+                    and config_row.upstream_state == "unknown"
+                    and config_row.retention_state == "unknown"
                     and config_row.outbound_scope == "reviewed_text")
                 assert db(lambda: ModelRun.objects.filter(household_id=household_id).count()) == 0
                 screenshot("phone-ai-home.png")
@@ -283,8 +315,33 @@ def main():
                 assert (Path(os.environ["SWB_DATA_ROOT"]) / pages[0].image.payload["storage_key"]).read_bytes() == raw_image
                 checks.append("synthetic-upload-byte-reuse")
 
-                question_one = create_question("合成题 A", "1/3 + 1/6 = ?")
+                # Exercise the actual manual entry, reviewed revision and print path.
+                formula_text='合成公式题\n1/3 + 1/6\n(-2)^2\n(x^2)^3\nsqrt(x)'
+                formula_markup='**合成公式题**\n[[math:1/3 + 1/6]]\n[[math:(-2)^2]]\n[[math:(x^2)^3]]\n[[image:1|sqrt(x)]]'
+                question_one = create_question("合成题 A",formula_text,formula_markup)
                 question_two = create_question("合成题 B", "2/5 + 1/10 = ?")
+                # Local derivative controls use the same page selection and original pixels.
+                material_page=db(lambda:MaterialPage.objects.select_related('image').filter(material=material).first())
+                goto(f'/page/{material_page.pk}/','image-derivatives')
+                card=page.locator('.region-card').first
+                for selector,value in zip(('.coord-x0','.coord-y0','.coord-x1','.coord-y1'),(10,20,400,500)):
+                    card.locator(selector).fill(str(value))
+                card.locator('.add-coordinates').click()
+                page.locator('#use-derivative-region').click()
+                assert json.loads(page.locator('#derivative-form [name=display_bbox]').input_value())==[10,20,400,500]
+                for operation in ('crop','erase','contrast'):
+                    form=page.locator('#derivative-form')
+                    form.locator('[name=operation]').select_option(operation)
+                    form.locator('[name=display_bbox]').fill('[10,20,400,500]')
+                    form.locator('[name=masks]').fill('[[20,30,40,50]]' if operation=='erase' else '[]')
+                    form.get_by_role('button',name='生成新的派生记录',exact=True).click()
+                    expect(page.locator('h2').filter(has_text='本机派生处理')).to_be_visible()
+                derivatives=db(lambda:list(ImageDerivative.objects.filter(page=material_page)))
+                assert {d.operation for d in derivatives}=={'crop','erase','contrast'}
+                assert all(d.original_sha256==material_page.image.sha256 for d in derivatives)
+                response=context.request.get(origin+f'/derivative/{derivatives[0].pk}/')
+                assert response.status==200 and 'no-store' in response.headers['cache-control']
+                checks.append('local-crop-erase-contrast-source-and-private-file')
                 goto(question_one["url"], "question-history")
                 screenshot("phone-question.png")
 
@@ -292,6 +349,7 @@ def main():
                 goto(f"/knowledge/?household_id={household_id}", "knowledge-index")
                 page.locator("a[href*='/knowledge/create/knowledge/']").click()
                 page.locator("#id_definition").fill("分数相加时，先通分再相加分子。")
+                page.locator('#id_display_markup').fill('**分数相加时，先通分再相加分子。**')
                 page.locator("#id_conditions").fill("分母不同的两个分数")
                 page.locator("#id_common_errors").fill("遗漏通分")
                 page.locator("#id_reason").fill("整理合成分数规则")
@@ -310,6 +368,7 @@ def main():
                 assert db(lambda: EntityRecord.objects.get(pk=node_pk).published_revision_id) == node_revision_one
                 page.goto(node_url + "edit/")
                 page.locator("#id_definition").fill("分数相加先通分，再相加分子并保留公分母。")
+                page.locator('#id_display_markup').fill('==分数相加先通分，再相加分子并保留公分母。==')
                 page.locator("#id_conditions").fill("分母不同且需进行加减运算")
                 page.locator("#id_common_errors").fill("忘记同步放大分子")
                 page.locator("#id_reason").fill("补充分子同步放大的说明")
@@ -485,6 +544,14 @@ def main():
                     expect(page.locator("h1")).to_have_text(title)
                     snapshot_id = int(page.url.rstrip("/").split("/")[-1])
                     row = db(lambda: ExportSnapshot.objects.get(pk=snapshot_id))
+                    import shutil
+                    from app.exports.snapshots import private_directory,verify_snapshot
+                    parent=ROOT/'exports'/'gap-closure-business'
+                    for directory in (ROOT/'exports',parent,parent/artifact_owner):private_directory(directory)
+                    destination=parent/artifact_owner/row.export_id
+                    shutil.copytree(Path(os.environ['SWB_DATA_ROOT'])/row.storage_key,destination)
+                    verify_snapshot(destination)
+                    office_documents.append({'directory':str(destination)})
                     return row
 
                 answer_snapshot = create_export("parent_answers", "合成家长答案导出")
@@ -493,6 +560,21 @@ def main():
                 assert independent_snapshot.provenance["answers"] == []
                 content = context.request.get(origin + f"/prints/snapshots/{independent_snapshot.pk}/content.json/")
                 assert content.status == 200 and teacher_answer.encode() not in content.body()
+                parsed=content.json()
+                blocks=[block for p in parsed['pages'] for block in p]
+                assert sum(b['kind']=='math' for b in blocks)==3
+                assert sum(b['kind']=='formula_image' for b in blocks)==1
+                assert any('<b>合成公式题</b>'==b.get('content') for b in blocks)
+                docx=context.request.get(origin+f"/prints/snapshots/{independent_snapshot.pk}/document.docx/")
+                assert docx.status==200
+                import zipfile
+                with zipfile.ZipFile(BytesIO(docx.body())) as archive:
+                    xml=archive.read('word/document.xml').decode()
+                assert 'm:f' in xml and 'm:sSup' in xml and 'w:b' in xml
+                summary=create_export('knowledge_summary','合成知识重点导出')
+                summary_content=context.request.get(origin+f"/prints/snapshots/{summary.pk}/content.json/").json()
+                assert any('backcolor' in str(b['content']) for p in summary_content['pages'] for b in p)
+                checks.append('manual-formula-emphasis-native-docx-and-source-image-print')
                 checks.append("teacher-answer-export-and-independent-practice-exclusion")
 
                 # Split preserves its source; merge starts from two selected exact current versions.
@@ -611,6 +693,8 @@ def main():
                 page.goto(profile_url)
                 expect(page).to_have_url(re.compile(re.escape(origin) + r"/accounts/login/\?next="))
                 assert not errors, errors
+                assert {"question", "knowledge", "learning"}.issubset(region_control_surfaces), region_control_surfaces
+                checks.append("shared-image-tools:question-knowledge-learning")
                 assert not blocked_requests, blocked_requests
                 checks.append("logout-revokes-authenticated-page")
                 browser.close()
@@ -627,6 +711,9 @@ def main():
         report_path = output / "verification.local.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
         report_path.chmod(0o600)
+        office_report=output/'office-sources.local.json'
+        office_report.write_text(json.dumps({'documents':office_documents},ensure_ascii=False,indent=2))
+        office_report.chmod(0o600)
         print(f"Business browser acceptance passed: {len(checks)} checks; report={report_path}", flush=True)
     finally:
         if server is not None:

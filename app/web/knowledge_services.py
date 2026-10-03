@@ -1,9 +1,10 @@
 """Household-scoped manual knowledge, method, type and exact question links."""
 from dataclasses import replace
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.db import transaction
+from django.db.models import F
 
 from app.domain import (
     KnowledgeItem, KnowledgeRevision, KnowledgeQuestionLinkRevision, Method, MethodRevision,
@@ -11,13 +12,14 @@ from app.domain import (
     ReviewState, seal_revision,
 )
 from app.domain.contracts import EvidencePurpose
+from app.domain.presentation import validate_display
 from app.imports.models import LegacyIndexEntry
 from app.catalogue.models import QuestionLabel
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
 from app.persistence.models import EntityRecord, EvidenceRecord, ImageRecord, RevisionDependency, RevisionRecord
 from . import records
-from .models import MaterialPage, PagePreview, QuestionSource
+from .models import MaterialPage, MaterialSet, PagePreview, QuestionSource
 
 
 NODE_TYPES = {
@@ -109,6 +111,7 @@ def save_node(actor, household_id, kind, *, data, request_key, reason, stable_id
     if kind == "knowledge":
         content = {
             "definition": _required(data.get("definition"), "定义、公式与例题", 20000),
+            "display_markup": _optional(data.get("display_markup", ""), "公式与重点排版", 24000) or None,
             "conditions": _lines(data.get("conditions", ""), "适用条件", 6000),
             "common_errors": _lines(data.get("common_errors", ""), "易错点", 6000),
         }
@@ -129,9 +132,12 @@ def save_node(actor, household_id, kind, *, data, request_key, reason, stable_id
 
     creating = stable_id is None
 
+    fingerprint_content = dict(content)
+    if kind == "knowledge" and content["display_markup"] is None:
+        fingerprint_content.pop("display_markup")
     normalized = {
         "household": household.pk, "kind": kind, "stable_id": stable_id,
-        "content": content, "sources": sources, "replace_sources": replace_sources,
+        "content": fingerprint_content, "sources": sources, "replace_sources": replace_sources,
         "reason": reason, "expected_context": expected_context,
     }
 
@@ -158,8 +164,13 @@ def save_node(actor, household_id, kind, *, data, request_key, reason, stable_id
         refs = _merge_source_refs(old_refs, selected_refs, replace_sources)
         header = records.header(actor, owner_id, reason, previous_record)
         if kind == "knowledge":
+            try:
+                validate_display(content["display_markup"], content["definition"], refs)
+            except (TypeError, ValueError) as exc:
+                raise core.PersistenceError("invalid_input", str(exc)) from exc
             revision = seal_revision(KnowledgeRevision(header, ReviewState.DRAFT,
-                content["definition"], content["conditions"], content["common_errors"], refs))
+                content["definition"], content["conditions"], content["common_errors"], refs,
+                display_markup=content["display_markup"]))
         elif kind == "method":
             revision = seal_revision(MethodRevision(header, ReviewState.DRAFT,
                 content["name"], content["conditions"], content["steps"], content["notes"],
@@ -302,25 +313,75 @@ def _home_question_rows(household_id):
     return result
 
 
-def _question_entities_for_node(actor, household_id, kind, stable_id):
+def _question_entities_for_node(actor, household_id, kind, stable_id, *, role=None):
     trace = core.published_trace(actor, household_id, node=ObjectKey(kind, stable_id))
-    ids = set(RevisionRecord.objects.filter(pk__in=trace["question_revision_ids"],
+    question_revision_ids = set(trace["question_revision_ids"])
+    if kind == "method" and role:
+        link_rows = RevisionRecord.objects.filter(
+            entity__household_id=household_id, entity__kind="method_question",
+            entity__published_revision_id=F("pk"),
+            review_projection__state="accepted", payload__role=role,
+            outgoing_dependencies__role="link_method",
+            outgoing_dependencies__target_id__in=trace["node_revision_ids"],
+        )
+        matching_question_ids = set()
+        for link_id in link_rows.values_list("pk", flat=True):
+            matching_question_ids.update(RevisionDependency.objects.filter(
+                source_id=link_id, role="link_question",
+                target_id__in=question_revision_ids).values_list("target_id", flat=True))
+        question_revision_ids.intersection_update(matching_question_ids)
+    ids = set(RevisionRecord.objects.filter(pk__in=question_revision_ids,
         entity__household_id=household_id, entity__kind="question").values_list("entity_id", flat=True))
     if kind == "method":
         revision_ids = list(RevisionRecord.objects.filter(entity__household_id=household_id,
             entity__kind="method", entity__stable_id=stable_id).values_list("pk", flat=True))
         legacy = LegacyIndexEntry.objects.filter(batch__household_id=household_id).filter(
-            models_Q_primary_or_aux(revision_ids))
+            models_Q_primary_or_aux(revision_ids, role=role))
         ids.update(legacy.values_list("question_revision__entity_id", flat=True))
     return ids
 
 
-def models_Q_primary_or_aux(revision_ids):
+def models_Q_primary_or_aux(revision_ids, *, role=None):
     from django.db.models import Q
+    if role == "primary":
+        return Q(primary_method_revision_id__in=revision_ids)
+    if role == "auxiliary":
+        query = Q(pk__in=[])
+        for revision_id in revision_ids:
+            query |= Q(auxiliary_method_revision_ids__contains=[revision_id])
+        return query
     query = Q(primary_method_revision_id__in=revision_ids)
     for revision_id in revision_ids:
         query |= Q(auxiliary_method_revision_ids__contains=[revision_id])
     return query
+
+
+def _material_question_revision_ids(household_id, material_id, current_revision_ids):
+    source_rows = QuestionSource.objects.filter(material_id=material_id,
+        material__household_id=household_id,
+        revision__entity__household_id=household_id,
+        revision__entity__kind="question").values_list("revision_id", "sources")
+    matched = set()
+    region_revision_ids = set()
+    for revision_id, sources in source_rows:
+        if revision_id in current_revision_ids:
+            matched.add(revision_id)
+        if not isinstance(sources, list):
+            continue
+        for source in sources:
+            region_revision_id = source.get("region_revision_id") if isinstance(source, dict) else None
+            if isinstance(region_revision_id, str) and region_revision_id:
+                region_revision_ids.add(region_revision_id)
+    if region_revision_ids and current_revision_ids:
+        matched.update(EvidenceRecord.objects.filter(
+            source_id__in=current_revision_ids,
+            source__entity__household_id=household_id,
+            source__entity__kind="question",
+            region_id__in=region_revision_ids,
+            region__entity__household_id=household_id,
+            region__entity__kind="region",
+        ).values_list("source_id", flat=True))
+    return matched
 
 
 @transaction.atomic
@@ -329,6 +390,18 @@ def index_data(actor, household_id, filters=None):
     nodes = _home_nodes(house.pk)
     questions = _home_question_rows(house.pk)
     filters = filters or {}
+    material_id = str(filters.get("material_id", "")).strip()
+    if material_id:
+        try:
+            material_key = UUID(material_id)
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise core.PersistenceError("not_found", "资料不属于当前家庭。") from exc
+        if not MaterialSet.objects.filter(pk=material_key, household=house).exists():
+            raise core.PersistenceError("not_found", "资料不属于当前家庭。")
+        current_revision_ids = {row["revision"].pk for row in questions}
+        matching_revision_ids = _material_question_revision_ids(
+            house.pk, material_key, current_revision_ids)
+        questions = [row for row in questions if row["revision"].pk in matching_revision_ids]
     number = str(filters.get("number", "")).strip().casefold()
     if number:
         questions = [row for row in questions if number in row["number"].casefold()
@@ -341,10 +414,19 @@ def index_data(actor, household_id, filters=None):
         if stable_id:
             if not EntityRecord.objects.filter(household=house, kind=kind, stable_id=stable_id).exists():
                 raise core.PersistenceError("not_found", "筛选节点不属于当前家庭。")
-            allowed = _question_entities_for_node(actor, house.pk, kind, stable_id)
+            role = filters.get("method_role") if kind == "method" else None
+            if role not in (None, "", "primary", "auxiliary"):
+                raise core.PersistenceError("invalid_input", "方法角色筛选无效。")
+            allowed = _question_entities_for_node(actor, house.pk, kind, stable_id, role=role or None)
             questions = [row for row in questions if row["entity"].pk in allowed]
+    if filters.get("method_role") and not filters.get("method_id"):
+        raise core.PersistenceError("invalid_input", "请先选择方法，再筛选主方法或辅助方法。")
+    if filters.get("method_role") not in (None, "", "primary", "auxiliary"):
+        raise core.PersistenceError("invalid_input", "方法角色筛选无效。")
     tree = method_tree_data(house.pk)
-    return {"household": house, "nodes": nodes, "questions": questions, "method_tree": tree}
+    materials = list(MaterialSet.objects.filter(household=house).order_by("title", "id"))
+    return {"household": house, "nodes": nodes, "questions": questions,
+        "method_tree": tree, "materials": materials}
 
 
 @transaction.atomic

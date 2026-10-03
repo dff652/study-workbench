@@ -22,6 +22,8 @@ from app.persistence.models import EntityRecord, RevisionRecord, ReviewProjectio
 from app.web import records, services as materials
 from .models import TeacherAnswerRevision, AnswerDecision, ExportSnapshot
 from .layout import paginate
+from app.exports.body import body_blocks
+from app.domain.presentation import display_lines
 
 
 def _text(value, limit=20000):
@@ -107,6 +109,11 @@ def source_formula_image(actor,household_id,question_revision_id,region_revision
     question=published_question(household_id,question_revision_id)
     reference=next((r for r in question.payload['evidence_refs'] if r.get('region_revision_id')==region_revision_id),None)
     if reference is None:raise core.PersistenceError('invalid_input','公式图片区域不属于当前题目。')
+    return _source_ref_image(household_id,reference,alt)
+
+
+def _source_ref_image(household_id,reference,alt):
+    region_revision_id=reference['region_revision_id']
     region=RevisionRecord.objects.select_related('original_image').get(pk=region_revision_id,
         entity__household_id=household_id,entity__kind='region')
     original=region.original_image
@@ -163,7 +170,7 @@ def apply_erratum(actor, household_id, erratum_revision_id, *, expected, request
         question=next(q for q in bundle.questions if q.question_id==row.entity.stable_id)
         old=question.revisions[-1]
         revision=seal_revision(replace(old,header=records.header(actor,question.question_id,'按已审核勘误订正',row),
-            review_state=ReviewState.DRAFT,working_text=erratum.payload['corrected_text'],
+            review_state=ReviewState.DRAFT,working_text=erratum.payload['corrected_text'],display_markup=None,image_print_confirmed=None,
             erratum_revision_ids=(*old.erratum_revision_ids,erratum.pk)))
         questions=tuple(replace(q,revisions=(*q.revisions,revision)) if q.question_id==question.question_id else q for q in bundle.questions)
         heads.update(records.check_edit(erratum,records.edit_context(erratum)))
@@ -204,7 +211,14 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
         provenance['questions'].append({'revision_id':question.pk,'content_hash':question.content_hash,
             'review_decision_id':str(question.review_projection.decision_id),
             'evidence_refs':question.payload['evidence_refs']})
-        blocks.append(Block('p',escape(f'{position}. '+question.payload['working_text']).replace('\n','<br/>'),'question'))
+        if question.payload.get('display_markup'):
+            if purpose=='independent_practice' and not question.payload.get('image_print_confirmed') and any(
+                    line.kind=='image' for line in display_lines(question.payload['display_markup'])):
+                raise core.PersistenceError('image_review_required','独立练习的图片须先人工核对没有作答、提示或方法笔记，并追加已审核版本。')
+            blocks.append(Block('small',f'{position}.','question'))
+            blocks.extend(_revision_blocks(question,owner.pk,'question'))
+        else:
+            blocks.append(Block('p',escape(f'{position}. '+question.payload['working_text']).replace('\n','<br/>'),'question'))
         if question.payload['header']['origin']=='ai':
             blocks.append(Block('small','AI 生成题目 · 已人工审核；来源区域仅表示生成依据。','instruction'))
         if purpose=='independent_practice':
@@ -232,12 +246,24 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
                     'review_decision_id':str(link.published_revision.review_projection.decision_id)})
                 provenance['nodes'].append({'revision_id':target.pk,'content_hash':target.content_hash,
                     'review_decision_id':str(target.review_projection.decision_id)})
-                text=target.payload.get('definition') or target.payload.get('name')
+                blocks.extend(_revision_blocks(target,owner.pk,'body'))
                 if purpose=='knowledge_summary':
-                    text+='\n'+str(target.payload.get('conditions',''))+'\n'+str(target.payload.get('steps',''))
-                blocks.append(Block('p',escape(text).replace('\n','<br/>'),'body'))
+                    for field,label in [('conditions','适用条件'),('steps','步骤'),('common_errors','易错点')]:
+                        for value in target.payload.get(field,()):
+                            blocks.append(Block('p',escape(label+'：'+value),'body'))
     source_hash=digest(canonical(provenance))
     return _export_blocks(actor,owner,title,purpose,blocks,provenance,source_hash,questions[0].pk)
+
+
+def _revision_blocks(revision,household_id,role):
+    payload=revision.payload
+    text=payload.get('working_text') or payload.get('definition') or payload.get('name') or ''
+    refs=payload.get('evidence_refs',payload.get('source_refs',[]))
+    def resolve(sequence,alt):
+        ref=next((ref for ref in refs if ref['sequence']==sequence and ref.get('region_revision_id')),None)
+        if ref is None:raise core.PersistenceError('invalid_display','排版图片缺少本版本来源。')
+        return _source_ref_image(household_id,ref,alt)
+    return body_blocks(text,payload.get('display_markup'),role=role,image_resolver=resolve)
 
 
 def _export_blocks(actor,owner,title,purpose,blocks,provenance,source_hash,revision_id):

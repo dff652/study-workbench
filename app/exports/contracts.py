@@ -11,7 +11,7 @@ from PIL import Image
 
 
 SCHEMA_VERSION = "study-workbench.print.v0.1"
-GENERATOR_VERSION = "study-workbench.renderer.a2.v1"
+GENERATOR_VERSION = "study-workbench.renderer.a2.v2"
 PURPOSES = {"knowledge_summary", "classification_index", "evidence_report", "independent_practice", "parent_answers"}
 TEXT_KINDS = {"title", "sub", "h", "p", "small", "key", "warn", "bridge", "erratum"}
 INDEPENDENT_ROLES = {"title", "instruction", "question", "answer_space"}

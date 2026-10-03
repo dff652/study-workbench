@@ -7,6 +7,17 @@
     <p><strong>状态：</strong>{{ run_status }}</p>
     {% if run.error_code %}<p class="notice">任务状态码：{{ run.error_code }}</p>{% endif %}
     <p class="muted">创建时间：{{ run.created_at|date:"Y-m-d H:i:s" }} · 配置版本：{{ config.revision_no }} · 输出版本：{{ run.schema_version }}</p>
+    <details class="panel"><summary>本任务固定的外发配置与确认</summary><dl>
+      <dt>配置 ID</dt><dd>{{ config.config_id }}</dd>
+      <dt>供应商或网关</dt><dd>{{ config.provider_label }} · {{ config.model }} · {{ config.base_url }}</dd>
+      <dt>连接路径</dt><dd>{% if config.connection_route == "direct" %}直连供应商{% elif config.connection_route == "gateway" %}通过网关{% elif config.connection_route == "unknown" %}链路未知{% else %}未知（旧配置未确认）{% endif %}</dd>
+      <dt>上游</dt><dd>{% if config.upstream_state == "known" %}{{ config.known_upstream_providers|linebreaksbr }}{% else %}未知{% endif %}</dd>
+      <dt>供应商留存</dt><dd>{% if config.retention_state == "known" %}{{ config.retention_description|linebreaksbr }}{% else %}未知{% endif %}</dd>
+      <dt>外发范围</dt><dd>{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}</dd>
+      <dt>确认人账号／时间</dt><dd>{{ config.outbound_confirmation_by|default:"无新确认" }} · {{ config.outbound_confirmation_at|default:"未知" }}</dd>
+      <dt>请求限额</dt><dd>超时 {{ config.timeout_seconds }} 秒 · 输入 {{ config.max_input_chars }} 字符 · 输出 {{ config.max_output_tokens }} token · 本地工具最多 {{ config.max_calls }} 次</dd>
+      <dt>费用配置</dt><dd>本批 {{ config.batch_budget }} {{ config.currency }} · 输入 {{ config.input_price_per_million }}/百万 token · 输出 {{ config.output_price_per_million }}/百万 token · 图像预留 {{ config.reserved_per_call }} {{ config.currency }} · 非计价网关 {% if config.non_billable_gateway %}是{% else %}否{% endif %}</dd>
+    </dl></details>
     {% if run.usage %}<p class="muted">已记录用量：输入 {{ run.usage.prompt_tokens }} token，输出 {{ run.usage.completion_tokens }} token；费用估算 {{ run.estimated_cost|default:"待确认" }} USD。</p>{% endif %}
     {% if proposal %}<h2>模型建议（未经接受）</h2>
       {% if run.task_kind == "question" %}<dl><dt>识别题干</dt><dd>{{ proposal.printed_text|default:"未识别" }}</dd><dt>待补内容</dt><dd>{% for item in proposal.missing_fields %}{{ item }}{% if not forloop.last %}、{% endif %}{% empty %}无{% endfor %}</dd><dt>分类建议</dt><dd>{{ proposal.classification_suggestion|default:"未提供" }}</dd><dt>解析建议</dt><dd>{{ proposal.analysis_suggestion|default:"未提供" }}</dd></dl>

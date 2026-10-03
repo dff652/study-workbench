@@ -5,7 +5,7 @@ transforms, persist data, or provide export/backup services.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from enum import Enum
 import hashlib
 import json
@@ -202,6 +202,7 @@ class KnowledgeRevision:
     conditions: tuple[str, ...]
     common_errors: tuple[str, ...]
     source_refs: tuple[EvidenceRef, ...] = ()
+    display_markup: str | None = field(default=None, metadata={"legacy_omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,6 +258,8 @@ class QuestionRevision:
     missing_fields: tuple[str, ...]
     evidence_refs: tuple[EvidenceRef, ...]
     erratum_revision_ids: tuple[str, ...] = ()
+    display_markup: str | None = field(default=None, metadata={"legacy_omit_none": True})
+    image_print_confirmed: bool | None = field(default=None, metadata={"legacy_omit_none": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -474,7 +477,8 @@ def _plain(value: object) -> object:
     if is_dataclass(value):
         return {
             "_type": type(value).__name__,
-            **{field.name: _plain(getattr(value, field.name)) for field in fields(value)},
+            **{item.name: _plain(getattr(value, item.name)) for item in fields(value)
+               if not (item.metadata.get("legacy_omit_none") and getattr(value, item.name) is None)},
         }
     if isinstance(value, tuple):
         return [_plain(item) for item in value]

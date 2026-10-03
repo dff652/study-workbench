@@ -1,4 +1,5 @@
 """Authenticated learner archive pages."""
+from datetime import date
 from functools import wraps
 from uuid import uuid4
 
@@ -171,12 +172,18 @@ def profile_detail(request, learner_id):
     review_filter = request.GET.get("review", "")
     error_filter = request.GET.get("error", "")
     attempts = data["attempts"]
+    if question_filter and question_filter not in {item["attempt"].question_id for item in attempts}:
+        raise Http404
+    if knowledge_filter and knowledge_filter not in {item["stable_id"] for item in data["knowledge_options"]}:
+        raise Http404
+    if type_filter and type_filter not in {item["stable_id"] for item in data["type_options"]}:
+        raise Http404
     if question_filter:
         attempts = [item for item in attempts if item["attempt"].question_id == question_filter]
     if knowledge_filter:
-        attempts = [item for item in attempts if knowledge_filter in item["knowledge_labels"]]
+        attempts = [item for item in attempts if knowledge_filter in item["knowledge_ids"]]
     if type_filter:
-        attempts = [item for item in attempts if type_filter in item["type_labels"]]
+        attempts = [item for item in attempts if type_filter in item["type_ids"]]
     if review_filter:
         attempts = [item for item in attempts if any(row["state"] == review_filter for row in item["assessments"])]
     if error_filter == "yes":
@@ -186,10 +193,21 @@ def profile_detail(request, learner_id):
             for row in item["assessments"])]
     from_date = request.GET.get("from", "")
     to_date = request.GET.get("to", "")
+    try:
+        from_date_value = date.fromisoformat(from_date) if from_date else None
+        to_date_value = date.fromisoformat(to_date) if to_date else None
+    except ValueError as exc:
+        raise Http404 from exc
+    if from_date_value and to_date_value and from_date_value > to_date_value:
+        raise Http404
     if from_date:
-        attempts = [item for item in attempts if item["revision"].actual_date_state.value == "known" and item["revision"].actual_date >= from_date]
+        attempts = [item for item in attempts if item["revision"].actual_date_state.value == "known"
+            and item["revision"].actual_date
+            and date.fromisoformat(item["revision"].actual_date) >= from_date_value]
     if to_date:
-        attempts = [item for item in attempts if item["revision"].actual_date_state.value == "known" and item["revision"].actual_date <= to_date]
+        attempts = [item for item in attempts if item["revision"].actual_date_state.value == "known"
+            and item["revision"].actual_date
+            and date.fromisoformat(item["revision"].actual_date) <= to_date_value]
     data.update({"attempts": sorted(attempts, key=lambda item: item["sort_date"], reverse=True),
         "filters": {"question": question_filter, "knowledge": knowledge_filter, "type": type_filter,
             "review": review_filter, "error": error_filter, "from": from_date, "to": to_date}})

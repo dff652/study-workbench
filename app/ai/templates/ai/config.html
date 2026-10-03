@@ -4,8 +4,9 @@
   <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><span>追加配置版本</span></nav>
   <section class="panel narrow-panel">
     <p class="eyebrow">仅家庭所有者</p><h1>模型服务配置</h1>
-    <p class="muted">保存会追加不可改写的配置版本。API 密钥不在此页面输入或保存，只能由后台从固定环境变量 <code>SWB_MODEL_API_KEY</code> 读取。</p>
-    <p class="notice">启用前请确认服务地址的主机已加入服务端 <code>SWB_MODEL_ALLOWED_HOSTS</code> 白名单。选区图像按原图坐标裁切并重编码；原图不会修改。</p>
+    <p class="muted">保存会追加不可改写的配置版本。每份任务会固定完整配置与本次确认。API 密钥不在此页面输入或保存，只能由后台从固定环境变量 <code>SWB_MODEL_API_KEY</code> 读取。</p>
+    <p class="notice">启用前请明确选择直连、网关或未知；填写已知上游名单，或明确标记未知；说明供应商留存行为，或明确标记未知。确认框默认不勾选，必须由你手动选择。关闭后会阻止后续外发，但不能撤回已发请求，也不表示供应商删除了副本。</p>
+    <p class="muted">服务地址主机仍须加入服务端 <code>SWB_MODEL_ALLOWED_HOSTS</code> 白名单。选区图像按原图坐标裁切并重编码；原图不会修改。每次追加配置（包括扩大外发范围或更换上游）都需再次确认。</p>
     <form method="post" class="stack-form">
       {% csrf_token %}
       {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}

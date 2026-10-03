@@ -57,6 +57,42 @@ class PrintTests(TransactionTestCase):
         with self.assertRaises(DatabaseError),transaction.atomic():TeacherAnswerRevision.objects.filter(pk=a.pk).update(body='覆盖')
         with self.assertRaises(DatabaseError),transaction.atomic():AnswerDecision.objects.all().delete()
 
+    def test_question_formula_emphasis_source_fallback_and_history(self):
+        text='重点\n1/2\n(-2)^2\n(x^2)^3\nsqrt(x)'
+        markup='**重点**\n[[math:1/2]]\n[[math:(-2)^2]]\n[[math:(x^2)^3]]\n[[image:1|sqrt(x)]]'
+        result=materials.save_question(self.owner,self.material.pk,printed_text=text,display_markup=markup,
+            image_print_confirmed=True,
+            original_number='公式1',sources=[self.source(self.page())],request_key=key(),reason='合成排版核对')
+        self.accept_revision(result['revision_id'])
+        q=RevisionRecord.objects.get(pk=result['revision_id'])
+        before=q.payload.copy()
+        snapshot=services.export_questions(self.owner,self.house.pk,[q.pk],title='公式独立练习',purpose='independent_practice')
+        raw=services.snapshot_file(self.owner,snapshot.pk,'content.json').read_bytes()
+        content=json.loads(raw)
+        blocks=[block for page in content['pages'] for block in page]
+        self.assertEqual(sum(b['kind']=='math' for b in blocks),3)
+        self.assertEqual(sum(b['kind']=='formula_image' for b in blocks),1)
+        self.assertTrue(any('<b>重点</b>'==b.get('content') for b in blocks))
+        self.assertFalse(any(b['role'] in {'answer','method','classification','assessment'} for b in blocks))
+        import zipfile
+        with zipfile.ZipFile(services.snapshot_file(self.owner,snapshot.pk,'document.docx')) as archive:
+            xml=archive.read('word/document.xml').decode()
+        self.assertIn('m:f',xml);self.assertIn('m:sSup',xml);self.assertIn('w:b',xml)
+        edit=materials.question_detail(self.owner,q.entity.stable_id)
+        materials.save_question(self.owner,self.material.pk,printed_text=text,display_markup=markup.replace('**重点**','==重点=='),
+            original_number='公式1',sources=[self.source(self.page())],question_id=q.entity.stable_id,
+            expected_context=edit['edit_context'],request_key=key(),reason='重点样式新版本')
+        q.refresh_from_db();self.assertEqual(q.payload,before)
+        self.assertEqual(services.snapshot_file(self.owner,snapshot.pk,'content.json').read_bytes(),raw)
+
+    def test_unconfirmed_formula_image_blocks_independent_practice(self):
+        result=materials.save_question(self.owner,self.material.pk,printed_text='sqrt(x)',display_markup='[[image:1|sqrt(x)]]',
+            original_number='图片未核定',sources=[self.source(self.page())],request_key=key(),reason='图像可能含未知手写')
+        self.accept_revision(result['revision_id'])
+        with self.assertRaises(core.PersistenceError) as caught:
+            services.export_questions(self.owner,self.house.pk,[result['revision_id']],title='独立练习',purpose='independent_practice')
+        self.assertEqual(caught.exception.code,'image_review_required')
+
     def test_print_modes_download_authorization_duplicate_hash_and_edit_history(self):
         q=self.published()
         with self.assertRaises(core.PersistenceError):services.export_questions(self.owner,self.house.pk,[q.pk],title='答案',purpose='parent_answers')
@@ -107,6 +143,26 @@ class PrintTests(TransactionTestCase):
         link_revision=RevisionRecord.objects.select_related('review_projection').get(pk=link['revision_id'])
         self.assertNotEqual(str(node_revision.review_projection.decision_id),node_decision)
         self.assertNotEqual(str(link_revision.review_projection.decision_id),link_decision)
+
+    def test_knowledge_formula_and_highlight_print_without_practice_hint(self):
+        q=self.published('计算题')
+        node=knowledge_services.save_node(self.owner,self.house.pk,'knowledge',data={
+            'definition':'性质\n1/2\n(-2)^2\n(x^2)^3',
+            'display_markup':'==性质==\n[[math:1/2]]\n[[math:(-2)^2]]\n[[math:(x^2)^3]]',
+            'conditions':'先核对底数','common_errors':'不要忽略负号','sources':'[]'},request_key=key(),reason='公式知识核对')
+        self.accept_revision(node['revision_id'])
+        link=knowledge_services.create_link(self.owner,self.house.pk,kind='knowledge',node_revision_id=node['revision_id'],
+            question_revision_id=q.pk,role='applies',request_key=key(),reason='知识对应题目')
+        self.accept_revision(link['revision_id'])
+        summary=services.export_questions(self.owner,self.house.pk,[q.pk],title='知识公式',purpose='knowledge_summary')
+        content=json.loads(services.snapshot_file(self.owner,summary.pk,'content.json').read_text())
+        blocks=[b for p in content['pages'] for b in p]
+        self.assertEqual(sum(b['kind']=='math' for b in blocks),3)
+        self.assertTrue(any('backcolor' in str(b['content']) for b in blocks))
+        self.assertTrue(any('适用条件：先核对底数' in str(b['content']) for b in blocks))
+        practice=services.export_questions(self.owner,self.house.pk,[q.pk],title='独立练习',purpose='independent_practice')
+        raw=services.snapshot_file(self.owner,practice.pk,'content.json').read_text()
+        self.assertNotIn('先核对底数',raw);self.assertNotIn('不要忽略负号',raw)
 
     def test_erratum_review_changes_working_text_preserves_print_and_no_child_records(self):
         q=self.published('1+1=3')

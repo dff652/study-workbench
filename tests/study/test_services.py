@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TransactionTestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 
 from app.ai import services as ai
@@ -158,7 +159,9 @@ class StudyServiceTests(TransactionTestCase):
             request_key=key(), reason="确认合成方法")
         config = ModelConfig.objects.create(household=self.household, revision_no=1,
             created_by=self.owner, provider_label="synthetic", base_url="https://unused.invalid/v1",
-            model="synthetic", cloud_enabled=True, non_billable_gateway=True)
+            model="synthetic", cloud_enabled=True, non_billable_gateway=True,
+            connection_route='direct',upstream_state='unknown',retention_state='unknown',
+            outbound_confirmation_by=self.owner,outbound_confirmation_at=timezone.now())
         selection = ai.selection_context(self.owner, self.household.pk, "variant")
         run = ai.queue_run(self.owner, self.household.pk, task_kind="variant",
             source_revision_ids=[method["revision_id"]],

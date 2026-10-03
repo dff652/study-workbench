@@ -26,11 +26,17 @@
     const pageLabels = new Map([...root.querySelectorAll(".region-card")]
       .map(card => [card.dataset.pageId, card.dataset.pageLabel || "资料页"]));
     let sources = parseSources(sourcesField ? sourcesField.value : "[]");
+    const storeSources = () => {
+      if (!storageKey) return;
+      try { sessionStorage.setItem(storageKey, JSON.stringify(sources)); } catch (_error) { /* Storage can be disabled. */ }
+    };
 
     if (storageKey && root.dataset.edit !== "true") {
-      const saved = parseSources(sessionStorage.getItem(storageKey));
+      let savedValue = "[]";
+      try { savedValue = sessionStorage.getItem(storageKey) || "[]"; } catch (_error) { /* Storage can be disabled. */ }
+      const saved = parseSources(savedValue);
       if (saved.length) sources = [...saved, ...sources];
-      sessionStorage.removeItem(storageKey);
+      try { sessionStorage.removeItem(storageKey); } catch (_error) { /* Storage can be disabled. */ }
     }
 
     const pointInCanvas = (event, canvas) => {
@@ -39,6 +45,107 @@
         x: Math.max(0, Math.min(canvas.width, (event.clientX - box.left) * canvas.width / box.width)),
         y: Math.max(0, Math.min(canvas.height, (event.clientY - box.top) * canvas.height / box.height)),
       };
+    };
+
+    const setupImageTools = card => {
+      const viewport = card.querySelector(".image-wrap");
+      const image = card.querySelector(".region-image");
+      const canvas = card.querySelector(".region-canvas");
+      if (!viewport || !image || !canvas) return null;
+
+      viewport.classList.add("region-viewport");
+      const stage = document.createElement("div");
+      stage.className = "region-stage";
+      viewport.insertBefore(stage, image);
+      stage.append(image, canvas);
+
+      const toolbar = document.createElement("div");
+      toolbar.className = "region-image-tools";
+      const button = (className, label, ariaLabel) => {
+        const control = document.createElement("button");
+        control.type = "button";
+        control.className = `secondary-button region-tool-button ${className}`;
+        control.textContent = label;
+        control.setAttribute("aria-label", ariaLabel);
+        return control;
+      };
+      const pageLabel = card.dataset.pageLabel || "图片";
+      const zoomOut = button("region-zoom-out", "缩小", `缩小${pageLabel}`);
+      const zoomIn = button("region-zoom-in", "放大", `放大${pageLabel}`);
+      const panMode = button("region-pan-mode", "移动图片", `移动${pageLabel}`);
+      const selectMode = button("region-select-mode", "框选区域", `框选${pageLabel}`);
+      const reset = button("region-reset-view", "重置视图", `重置${pageLabel}视图`);
+      panMode.setAttribute("aria-pressed", "false");
+      selectMode.setAttribute("aria-pressed", "true");
+      const zoomStatus = document.createElement("output");
+      zoomStatus.className = "region-zoom-status";
+      zoomStatus.setAttribute("aria-live", "polite");
+      const modeStatus = document.createElement("span");
+      modeStatus.className = "region-mode-status";
+      modeStatus.setAttribute("aria-live", "polite");
+      toolbar.append(zoomOut, zoomIn, panMode, selectMode, reset, zoomStatus, modeStatus);
+      card.insertBefore(toolbar, viewport.nextSibling);
+
+      let zoom = 1;
+      let offsetX = 0;
+      let offsetY = 0;
+      let mode = "select";
+      const clampPan = () => {
+        offsetX = Math.max(viewport.clientWidth * (1 - zoom), Math.min(0, offsetX));
+        offsetY = Math.max(viewport.clientHeight * (1 - zoom), Math.min(0, offsetY));
+      };
+      const updateView = () => {
+        clampPan();
+        if (zoom <= 1) mode = "select";
+        stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
+        zoomStatus.textContent = `图片 ${Math.round(zoom * 100)}%`;
+        modeStatus.textContent = mode === "pan" ? "移动模式：拖动图片查看。" : "框选模式：拖动图片选择区域。";
+        zoomOut.disabled = zoom <= 1;
+        zoomIn.disabled = zoom >= 4;
+        panMode.disabled = zoom <= 1;
+        panMode.setAttribute("aria-pressed", String(mode === "pan"));
+        selectMode.setAttribute("aria-pressed", String(mode === "select"));
+        canvas.style.cursor = mode === "pan" ? "grab" : "crosshair";
+      };
+      const setZoom = nextZoom => {
+        const clamped = Math.max(1, Math.min(4, nextZoom));
+        const factor = clamped / zoom;
+        const centerX = viewport.clientWidth / 2;
+        const centerY = viewport.clientHeight / 2;
+        offsetX = centerX - (centerX - offsetX) * factor;
+        offsetY = centerY - (centerY - offsetY) * factor;
+        zoom = clamped;
+        updateView();
+      };
+      const resetView = () => {
+        zoom = 1;
+        offsetX = 0;
+        offsetY = 0;
+        updateView();
+      };
+      const setMode = nextMode => {
+        mode = nextMode;
+        updateView();
+      };
+      const panTo = (x, y) => {
+        offsetX = x;
+        offsetY = y;
+        updateView();
+      };
+      const updateAspect = () => {
+        const width = Number(card.dataset.width);
+        const height = Number(card.dataset.height);
+        if (width > 0 && height > 0) viewport.style.aspectRatio = `${width} / ${height}`;
+        resetView();
+      };
+
+      zoomOut.addEventListener("click", () => setZoom(zoom - 0.5));
+      zoomIn.addEventListener("click", () => setZoom(zoom + 0.5));
+      panMode.addEventListener("click", () => setMode("pan"));
+      selectMode.addEventListener("click", () => setMode("select"));
+      reset.addEventListener("click", resetView);
+      updateAspect();
+      return { canvas, setMode, updateAspect, panTo, getOffset: () => [offsetX, offsetY] };
     };
 
     const draw = card => {
@@ -78,6 +185,7 @@
           display_bbox: source.display_bbox,
         })));
       }
+      if (root.hasAttribute("data-page-editor")) storeSources();
       if (sourceList) {
         sourceList.replaceChildren();
         sources.forEach((source, index) => {
@@ -124,6 +232,7 @@
       const canvas = card.querySelector(".region-canvas");
       const image = card.querySelector(".region-image");
       const selector = card.querySelector(".rotation-select");
+      const imageTools = setupImageTools(card);
       let start = null;
 
       image.addEventListener("load", () => draw(card));
@@ -139,31 +248,54 @@
         image.width = Number(option.dataset.width);
         image.height = Number(option.dataset.height);
         card.currentRect = null;
+        imageTools?.updateAspect();
         draw(card);
       });
 
       canvas.addEventListener("pointerdown", event => {
         event.preventDefault();
-        start = pointInCanvas(event, canvas);
         canvas.setPointerCapture(event.pointerId);
-        card.currentRect = [start.x, start.y, start.x, start.y];
+        if (card.querySelector(".region-pan-mode")?.getAttribute("aria-pressed") === "true") {
+          const [offsetX, offsetY] = imageTools?.getOffset() || [0, 0];
+          start = { mode: "pan", clientX: event.clientX, clientY: event.clientY,
+            offsetX, offsetY };
+          canvas.style.cursor = "grabbing";
+          return;
+        }
+        start = { mode: "select", point: pointInCanvas(event, canvas) };
+        card.currentRect = [start.point.x, start.point.y, start.point.x, start.point.y];
         draw(card);
       });
       canvas.addEventListener("pointermove", event => {
         if (!start) return;
+        if (start.mode === "pan") {
+          imageTools?.panTo(start.offsetX + event.clientX - start.clientX,
+            start.offsetY + event.clientY - start.clientY);
+          canvas.style.cursor = "grabbing";
+          return;
+        }
         const point = pointInCanvas(event, canvas);
-        card.currentRect = [Math.min(start.x, point.x), Math.min(start.y, point.y), Math.max(start.x, point.x), Math.max(start.y, point.y)];
+        card.currentRect = [Math.min(start.point.x, point.x), Math.min(start.point.y, point.y), Math.max(start.point.x, point.x), Math.max(start.point.y, point.y)];
         draw(card);
       });
       const stop = event => {
         if (!start) return;
+        if (start.mode === "pan") {
+          start = null;
+          canvas.style.cursor = "grab";
+          return;
+        }
         const point = pointInCanvas(event, canvas);
-        card.currentRect = [Math.min(start.x, point.x), Math.min(start.y, point.y), Math.max(start.x, point.x), Math.max(start.y, point.y)].map(Math.round);
+        card.currentRect = [Math.min(start.point.x, point.x), Math.min(start.point.y, point.y), Math.max(start.point.x, point.x), Math.max(start.point.y, point.y)].map(Math.round);
         start = null;
         draw(card);
       };
       canvas.addEventListener("pointerup", stop);
-      canvas.addEventListener("pointercancel", () => { start = null; card.currentRect = null; draw(card); });
+      canvas.addEventListener("pointercancel", () => {
+        if (start?.mode === "select") card.currentRect = null;
+        start = null;
+        draw(card);
+      });
 
       card.querySelector(".add-region")?.addEventListener("click", () => {
         if (card.currentRect) addSource(card, card.currentRect);
@@ -179,7 +311,7 @@
     });
 
     root.querySelector(".continue-question")?.addEventListener("click", () => {
-      if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify(sources));
+      storeSources();
     });
     root.closest("form")?.addEventListener("submit", render);
     render();

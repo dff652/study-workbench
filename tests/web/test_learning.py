@@ -230,6 +230,21 @@ class LearningServiceTests(TransactionTestCase):
             expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
             expected_decision_id=review["expected_decision_id"], request_key=key(), reason="确认题目关系")
 
+        same_name_node = knowledge.save_node(self.owner, self.household.pk, "knowledge", data={
+            "definition": "加法知识", "conditions": "", "common_errors": "", "sources": "[]"},
+            request_key=key(), reason="建立同名但身份不同的知识点")
+        review = core.review_context(self.owner, self.household.pk, same_name_node["revision_id"])
+        core.review_revision(self.owner, self.household.pk, same_name_node["revision_id"], action="accept",
+            expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
+            expected_decision_id=review["expected_decision_id"], request_key=key(), reason="确认同名知识点")
+        same_name_link = knowledge.create_link(self.owner, self.household.pk, kind="knowledge",
+            node_revision_id=same_name_node["revision_id"], question_revision_id=self.question_revision_id,
+            role="applies", request_key=key(), reason="同名知识点精确关系")
+        review = core.review_context(self.owner, self.household.pk, same_name_link["revision_id"])
+        core.review_revision(self.owner, self.household.pk, same_name_link["revision_id"], action="accept",
+            expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
+            expected_decision_id=review["expected_decision_id"], request_key=key(), reason="确认同名知识点关系")
+
         self.save_question_revision("2 + 3 = 5", "J1-2", accept=True)
         second = self.create_attempt()
         profile = learning.profile_detail(self.owner, self.learner_id)
@@ -241,10 +256,27 @@ class LearningServiceTests(TransactionTestCase):
         self.assertIn("r1", old["question_label"])
         self.assertIn("J1-2", current["question_label"])
         self.assertIn("r2", current["question_label"])
-        self.assertEqual(len(old["knowledge_labels"]), 1)
-        self.assertIn("加法知识", old["knowledge_labels"][0])
-        self.assertIn("历史关系", old["knowledge_labels"][0])
+        self.assertEqual(len(old["knowledge_labels"]), 2)
+        self.assertTrue(all("加法知识" in label and "历史关系" in label for label in old["knowledge_labels"]))
+        self.assertEqual(old["knowledge_ids"], frozenset((node["stable_id"], same_name_node["stable_id"])))
+        self.assertTrue(all(stable_id[-8:] in " ".join(old["knowledge_labels"])
+            for stable_id in (node["stable_id"], same_name_node["stable_id"])))
+        self.assertEqual({item["stable_id"] for item in profile["knowledge_options"]},
+            {node["stable_id"], same_name_node["stable_id"]})
+        self.assertEqual(len({item["label"] for item in profile["knowledge_options"]}), 2)
         self.assertEqual(current["knowledge_labels"], ())
+        self.assertEqual(current["knowledge_ids"], frozenset())
+
+        review = core.review_context(self.owner, self.household.pk, same_name_link["revision_id"])
+        core.review_revision(self.owner, self.household.pk, same_name_link["revision_id"], action="withdraw",
+            expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
+            expected_decision_id=review["expected_decision_id"], request_key=key(), reason="撤回同名关系")
+        withdrawn_profile = learning.profile_detail(self.owner, self.learner_id)
+        withdrawn_old = next(item for item in withdrawn_profile["attempts"]
+            if item["attempt"].attempt_id == first["attempt_id"])
+        self.assertEqual(withdrawn_old["knowledge_ids"], frozenset((node["stable_id"],)))
+        self.assertEqual({item["stable_id"] for item in withdrawn_profile["knowledge_options"]},
+            {node["stable_id"]})
 
     def test_identity_correction_withdraws_old_attempt_and_keeps_its_assessment_link(self):
         original = self.create_attempt()

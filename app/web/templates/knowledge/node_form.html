@@ -12,6 +12,7 @@
     <section class="panel"><h2>条目内容</h2>
       {% if kind == "knowledge" %}
         <div class="field"><label for="id_definition">定义、公式与例题</label>{{ form.definition }}<span class="help-text">{{ form.definition.help_text }}</span>{{ form.definition.errors }}</div>
+        <div class="field"><label for="id_display_markup">公式与重点排版</label>{{ form.display_markup }}<span class="help-text">{{ form.display_markup.help_text }}</span>{{ form.display_markup.errors }}</div>
         <div class="field"><label for="id_conditions">适用条件</label>{{ form.conditions }}<span class="help-text">{{ form.conditions.help_text }}</span>{{ form.conditions.errors }}</div>
         <div class="field"><label for="id_common_errors">易错点</label>{{ form.common_errors }}<span class="help-text">{{ form.common_errors.help_text }}</span>{{ form.common_errors.errors }}</div>
       {% elif kind == "method" %}

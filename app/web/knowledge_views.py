@@ -120,6 +120,7 @@ def _initial_node(kind, data):
         "reason": "", "sources": "[]", "replace_sources": False}
     if kind == "knowledge":
         initial.update({"definition": current["definition"],
+            "display_markup": current.get("display_markup") or "",
             "conditions": "\n".join(current["conditions"]),
             "common_errors": "\n".join(current["common_errors"])})
     elif kind == "method":
@@ -252,6 +253,7 @@ def index(request):
     nodes = home["nodes"] if home else {}
     form_data = request.POST if request.method == "POST" else (request.GET or None)
     form = IndexForm(form_data, households=households, household_id=household_id, nodes=nodes,
+        materials=home["materials"] if home else (),
         initial=empty if request.method == "GET" else None)
     if request.method == "POST":
         if form.is_valid():

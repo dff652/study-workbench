@@ -75,7 +75,12 @@ def _register_fonts(fonts):
         registered[role] = alias
         if alias not in pdfmetrics.getRegisteredFontNames():
             try:
-                pdfmetrics.registerFont(TTFont(alias, str(path)))
+                font = TTFont(alias, str(path))
+                # ReportLab also deduplicates dynamic fonts by face name.
+                # Different CJK subsets have the same internal PostScript name,
+                # so an alias alone can silently reuse a subset lacking glyphs.
+                font.face.name = ("SWB" + digest[:60]).encode("ascii")
+                pdfmetrics.registerFont(font)
             except Exception as exc:
                 raise ExportError("invalid_font", f"Could not register the injected {role} font") from exc
         try:

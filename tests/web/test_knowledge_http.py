@@ -25,6 +25,7 @@ class KnowledgeHTTPTests(TransactionTestCase):
     def payload(self):
         return {"request_key": uuid.uuid4().hex, "household_id": self.household.pk,
             "reason": "人工合成录入", "sources": "[]", "definition": "乘法分配律：a(b+c)=ab+ac",
+            "display_markup": "**乘法分配律**：a(b+c)=ab+ac",
             "conditions": "适用整数与实数", "common_errors": "漏乘后一项"}
 
     def test_editor_requires_csrf_and_viewer_cannot_create(self):
@@ -50,3 +51,6 @@ class KnowledgeHTTPTests(TransactionTestCase):
         self.assertIn("乘法分配律", content)
         self.assertIn("人工依据尚未关联", content)
         self.assertIn("待审核", content)
+        edit = self.client.get(reverse("knowledge:node_edit", kwargs={"entity_id": detail.context["entity"].pk}))
+        self.assertEqual(edit.status_code, 200)
+        self.assertContains(edit, "**乘法分配律**：a(b+c)=ab+ac")

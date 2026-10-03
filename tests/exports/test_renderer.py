@@ -288,6 +288,25 @@ assert before == after, (before, after)
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_sequential_exports_with_distinct_cjk_subsets_keep_all_text(self):
+        # Each business export prepares a different subset in the same web
+        # process. ReportLab must not reuse another subset with the same face.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for index, text in enumerate(("甲乙丙", "丁戊己")):
+                doc = document([[Block("p", text, "body")]],
+                    document_id=f"distinct-subset-{index}")
+                fonts, _ = prepare_fonts([doc], root / f"fonts-{index}",
+                    regular_source="/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    bold_source="/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+                    math_source=MATH_FONT,
+                    cjk_notice=ROOT / "licenses" / "Noto-OFL.txt",
+                    math_notice=ROOT / "licenses" / "DejaVu-fonts.txt")
+                result = render_document(doc, root / f"output-{index}", fonts)
+                extracted = subprocess.run(["pdftotext", str(result["pdf"]), "-"],
+                    check=True, capture_output=True, text=True).stdout
+                self.assertIn(text, extracted)
+
 
 if __name__ == "__main__":
     unittest.main()

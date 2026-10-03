@@ -218,7 +218,7 @@ from django.apps import apps
 from app.persistence.models import (EvidenceRecord, EntityRecord, Household, HouseholdMember,
     ImageRecord, RequestReceipt, RevisionDependency, RevisionRecord, ReviewDecision, ReviewProjection)
 from app.web.services import asset_path
-from app.web.models import MaterialPage, MaterialSet, PagePreview, QuestionSource
+from app.web.models import MaterialPage, MaterialSet, PagePreview, QuestionSource, ImageDerivative
 
 models = [get_user_model(), Session, *[model for model in apps.get_models()
     if model.__module__.startswith('app.')]]
@@ -243,6 +243,10 @@ for preview in PagePreview.objects.order_by("pk"):
     existing = asset_refs.setdefault(preview.storage_key, preview.sha256)
     if existing != preview.sha256:
         raise SystemExit(f"Conflicting database hashes for storage key {preview.storage_key}")
+for derivative in ImageDerivative.objects.order_by('pk'):
+    existing=asset_refs.setdefault(derivative.storage_key,derivative.sha256)
+    if existing!=derivative.sha256:raise RuntimeError('Conflicting derivative file hash')
+    if derivative.original_sha256!=derivative.original_image.sha256:raise RuntimeError('Derivative original mismatch')
 from app.printing.models import ExportSnapshot
 from app.operations.models import ExportArchiveRecord, ExportRetirementRecord
 for export in ExportSnapshot.objects.order_by('pk'):

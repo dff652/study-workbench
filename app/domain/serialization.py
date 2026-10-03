@@ -33,7 +33,8 @@ def _to_data(value: object, path: str = "$") -> object:
     if is_dataclass(value):
         if type(value).__name__ not in _TYPES:
             raise ContractError("unknown_contract_type", path, "dataclass is not part of the closed bundle format")
-        return {"_type": type(value).__name__, **{item.name: _to_data(getattr(value, item.name), f"{path}.{item.name}") for item in fields(value)}}
+        return {"_type": type(value).__name__, **{item.name: _to_data(getattr(value, item.name), f"{path}.{item.name}")
+            for item in fields(value) if not (item.metadata.get("legacy_omit_none") and getattr(value, item.name) is None)}}
     if isinstance(value, tuple):
         return [_to_data(item, f"{path}[]") for item in value]
     if value is None or isinstance(value, (str, bool, int)):
@@ -102,13 +103,15 @@ def _decode(value: object, expected: object, path: str) -> object:
             raise ContractError("contract_type_mismatch", f"{path}._type", f"expected {expected.__name__}")
         declared = {field.name for field in fields(expected)}
         extra = set(value) - declared - {"_type"}
-        missing = declared - set(value)
+        compatible = {item.name for item in fields(expected) if item.metadata.get("legacy_omit_none")}
+        missing = declared - set(value) - compatible
         if extra:
             raise ContractError("unexpected_field", path, f"unexpected fields: {', '.join(sorted(extra))}")
         if missing:
             raise ContractError("missing_field", path, f"missing fields: {', '.join(sorted(missing))}")
         hints = get_type_hints(expected)
-        kwargs = {field.name: _decode(value[field.name], hints[field.name], f"{path}.{field.name}") for field in fields(expected)}
+        kwargs = {field.name: _decode(value[field.name], hints[field.name], f"{path}.{field.name}")
+                  for field in fields(expected) if field.name in value}
         try:
             return expected(**kwargs)
         except (TypeError, ValueError) as exc:

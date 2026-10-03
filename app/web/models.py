@@ -44,3 +44,37 @@ class QuestionSource(models.Model):
     material = models.ForeignKey(MaterialSet, on_delete=models.PROTECT)
     original_number = models.CharField(max_length=80, blank=True)
     sources = models.JSONField()
+
+
+class ImageDerivative(models.Model):
+    """Immutable local processing record; never substitutes for original evidence."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    page = models.ForeignKey(MaterialPage, on_delete=models.PROTECT, related_name='derivatives')
+    original_image = models.ForeignKey(ImageRecord, on_delete=models.PROTECT, related_name='derivatives')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    operation = models.CharField(max_length=16, choices=(('crop','裁切'),('erase','手动遮白'),('contrast','对比度增强')))
+    parameters = models.JSONField()
+    original_sha256 = models.CharField(max_length=64)
+    sha256 = models.CharField(max_length=64)
+    storage_key = models.CharField(max_length=240)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    lossy_description = models.CharField(max_length=1000)
+    request_key = models.CharField(max_length=160)
+    fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=('page','created_by','request_key'),name='swb_derivative_request'),
+            models.CheckConstraint(condition=models.Q(operation__in=('crop','erase','contrast')),name='swb_derivative_operation'),
+            models.CheckConstraint(condition=models.Q(width__gt=0,height__gt=0),name='swb_derivative_size')]
+
+    def save(self,*args,**kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError('派生记录只能追加。')
+        return super().save(*args,**kwargs)
+
+    def delete(self,*args,**kwargs):
+        from django.core.exceptions import ValidationError
+        raise ValidationError('派生来源记录默认保留。')

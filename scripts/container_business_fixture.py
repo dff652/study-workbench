@@ -13,7 +13,7 @@ from django.contrib.auth import get_user_model
 from app.persistence.models import EntityRecord
 from app.domain.arithmetic import formula_ast
 from app.web.models import MaterialPage
-from app.web import services as materials, learning_services as learning
+from app.web import services as materials, learning_services as learning, derivatives
 from app.printing import services as printing
 from app.study import services as study
 from app.catalogue import services as catalogue
@@ -30,6 +30,10 @@ key = lambda: str(uuid4())
 preview = materials.preview_file(actor, page.pk, 0)
 source = dict(page_id=str(page.pk), rotation=0, preview_sha256=preview.sha256,
               display_bbox=[2, 2, 28, 20])
+for operation in ('crop','erase','contrast'):
+    derivatives.create_derivative(actor,page.pk,operation=operation,rotation=0,
+        preview_sha256=preview.sha256,display_bbox=[2,2,28,20],
+        masks=[[3,3,8,8]] if operation=='erase' else [],contrast=1.5,request_key=key())
 question = materials.save_question(actor, page.material_id, printed_text='4 × 2 = ?',
     original_number='合成验收题', sources=[source], request_key=key(), reason='隔离验收')
 detail = materials.question_detail(actor, question['question_id'])
@@ -87,7 +91,9 @@ catalogue.split_question(actor, household_id, source_revision_id=qrow.pk, contex
               {'printed_text':'2 × 4 = ?', 'original_number':'合成b'}], reason='合成拆题追溯', request_key=key())
 ai.create_model_config(actor, household_id, data={'provider_label':'未启用的合成配置',
     'base_url':'https://model.example.test/v1', 'model':'manual-configuration-later',
-    'cloud_enabled':False, 'outbound_scope':'reviewed_text'})
+    'cloud_enabled':False, 'outbound_scope':'reviewed_text',
+    'connection_route':'unknown','upstream_state':'unknown','known_upstream_providers':'',
+    'retention_state':'unknown','retention_description':'','confirm_external_processing':False})
 operations.append_retention_policy(actor, household_id, archive_after_days=None,
     delete_after_days=None, reason='合成验收默认长期保留', request_key=key())
 timing_context = operations.work_timing_context(actor, household_id)

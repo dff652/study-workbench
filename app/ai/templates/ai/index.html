@@ -16,10 +16,11 @@
         {% if config %}
           <p><strong>{{ config.provider_label }}</strong> · {{ config.model }} · {% if config.cloud_enabled %}已启用{% else %}未启用{% endif %}</p>
           <p class="muted">外发范围：{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}；预算上限：{{ config.batch_budget }} USD。密钥只从服务端环境变量读取。</p>
+          {% if config.cloud_enabled and not external_ready %}<p class="notice">此配置没有本轮外发确认，任务不能发送。请由所有者追加一份明确填写上游与留存状态并手动确认的配置版本。</p>{% elif external_ready %}<p class="muted">连接：{% if config.connection_route == "direct" %}直连供应商{% elif config.connection_route == "gateway" %}通过网关{% else %}未知{% endif %}；上游：{% if config.upstream_state == "known" %}{{ config.known_upstream_providers|linebreaksbr }}{% else %}未知{% endif %}；供应商留存：{% if config.retention_state == "known" %}{{ config.retention_description|linebreaksbr }}{% else %}未知{% endif %}。确认人账号 {{ config.outbound_confirmation_by_id }} · {{ config.outbound_confirmation_at|date:"Y-m-d H:i:s" }}</p>{% endif %}
         {% else %}<p class="muted">尚未配置模型服务。默认状态下不会调用远程模型。</p>{% endif %}
         {% if can_configure %}<a class="secondary-button" href="{% url 'ai:config' household_id=household_id %}">{% if config %}追加配置版本{% else %}配置模型服务{% endif %}</a>{% endif %}
       </section>
-      {% if writable and config and config.cloud_enabled %}
+      {% if writable and external_ready %}
         <section class="panel">
           <h2>新建待复核任务</h2>
           <p class="muted">任务只会排队；需要后台 worker 执行。题目识别仅接受已选区域，作答评价仅使用指定作答。</p>

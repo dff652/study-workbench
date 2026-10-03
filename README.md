@@ -4,7 +4,7 @@
 
 当前阶段：**人工业务、知识与题库、逐次作答／评价、打印、复习／报告及容器服务已实现并通过独立验收。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
 
-GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。已完成首次完整审查、修复和独立复验，源码已手动推送至 public 仓库的 `main`。36 测试服务仍运行此前的 `a59e8d7`；修复版本待后续更新。交付状态及下一步见[仓库交付记录](docs/repository-handoff.md)。
+GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。已完成首次完整审查、修复和独立复验，源码已手动推送至 public 仓库的 `main`。36 测试服务已备份并升级至审查后源码 `4f145ef`，恢复演练、历史数据及手机业务复验通过。交付状态及下一步见[仓库交付记录](docs/repository-handoff.md)。
 
 两条核心主线：
 

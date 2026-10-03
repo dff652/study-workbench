@@ -2,7 +2,7 @@
 
 面向家庭的学习资料与作答证据工作台。把照片整理成可追溯的题目，关联知识、方法、题型、独立作答和复习记录，支持纸上练习及 PDF／Word 导出。
 
-当前阶段：**人工业务、知识与题库、逐次作答／评价、打印、复习／报告及容器服务已实现并通过独立验收。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
+当前阶段：**知识与题库、逐次作答／评价、打印、复习／报告及容器服务的主要人工流程已实现并通过对应工程验收。对照完整需求仍有公式打印、检索、手机放大、外发配置和派生处理缺口，M1a 尚不能判全部通过。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
 
 GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。已完成首次完整审查、修复和独立复验，源码已手动推送至 public 仓库的 `main`。36 测试服务已备份并升级至审查后源码 `4f145ef`，恢复演练、历史数据及手机业务复验通过。交付状态及下一步见[仓库交付记录](docs/repository-handoff.md)。
 
@@ -18,6 +18,7 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 | 文档 | 内容 |
 | --- | --- |
 | [当前进度](DEV_STATE.md) | 已完成事项、验证结果和下一步 |
+| [需求与实现核查](docs/requirements-implementation-audit-20261003.md) | 18 FR／6 NFR／24 AC 的实际覆盖、工程缺口及后续任务 |
 | [仓库交付记录](docs/repository-handoff.md) | Public 仓库、源码／私有数据边界与提交／推送状态 |
 | [首次推送前审查](docs/reviews/pre-push-20261003.md) | 完整提交审查、修复及独立验收 |
 | [功能清单与覆盖说明](docs/feature-checklist.md) | 知识库／题库、知识地图、手写评价和学习档案的范围及阶段 |

@@ -52,10 +52,10 @@ def _entity(actor, entity_pk, kind):
     return row
 
 
-def _accepted_current_revision(household_id, kind, revision_id):
+def _accepted_current_revision(household_id, kind, revision_id, *, require_head=True):
     revision = (RevisionRecord.objects.filter(pk=revision_id, entity__household_id=household_id,
         entity__kind=kind).select_related("entity", "review_projection").first())
-    if (revision is None or revision.entity.head_revision_id != revision.pk
+    if (revision is None or (require_head and revision.entity.head_revision_id != revision.pk)
             or revision.entity.published_revision_id != revision.pk
             or revision.review_projection.state != "accepted"):
         raise core.PersistenceError("stale_context", "目标必须是当前已接受并发布的精确版本。")
@@ -154,8 +154,9 @@ def new_schedule_context(actor, learner_entity_pk):
     if profile is None:
         raise core.PersistenceError("not_found", "学习者档案不存在。")
     question_versions = {item["question_id"]: item["revision_id"] for item in data["questions"]}
+    question_heads = {item["question_id"]: item["head_revision_id"] for item in data["questions"]}
     context = {"learner_entity_pk": learner.pk, "learner_id": learner.stable_id,
-               "question_versions": question_versions}
+               "question_versions": question_versions, "question_heads": question_heads}
     return {"household_id": learner.household_id, "learner": profile,
             "questions": data["questions"], "context": context}
 
@@ -167,24 +168,29 @@ def create_schedule(actor, learner_entity_pk, *, question_revision_id, due_date,
     household_id = str(learner.household_id)
     if (not isinstance(context, dict) or context.get("learner_entity_pk") != learner.pk
             or context.get("learner_id") != learner.stable_id
-            or not isinstance(context.get("question_versions"), dict)):
+            or not isinstance(context.get("question_versions"), dict)
+            or not isinstance(context.get("question_heads"), dict)):
         raise core.PersistenceError("stale_context", "计划创建凭据无效，请重新打开。")
     due_date = _date_value(due_date)
     goal = _clean_text(goal, "目标说明", 1200)
     prompt_plan = _clean_text(prompt_plan, "提示安排", 2000, allow_blank=True)
     reason = _clean_text(reason, "计划依据", 1000)
-    question = RevisionRecord.objects.filter(pk=question_revision_id).select_related("entity").first()
+    question = RevisionRecord.objects.filter(pk=question_revision_id, entity__household_id=household_id,
+        entity__kind="question").select_related("entity").first()
     if question is None or context["question_versions"].get(question.entity.stable_id) != question.pk:
         raise core.PersistenceError("stale_context", "所选题目已改变，请重新打开计划页面。")
+    expected_head = context["question_heads"].get(question.entity.stable_id)
+    if expected_head is None:
+        raise core.PersistenceError("stale_context", "题目版本已改变，请重新打开计划页面。")
 
     def build(bundle):
         if (learner.household_id != household_id or learner.kind != "learner"
                 or not any(item.learner_id == learner.stable_id for item in bundle.learners)):
             raise core.PersistenceError("not_found", "学习者档案不存在。")
-        exact = _accepted_current_revision(household_id, "question", question.pk)
+        exact = _accepted_current_revision(household_id, "question", question.pk, require_head=False)
         expected = {
             ObjectKey("learner", learner.stable_id): None,
-            ObjectKey("question", exact.entity.stable_id): exact.entity.head_revision_id,
+            ObjectKey("question", exact.entity.stable_id): expected_head,
         }
         schedule_id = uuid4()
         result = {"schedule_pk": None, "schedule_id": str(schedule_id)}

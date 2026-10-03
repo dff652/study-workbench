@@ -78,7 +78,11 @@ def formula_ast(expression):
         if isinstance(node,ast.BinOp):
             left,right=visit(node.left),visit(node.right)
             if isinstance(node.op,ast.Div):return ['f',left,right]
-            if isinstance(node.op,ast.Pow):return ['u',left,right]
+            if isinstance(node.op,ast.Pow):
+                if (isinstance(node.left,ast.UnaryOp) or
+                    (isinstance(node.left,ast.BinOp) and isinstance(node.left.op,ast.Pow))):
+                    left=['r',['t','('],left,['t',')']]
+                return ['u',left,right]
             operators={ast.Add:'+',ast.Sub:'-',ast.Mult:'×'}
             if type(node.op) in operators:
                 return ['r',['t','('],left,['t',operators[type(node.op)]],right,['t',')']]

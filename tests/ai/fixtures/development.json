@@ -70,6 +70,7 @@
       "source_page_id": "synthetic-page-dev-v-001",
       "task": "variant",
       "source_revision_ids": ["synthetic-dev-q-rev-004", "synthetic-dev-method-rev-001"],
+      "method_revision_ids": ["synthetic-dev-method-rev-001"],
       "region_revision_ids": [],
       "case_tags": ["classroom_notes", "incomplete_source", "unknown_author"],
       "source_excerpt": "纯虚构变式依据：课堂笔记只记下“按上课方法试做”，方法条件和记录者均未知。",

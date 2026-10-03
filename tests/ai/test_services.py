@@ -6,7 +6,9 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from decimal import Decimal
 from io import BytesIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -19,6 +21,7 @@ from PIL import Image, PngImagePlugin
 
 from app.ai import services as ai
 from app.ai.models import ModelBudgetReservation, ModelConfig, ModelRun
+from app.ai.provider import ProviderFailure
 from app.domain import Origin
 from app.persistence import services as core
 from app.persistence.models import EntityRecord, EvidenceRecord, HouseholdMember, RevisionRecord, ReviewProjection
@@ -282,7 +285,7 @@ class AIWorkflowTests(TransactionTestCase):
         response = self.proposal_response(run, printed_text="晚到的模型建议")
         ai.request_execution(self.owner, run.pk)
 
-        def late_result(_config, _messages):
+        def late_result(_config, _messages, **_kwargs):
             ai.cancel_run(self.owner, run.pk)
             return response, {"prompt_tokens": 30, "completion_tokens": 20}
 
@@ -324,7 +327,7 @@ class AIWorkflowTests(TransactionTestCase):
         release = threading.Event()
         response = self.proposal_response(first, printed_text="并发预算合成建议")
 
-        def hold_first(_config, _messages):
+        def hold_first(_config, _messages, **_kwargs):
             entered.set()
             if not release.wait(10):
                 raise TimeoutError("synthetic worker was not released")
@@ -344,6 +347,221 @@ class AIWorkflowTests(TransactionTestCase):
         self.assertEqual(second_result.status, ModelRun.Status.FAILED)
         self.assertEqual(second_result.error_code, "budget_exhausted")
         self.assertEqual(ModelBudgetReservation.objects.filter(config=config).count(), 1)
+
+    def test_image_usage_above_fixed_reserve_is_settled_and_blocks_next_run(self):
+        config = self.make_config(budget="0.15", reserved="0.1")
+        self.config = config
+        first = self.queue_question(self.published, image=True)
+        response = self.proposal_response(first, printed_text="合成图像建议")
+        ai.request_execution(self.owner, first.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.chat_completion", return_value=(response,
+                    {"prompt_tokens": 200000, "completion_tokens": 20})):
+            completed = ai.execute_run(first.pk)
+        self.assertEqual(completed.status, ModelRun.Status.AWAITING_REVIEW)
+        reservation = ModelBudgetReservation.objects.get(run=first)
+        self.assertEqual(reservation.reserved_cost, Decimal("0.1"))
+        self.assertEqual(reservation.actual_cost, Decimal("0.20002"))
+        self.assertEqual(completed.estimated_cost, Decimal("0.20002"))
+
+        second = self.queue_question(self.published, image=True)
+        ai.request_execution(self.owner, second.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.chat_completion") as provider:
+            rejected = ai.execute_run(second.pk)
+        self.assertEqual(rejected.status, ModelRun.Status.FAILED)
+        self.assertEqual(rejected.error_code, "budget_exhausted")
+        provider.assert_not_called()
+        self.assertFalse(ModelBudgetReservation.objects.filter(run=second).exists())
+
+    def test_total_crop_pixel_limit_fails_before_open_or_reservation(self):
+        run = self.queue_question(self.published, image=True)
+        ai.request_execution(self.owner, run.pk)
+        evidence = SimpleNamespace(
+            region=SimpleNamespace(payload={"coordinate_space": "original_pixels",
+                "geometry": [0, 0, 3000, 3000]}),
+            image=SimpleNamespace(payload={"storage_key": "synthetic", "width": 4000, "height": 4000},
+                sha256="synthetic"),
+        )
+
+        class FakeQuery:
+            def select_related(self, *_args):
+                return self
+
+            def first(self):
+                return evidence
+
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.EvidenceRecord.objects.filter", return_value=FakeQuery()), \
+                patch("app.ai.services.materials.asset_path") as asset_path, \
+                patch("app.ai.services.Image.open") as image_open, \
+                patch("app.ai.services.chat_completion") as provider:
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "input_too_large")
+        asset_path.assert_not_called()
+        image_open.assert_not_called()
+        provider.assert_not_called()
+        self.assertFalse(ModelBudgetReservation.objects.filter(run=run).exists())
+
+    def test_total_crop_pixel_limit_counts_several_individually_allowed_regions(self):
+        run = SimpleNamespace(task_kind=ModelRun.TaskKind.QUESTION,
+            selected_region_revision_ids=["region-a", "region-b"], source_revision_ids=["source"],
+            question_revision_ids=["question"], attempt_revision_id=None, household_id="household")
+        evidence = {
+            region_id: SimpleNamespace(
+                region=SimpleNamespace(payload={"coordinate_space": "original_pixels",
+                    "geometry": [0, 0, 2500, 2000]}),
+                image=SimpleNamespace(payload={"storage_key": "synthetic", "width": 4000, "height": 3000},
+                    sha256="synthetic"),
+            ) for region_id in run.selected_region_revision_ids
+        }
+
+        class FakeQuery:
+            def __init__(self, row):
+                self.row = row
+
+            def select_related(self, *_args):
+                return self
+
+            def first(self):
+                return self.row
+
+        class FakeCrop:
+            width, height = 2500, 2000
+
+            def convert(self, _mode):
+                return self
+
+            def save(self, output, **_kwargs):
+                output.write(b"png")
+
+        class FakeImage:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def crop(self, _box):
+                return FakeCrop()
+
+        def evidence_query(**kwargs):
+            return FakeQuery(evidence[kwargs["region_id"]])
+
+        with patch("app.ai.services.EvidenceRecord.objects.filter", side_effect=evidence_query), \
+                patch("app.ai.services.materials.asset_path", return_value="synthetic") as asset_path, \
+                patch("app.ai.services.Image.open", return_value=FakeImage()) as image_open:
+            with self.assertRaises(core.PersistenceError) as caught:
+                ai._crop_regions(self.owner, "household", run)
+        self.assertEqual(caught.exception.code, "input_too_large")
+        self.assertEqual(asset_path.call_count, 1)
+        self.assertEqual(image_open.call_count, 1)
+
+    def test_total_crop_png_limit_fails_without_reservation_or_provider_call(self):
+        run = self.queue_question(self.published, image=True)
+        ai.request_execution(self.owner, run.pk)
+
+        class FakeCrop:
+            width, height = 25, 30
+
+            def convert(self, _mode):
+                return self
+
+            def save(self, output, **_kwargs):
+                output.write(b"x" * (ai.MAX_TOTAL_CROP_PNG_BYTES + 1))
+
+        class FakeImage:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def load(self):
+                return None
+
+            def convert(self, _mode):
+                return self
+
+            def crop(self, _box):
+                return FakeCrop()
+
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.Image.open", return_value=FakeImage()), \
+                patch("app.ai.services.chat_completion") as provider:
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "input_too_large")
+        provider.assert_not_called()
+        self.assertFalse(ModelBudgetReservation.objects.filter(run=run).exists())
+
+    def test_oversized_provider_payload_fails_before_reservation_or_call(self):
+        run = self.queue_question(self.published)
+        ai.request_execution(self.owner, run.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.prepare_request_payload",
+                    side_effect=ProviderFailure("request_payload_too_large")), \
+                patch("app.ai.services.chat_completion") as provider:
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "input_too_large")
+        provider.assert_not_called()
+        self.assertFalse(ModelBudgetReservation.objects.filter(run=run).exists())
+
+    def test_answer_text_controls_are_assessment_only(self):
+        client = Client()
+        client.force_login(self.owner)
+        question_url = reverse("ai:run_new", kwargs={"household_id": self.household.pk,
+            "task_kind": "question"})
+        question_page = client.get(question_url)
+        self.assertEqual(question_page.status_code, 200)
+        self.assertNotContains(question_page, 'name="attempt_revision_id"')
+        self.assertNotContains(question_page, 'name="include_attempt_text"')
+        assessment_url = reverse("ai:run_new", kwargs={"household_id": self.household.pk,
+            "task_kind": "assessment"})
+        assessment_page = client.get(assessment_url)
+        self.assertContains(assessment_page, 'name="attempt_revision_id"')
+        self.assertContains(assessment_page, 'name="include_attempt_text"')
+
+        context = ai.selection_context(self.owner, self.household.pk, "question")
+        with self.assertRaises(core.PersistenceError) as caught:
+            ai.queue_run(self.owner, self.household.pk, task_kind="question",
+                source_revision_ids=[self.published["revision_id"]],
+                question_revision_ids=[self.published["revision_id"]],
+                include_attempt_text=True, selection_token=context["token"], request_key=key())
+        self.assertEqual(caught.exception.code, "invalid_input")
+        self.assertEqual(ModelRun.objects.count(), 0)
+
+    def test_variant_question_revision_cannot_pass_as_target_method(self):
+        method = knowledge_services.save_node(self.owner, self.household.pk, "method", data={
+            "name": "合成方法", "conditions": "", "steps": "检查算式",
+            "notes": "", "parent_revision_id": "", "sources": "[]"},
+            request_key=key(), reason="创建变式校验方法")
+        method_context = core.review_context(self.owner, self.household.pk, method["revision_id"])
+        core.review_revision(self.owner, self.household.pk, method["revision_id"], action="accept",
+            expected_head=method_context["expected_head"],
+            expected_dependencies=method_context["expected_dependencies"],
+            expected_decision_id=method_context["expected_decision_id"],
+            request_key=key(), reason="接受变式校验方法")
+        selection = ai.selection_context(self.owner, self.household.pk, "variant")
+        run = ai.queue_run(self.owner, self.household.pk, task_kind="variant",
+            source_revision_ids=[method["revision_id"]],
+            question_revision_ids=[self.published["revision_id"]],
+            selection_token=selection["token"], request_key=key())
+        proposal = {"schema_version": "study-workbench.ai.v1", "task": "variant",
+            "source_revision_ids": [method["revision_id"], self.published["revision_id"]],
+            "proposal": {"text": "合成变式", "answer_expression": "3 + 4",
+                "check_expression": "7", "target_method_revision_id": self.published["revision_id"]},
+            "tool_calls": []}
+        ai.request_execution(self.owner, run.pk)
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False), \
+                patch("app.ai.services.chat_completion", return_value=(json.dumps(proposal),
+                    {"prompt_tokens": 10, "completion_tokens": 10})):
+            failed = ai.execute_run(run.pk)
+        self.assertEqual(failed.status, ModelRun.Status.FAILED)
+        self.assertEqual(failed.error_code, "response_unknown_source")
+        self.assertIsNone(failed.response)
 
     def test_database_guards_preserve_configuration_and_selected_run_identity(self):
         run = self.queue_question(self.published)

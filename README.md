@@ -19,6 +19,7 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 | --- | --- |
 | [当前进度](DEV_STATE.md) | 已完成事项、验证结果和下一步 |
 | [仓库交付记录](docs/repository-handoff.md) | Public 仓库、源码／私有数据边界与提交／推送状态 |
+| [首次推送前审查](docs/reviews/pre-push-20261003.md) | 完整提交审查、修复及独立验收 |
 | [功能清单与覆盖说明](docs/feature-checklist.md) | 知识库／题库、知识地图、手写评价和学习档案的范围及阶段 |
 | [产品需求 v0.2](docs/requirements.md) | 首版范围、用户流程、数据边界和可追踪验收场景 |
 | [开发与复用评估](docs/build-vs-reuse-assessment.md) | 两条核心主线、候选源码证据、组件复用与定制边界、后续决策条件 |

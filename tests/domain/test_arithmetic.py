@@ -18,3 +18,12 @@ class ArithmeticTests(unittest.TestCase):
     def test_fraction_formula_is_native_and_symbolic_check_is_separate(self):
         self.assertEqual(formula_ast('x/2'),['f',['t','x'],['t','2']])
         self.assertEqual(formula_ast('x^2'),['u',['t','x'],['t','2']])
+
+    def test_power_bases_preserve_unary_and_nested_power_grouping(self):
+        self.assertEqual(formula_ast('(-2)^2'),
+            ['u',['r',['t','('],['r',['t','-'],['t','2']],['t',')']],['t','2']])
+        self.assertEqual(formula_ast('(-x)^2'),
+            ['u',['r',['t','('],['r',['t','-'],['t','x']],['t',')']],['t','2']])
+        self.assertEqual(formula_ast('(x^2)^3'),
+            ['u',['r',['t','('],['u',['t','x'],['t','2']],['t',')']],['t','3']])
+        self.assertEqual(formula_ast('-x^2'),['r',['t','-'],['u',['t','x'],['t','2']]])

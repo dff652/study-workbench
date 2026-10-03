@@ -8,6 +8,8 @@ import urllib.request
 
 from django.conf import settings
 
+MAX_REQUEST_PAYLOAD = 8 * 1024 * 1024
+
 
 class ProviderFailure(Exception):
     def __init__(self, code, usage=None):
@@ -62,14 +64,29 @@ def validate_config_url(base_url, *, test_http_enabled=False):
         raise ProviderFailure("endpoint_rejected")
 
 
-def chat_completion(config, messages):
+def prepare_request_payload(config, messages):
+    body = {"model": config["model"], "messages": messages, "temperature": 0,
+        "max_tokens": config["max_output_tokens"], "response_format": {"type": "json_object"}}
+    encoder = json.JSONEncoder(separators=(",", ":"))
+    chunks = []
+    size = 0
+    for chunk in encoder.iterencode(body):
+        encoded = chunk.encode("utf-8")
+        size += len(encoded)
+        if size > MAX_REQUEST_PAYLOAD:
+            raise ProviderFailure("request_payload_too_large")
+        chunks.append(encoded)
+    return b"".join(chunks)
+
+
+def chat_completion(config, messages, *, prepared_payload=None):
     endpoint = _endpoint(config)
     api_key = os.environ.get("SWB_MODEL_API_KEY", "")
     if not api_key:
         raise ProviderFailure("provider_key_missing")
-    payload = json.dumps({"model": config["model"], "messages": messages,
-        "temperature": 0, "max_tokens": config["max_output_tokens"],
-        "response_format": {"type": "json_object"}}, separators=(",", ":")).encode()
+    payload = prepared_payload if prepared_payload is not None else prepare_request_payload(config, messages)
+    if not isinstance(payload, bytes) or len(payload) > MAX_REQUEST_PAYLOAD:
+        raise ProviderFailure("request_payload_too_large")
     request = urllib.request.Request(endpoint, data=payload, method="POST", headers={
         "Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
         "Accept": "application/json"})

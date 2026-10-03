@@ -1,9 +1,14 @@
 import json
+from django.contrib.auth import get_user_model
 from django.db import DatabaseError, transaction
 from django.test import TransactionTestCase
+from app.catalogue import services as catalogue
+from app.catalogue.models import QuestionLabel
 from app.persistence import services as core
-from app.persistence.models import EntityRecord, RevisionRecord
+from app.persistence.models import EntityRecord, HouseholdMember, RevisionRecord
 from app.web import services as materials, records
+from app.web import knowledge_services
+from app.web.models import QuestionSource
 from app.printing import services
 from app.printing.models import TeacherAnswerRevision, AnswerDecision, ExportSnapshot
 from tests.web.test_services import ManualServicesTests, key
@@ -27,6 +32,16 @@ class PrintTests(TransactionTestCase):
         return services.save_answer(self.owner,self.house.pk,q.pk,body=text,
             formulas=[['f',['t','1'],['t','2']]],basis='有理数通分复算',
             expected=services.answer_context(q),request_key=key())
+
+    def accept_revision(self,revision_id):
+        context=core.review_context(self.owner,self.house.pk,revision_id)
+        return core.review_revision(self.owner,self.house.pk,revision_id,action='accept',reason='合成打印依赖验收',
+            request_key=key(),**{k:context[k] for k in ['expected_head','expected_dependencies','expected_decision_id']})
+
+    def withdraw_revision(self,revision_id):
+        context=core.review_context(self.owner,self.house.pk,revision_id)
+        return core.review_revision(self.owner,self.house.pk,revision_id,action='withdraw',reason='合成新增审核决定',
+            request_key=key(),**{k:context[k] for k in ['expected_head','expected_dependencies','expected_decision_id']})
 
     def test_teacher_answers_append_review_replay_and_stale_guard(self):
         q=self.published();expected=services.answer_context(q);request_key=key()
@@ -64,6 +79,35 @@ class PrintTests(TransactionTestCase):
         from app.exports.contracts import ExportError
         with self.assertRaises(ExportError):services.snapshot_file(self.owner,practice.pk,'document.pdf')
 
+    def test_snapshot_provenance_pins_link_and_node_review_decisions(self):
+        q=self.published()
+        node=knowledge_services.save_node(self.owner,self.house.pk,'knowledge',data={
+            'definition':'合成知识节点','conditions':'','common_errors':'','sources':'[]'},
+            request_key=key(),reason='建立合成打印依赖')
+        self.accept_revision(node['revision_id'])
+        link=knowledge_services.create_link(self.owner,self.house.pk,kind='knowledge',
+            node_revision_id=node['revision_id'],question_revision_id=q.pk,role='applies',
+            request_key=key(),reason='合成题目知识关联')
+        self.accept_revision(link['revision_id'])
+        node_revision=RevisionRecord.objects.get(pk=node['revision_id'])
+        link_revision=RevisionRecord.objects.get(pk=link['revision_id'])
+        node_decision=str(node_revision.review_projection.decision_id)
+        link_decision=str(link_revision.review_projection.decision_id)
+
+        snapshot=services.export_questions(self.owner,self.house.pk,[q.pk],title='合成知识整理',purpose='knowledge_summary')
+        self.assertEqual(snapshot.provenance['nodes'][0]['review_decision_id'],node_decision)
+        self.assertEqual(snapshot.provenance['links'][0]['review_decision_id'],link_decision)
+
+        self.withdraw_revision(link['revision_id'])
+        self.withdraw_revision(node['revision_id'])
+        snapshot.refresh_from_db()
+        self.assertEqual(snapshot.provenance['nodes'][0]['review_decision_id'],node_decision)
+        self.assertEqual(snapshot.provenance['links'][0]['review_decision_id'],link_decision)
+        node_revision=RevisionRecord.objects.select_related('review_projection').get(pk=node['revision_id'])
+        link_revision=RevisionRecord.objects.select_related('review_projection').get(pk=link['revision_id'])
+        self.assertNotEqual(str(node_revision.review_projection.decision_id),node_decision)
+        self.assertNotEqual(str(link_revision.review_projection.decision_id),link_decision)
+
     def test_erratum_review_changes_working_text_preserves_print_and_no_child_records(self):
         q=self.published('1+1=3')
         result=services.save_erratum(self.owner,self.house.pk,q.pk,corrected_text='1+1=2',basis='整数加法复算',
@@ -79,6 +123,44 @@ class PrintTests(TransactionTestCase):
         self.assertEqual(EntityRecord.objects.filter(kind__in=['attempt','assessment']).count(),0)
         c=core.review_context(self.owner,self.house.pk,new.pk)
         records.review(self.owner,self.house.pk,'question',new.entity.stable_id,new.pk,action='accept',reason='按勘误接受',context=c,request_key=key())
+
+    def test_erratum_preserves_cross_material_question_label(self):
+        first=self.question(text='来自第一份资料的题目')
+        original_material=self.material
+        self.material=materials.create_material(self.owner,self.house.pk,'第二份合成资料',key())
+        second=self.question(text='来自第二份资料的题目')
+        self.material=original_material
+
+        source_ids=[first['revision_id'],second['revision_id']]
+        merged=catalogue.merge_questions(self.owner,self.house.pk,
+            source_revision_ids=source_ids,
+            context_token=catalogue.prepare_context(self.owner,self.house.pk,'merge',source_ids),
+            original_number='合题 J1-1+J1-2',printed_text='合并题印刷错误',
+            reason='合并两份资料中的来源题',request_key=key())
+        old_revision_id=merged['target_revision_ids'][0]
+        original_label=QuestionLabel.objects.get(revision_id=old_revision_id)
+        self.assertEqual(original_label.original_number,'合题 J1-1+J1-2')
+        self.assertFalse(QuestionSource.objects.filter(revision_id=old_revision_id).exists())
+
+        question=RevisionRecord.objects.get(pk=old_revision_id)
+        erratum_result=services.save_erratum(self.owner,self.house.pk,question.pk,
+            corrected_text='合并题订正后的题干',basis='核对两份合成资料',
+            expected=records.edit_context(question),request_key=key())
+        erratum=RevisionRecord.objects.get(pk=erratum_result['revision_id'])
+        reviewer=get_user_model().objects.create_user(username=f'print-reviewer-{key()}')
+        HouseholdMember.objects.create(household=self.house,user=reviewer,role='reviewer')
+        review_context=core.review_context(reviewer,self.house.pk,erratum.pk)
+        records.review(reviewer,self.house.pk,'erratum',erratum.entity.stable_id,erratum.pk,
+            action='accept',reason='核实资料勘误',context=review_context,request_key=key())
+        applied=services.apply_erratum(reviewer,self.house.pk,erratum.pk,
+            expected=records.edit_context(question),request_key=key())
+
+        new_label=QuestionLabel.objects.get(revision_id=applied['revision_id'])
+        original_label.refresh_from_db()
+        self.assertEqual(original_label.original_number,'合题 J1-1+J1-2')
+        self.assertEqual(new_label.original_number,original_label.original_number)
+        self.assertEqual(new_label.created_by,reviewer)
+        self.assertFalse(QuestionSource.objects.filter(revision_id=applied['revision_id']).exists())
 
     def test_answer_cannot_cross_family_or_be_written_by_viewer(self):
         q=self.published()

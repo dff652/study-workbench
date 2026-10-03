@@ -12,6 +12,7 @@ from app.domain import (
 )
 from app.domain.contracts import EvidencePurpose
 from app.imports.models import LegacyIndexEntry
+from app.catalogue.models import QuestionLabel
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
 from app.persistence.models import EntityRecord, EvidenceRecord, ImageRecord, RevisionDependency, RevisionRecord
@@ -230,11 +231,24 @@ def review_revision(actor, entity_id, revision_id, *, action, reason, context, r
 
 def _question_labels(household_id):
     labels = {}
+
+    def add(entity_id, value):
+        values = labels.setdefault(entity_id, [])
+        if value not in values:
+            values.append(value)
+
     for entry in LegacyIndexEntry.objects.filter(batch__household_id=household_id).select_related("question_revision__entity").order_by("ordinal"):
-        labels.setdefault(entry.question_revision.entity_id, []).append(f"{entry.book}-{entry.number}")
+        add(entry.question_revision.entity_id, f"{entry.book}-{entry.number}")
     for source in QuestionSource.objects.filter(revision__entity__household_id=household_id).select_related("revision__entity"):
         if source.original_number:
-            labels.setdefault(source.revision.entity_id, []).append(source.original_number)
+            add(source.revision.entity_id, source.original_number)
+    source_revision_ids = QuestionSource.objects.filter(revision__entity__household_id=household_id).exclude(
+        original_number="").values_list("revision_id", flat=True)
+    for label in QuestionLabel.objects.filter(revision__entity__household_id=household_id,
+            revision__entity__kind="question").exclude(revision_id__in=source_revision_ids).select_related(
+                "revision__entity"):
+        if label.original_number:
+            add(label.revision.entity_id, label.original_number)
     return labels
 
 
@@ -288,18 +302,10 @@ def _home_question_rows(household_id):
     return result
 
 
-def _question_entities_for_node(household_id, kind, stable_id):
-    spec = _link_spec(kind)
-    link_entity_kind, target_role = spec[4], spec[6]
-    link_rows = RevisionRecord.objects.filter(entity__household_id=household_id,
-        entity__kind=link_entity_kind, outgoing_dependencies__role=target_role,
-        outgoing_dependencies__target__entity__kind=kind,
-        outgoing_dependencies__target__entity__stable_id=stable_id).distinct()
-    ids = set()
-    for link in link_rows:
-        q_dep = link.outgoing_dependencies.filter(role="link_question").select_related("target__entity").first()
-        if q_dep:
-            ids.add(q_dep.target.entity_id)
+def _question_entities_for_node(actor, household_id, kind, stable_id):
+    trace = core.published_trace(actor, household_id, node=ObjectKey(kind, stable_id))
+    ids = set(RevisionRecord.objects.filter(pk__in=trace["question_revision_ids"],
+        entity__household_id=household_id, entity__kind="question").values_list("entity_id", flat=True))
     if kind == "method":
         revision_ids = list(RevisionRecord.objects.filter(entity__household_id=household_id,
             entity__kind="method", entity__stable_id=stable_id).values_list("pk", flat=True))
@@ -335,7 +341,7 @@ def index_data(actor, household_id, filters=None):
         if stable_id:
             if not EntityRecord.objects.filter(household=house, kind=kind, stable_id=stable_id).exists():
                 raise core.PersistenceError("not_found", "筛选节点不属于当前家庭。")
-            allowed = _question_entities_for_node(house.pk, kind, stable_id)
+            allowed = _question_entities_for_node(actor, house.pk, kind, stable_id)
             questions = [row for row in questions if row["entity"].pk in allowed]
     tree = method_tree_data(house.pk)
     return {"household": house, "nodes": nodes, "questions": questions, "method_tree": tree}

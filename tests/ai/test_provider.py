@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from django.test import override_settings
 
-from app.ai.provider import ProviderFailure, chat_completion
+from app.ai.provider import MAX_REQUEST_PAYLOAD, ProviderFailure, chat_completion
 
 
 class _Server(ThreadingHTTPServer):
@@ -94,3 +94,12 @@ class ProviderBoundaryTests(unittest.TestCase):
             with self.assertRaises(ProviderFailure) as failure:
                 chat_completion(config, [])
         self.assertEqual(failure.exception.code, "endpoint_rejected")
+
+    @override_settings(SWB_AI_ALLOW_TEST_HTTP=True, SWB_TEST_OWNER="synthetic", SWB_PRODUCTION=False)
+    def test_oversized_serialized_request_fails_before_http_request(self):
+        messages = [{"role": "user", "content": "x" * MAX_REQUEST_PAYLOAD}]
+        with patch.dict(os.environ, {"SWB_MODEL_API_KEY": "synthetic-only"}, clear=False):
+            with self.assertRaises(ProviderFailure) as failure:
+                chat_completion(self.config, messages)
+        self.assertEqual(failure.exception.code, "request_payload_too_large")
+        self.assertIsNone(self.server.last_authorization)

@@ -12,7 +12,7 @@ from PIL import Image
 
 from app.catalogue import services as catalogue
 from app.catalogue.forms import MergeForm
-from app.catalogue.models import QuestionLineage
+from app.catalogue.models import QuestionLabel, QuestionLineage
 from app.persistence import services as core
 from app.persistence.models import EntityRecord, HouseholdMember, RevisionRecord
 from app.web import services as materials
@@ -169,6 +169,46 @@ class QuestionLineageTests(TransactionTestCase):
             catalogue.prepare_context(self.owner, self.household.pk, "merge", [first["revision_id"], first["revision_id"]])
         with self.assertRaises(core.PersistenceError):
             catalogue.prepare_context(self.owner, self.household.pk, "merge", [first["revision_id"], "foreign-revision"])
+
+    def test_cross_material_merge_keeps_entered_number_and_immutable_label(self):
+        first = self.make_question("A1", "第一份资料", [(170, 30, 30)])
+        original_material = self.material
+        self.material = materials.create_material(self.owner, self.household.pk, "第二份资料", key())
+        second = self.make_question("B2", "第二份资料", [(30, 30, 170)])
+        self.material = original_material
+        source_ids = [first["revision_id"], second["revision_id"]]
+        args = {"source_revision_ids": source_ids,
+            "context_token": catalogue.prepare_context(self.owner, self.household.pk, "merge", source_ids),
+            "original_number": "合题 A1+B2", "printed_text": "跨资料人工合题",
+            "reason": "保留两份来源", "request_key": key()}
+        result = catalogue.merge_questions(self.owner, self.household.pk, **args)
+        self.assertEqual(catalogue.merge_questions(self.owner, self.household.pk, **args), result)
+        revision_id = result["target_revision_ids"][0]
+        label = QuestionLabel.objects.get(revision_id=revision_id)
+        self.assertEqual(label.original_number, "合题 A1+B2")
+        self.assertEqual(label.created_by, self.owner)
+        self.assertEqual(QuestionLabel.objects.count(), 1)
+        self.assertFalse(QuestionSource.objects.filter(revision_id=revision_id).exists())
+        entry = next(row for row in catalogue.question_index(self.owner, self.household.pk)["questions"]
+            if row["revision"].pk == revision_id)
+        self.assertEqual(entry["number"], "合题 A1+B2")
+        self.assertEqual(QuestionLineage.objects.get().source_revision_ids, source_ids)
+        self.assertEqual(len(RevisionRecord.objects.get(pk=revision_id).payload["evidence_refs"]), 2)
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            QuestionLabel.objects.filter(pk=revision_id).update(original_number="覆盖题号")
+        with self.assertRaises(DatabaseError), transaction.atomic():
+            QuestionLabel.objects.filter(pk=revision_id).delete()
+        for actor in (self.viewer, self.other):
+            with self.assertRaises(DatabaseError), transaction.atomic():
+                QuestionLabel.objects.create(revision_id=first["revision_id"], original_number="A1",
+                    created_by=actor)
+
+        split = catalogue.split_question(self.owner, self.household.pk, source_revision_id=revision_id,
+            context_token=catalogue.prepare_context(self.owner, self.household.pk, "split", [revision_id]),
+            children=[{"original_number": "C1", "printed_text": "第一问"},
+                {"original_number": "C2", "printed_text": "第二问"}], reason="继续拆分跨资料合题", request_key=key())
+        self.assertEqual(set(QuestionLabel.objects.filter(revision_id__in=split["target_revision_ids"])
+            .values_list("original_number", flat=True)), {"C1", "C2"})
 
     def test_stale_or_tampered_context_and_write_permissions_are_rejected(self):
         source = self.make_question("J1-4", "待拆分题目", [(120, 120, 30)])

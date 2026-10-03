@@ -70,6 +70,7 @@
       "source_page_id": "synthetic-page-holdout-v-101",
       "task": "variant",
       "source_revision_ids": ["synthetic-holdout-q-rev-104", "synthetic-holdout-method-rev-101"],
+      "method_revision_ids": ["synthetic-holdout-method-rev-101"],
       "region_revision_ids": [],
       "case_tags": ["classroom_notes", "incomplete_source"],
       "source_excerpt": "纯虚构课堂笔记中的变式记录：原方法只保留名称，前提条件和完整步骤都未记载。",

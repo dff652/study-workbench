@@ -2,7 +2,19 @@
 from django.conf import settings
 from django.db import models
 
-from app.persistence.models import Household
+from app.persistence.models import Household, RevisionRecord
+
+
+class QuestionLabel(models.Model):
+    """An entered derived question number independent of a single material set."""
+    revision = models.OneToOneField(RevisionRecord, primary_key=True, on_delete=models.PROTECT)
+    original_number = models.CharField(max_length=80)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=~models.Q(original_number=""),
+            name="swb_question_label_number_required")]
 
 
 class QuestionLineage(models.Model):

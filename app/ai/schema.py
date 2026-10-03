@@ -27,7 +27,7 @@ def _bad_constant(_):
 
 
 def parse_response(raw, *, task, allowed_sources, max_tool_calls=4,
-        allowed_regions=(), attempt_legibility=None):
+        allowed_regions=(), allowed_methods=(), attempt_legibility=None):
     if not isinstance(raw, str) or len(raw.encode("utf-8")) > MAX_RESPONSE:
         raise InvalidProposal("response_too_large")
     try:
@@ -102,7 +102,7 @@ def parse_response(raw, *, task, allowed_sources, max_tool_calls=4,
         _string(proposal["text"], 12000)
         _string(proposal["answer_expression"], 512)
         _string(proposal["check_expression"], 512)
-        if proposal["target_method_revision_id"] not in allowed_sources:
+        if proposal["target_method_revision_id"] not in allowed_methods:
             raise InvalidProposal("response_unknown_source")
         try:
             if check_arithmetic(proposal["answer_expression"], proposal["check_expression"])["matches"] is not True:

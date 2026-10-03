@@ -138,6 +138,13 @@ class StudyServiceTests(TransactionTestCase):
             context=detail["review_context"], request_key=key())
         return saved["revision_id"]
 
+    def save_question_draft(self, printed_text):
+        detail = materials.question_detail(self.owner, self.question_id)
+        return materials.save_question(self.owner, self.material.pk,
+            printed_text=printed_text, original_number="K1", sources=[self.source],
+            question_id=self.question_id, expected_context=detail["edit_context"],
+            request_key=key(), reason="保存合成题目草稿")
+
     def create_variant_run(self):
         method = knowledge_services.save_node(self.owner, self.household.pk, "method", data={
             "name": "分步计算", "conditions": "整数四则运算", "steps": "先算乘法再计算",
@@ -191,6 +198,27 @@ class StudyServiceTests(TransactionTestCase):
 
         self.assertEqual(replay, created)
         self.assertEqual(StudySchedule.objects.count(), 1)
+
+    def test_schedule_accepts_captured_published_revision_with_a_draft_head_and_detects_later_head_change(self):
+        draft = self.save_question_draft("草稿版本 2 × 2 = ?")
+        data = self.schedule_context()
+        context = data["context"]
+        self.assertEqual(context["question_versions"][self.question_id], self.question_revision_id)
+        self.assertEqual(context["question_heads"][self.question_id], draft["revision_id"])
+
+        command = {"question_revision_id": self.question_revision_id,
+            "due_date": date(2026, 10, 8), "goal": "独立完成两步计算",
+            "prompt_plan": "先提醒检查乘法顺序", "reason": "复习安排", "context": context}
+        created = study.create_schedule(self.owner, self.learner_entity.pk,
+            **command, request_key=key())
+        schedule = StudySchedule.objects.get(pk=created["schedule_pk"])
+        self.assertEqual(schedule.target_question_revision_id, self.question_revision_id)
+
+        self.save_question_draft("草稿版本 3 × 3 = ?")
+        with self.assertRaises(core.PersistenceError) as raised:
+            study.create_schedule(self.owner, self.learner_entity.pk,
+                **command, request_key=key())
+        self.assertEqual(raised.exception.code, "head_conflict")
 
     def test_applied_variant_stages_exact_provenance_and_publication_gate(self):
         self.assertIsNone(study.validate_variant_publication(self.owner, self.question_revision_id))

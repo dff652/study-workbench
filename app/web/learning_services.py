@@ -17,6 +17,7 @@ from app.domain import (
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
 from app.persistence.models import EntityRecord, HouseholdMember, ImageRecord, RevisionRecord, ReviewProjection
+from app.catalogue.models import QuestionLabel
 from app.web import services as material_services
 from app.web.models import MaterialPage, PagePreview, QuestionSource
 from . import records
@@ -154,11 +155,10 @@ def profile_detail(actor, learner_id):
 
 def _published_question_choices(actor, household_id, bundle):
     rows = (EntityRecord.objects.filter(household_id=household_id, kind="question", published_revision__isnull=False)
-            .select_related("published_revision", "published_revision__review_projection").order_by("stable_id"))
+            .select_related("published_revision", "published_revision__review_projection")
+            .order_by("stable_id"))
     questions = {item.question_id: item for item in bundle.questions}
-    labels = {}
-    for source in QuestionSource.objects.filter(revision_id__in=[row.published_revision_id for row in rows]):
-        labels[str(source.revision_id)] = source.original_number
+    numbers = _question_numbers_by_revision(household_id, [row.published_revision_id for row in rows])
     result = []
     for row in rows:
         revision = row.published_revision
@@ -171,18 +171,50 @@ def _published_question_choices(actor, household_id, bundle):
         if qrev is None:
             continue
         text = qrev.working_text or qrev.printed_text or "题干待补"
-        number = labels.get(revision.pk, "")
+        number = numbers.get(str(revision.pk), "")
+        revision_no = qrev.header.revision_no
         result.append({"question_id": question.question_id, "revision_id": revision.pk,
-                       "label": f"{number + ' · ' if number else ''}{text[:140]}"})
+                       "head_revision_id": row.head_revision_id, "revision_no": revision_no,
+                       "label": f"{number + ' · ' if number else ''}{text[:140]} · r{revision_no}"})
     return result
+
+
+def _question_numbers_by_revision(household_id, revision_ids):
+    revision_ids = tuple(revision_ids)
+    if not revision_ids:
+        return {}
+    numbers = {}
+    sources = QuestionSource.objects.filter(revision_id__in=revision_ids,
+        revision__entity__household_id=household_id, revision__entity__kind="question")
+    for source in sources:
+        if source.original_number:
+            numbers[str(source.revision_id)] = source.original_number
+    for label in QuestionLabel.objects.filter(revision_id__in=revision_ids,
+            revision__entity__household_id=household_id, revision__entity__kind="question").select_related(
+                "revision"):
+        key = str(label.revision_id)
+        if key not in numbers and label.original_number:
+            numbers[key] = label.original_number
+    return numbers
+
+
+def _question_revision_labels(household_id, bundle):
+    revisions = {revision.header.revision_id: revision
+        for question in bundle.questions for revision in question.revisions}
+    numbers = _question_numbers_by_revision(household_id, revisions)
+    labels = {}
+    for revision_id, revision in revisions.items():
+        text = revision.working_text or revision.printed_text or "题干待补"
+        number = numbers.get(str(revision_id), "")
+        revision_no = revision.header.revision_no
+        labels[revision_id] = f"{number + ' · ' if number else ''}{text[:140]} · r{revision_no}"
+    return labels
 
 
 def _profile_view(actor, household_id, bundle, profile, observations, attempts):
     question_options = _published_question_choices(actor, household_id, bundle)
-    qlabels = {item["question_id"]: item["label"] for item in question_options}
-    revision_to_question = {rev.header.revision_id: question.question_id
-                            for question in bundle.questions for rev in question.revisions}
-    knowledge_by_question, types_by_question = _published_node_labels(household_id, revision_to_question, bundle)
+    qlabels = _question_revision_labels(household_id, bundle)
+    knowledge_by_question, types_by_question = _published_node_labels(household_id, bundle)
     attempt_infos = []
     error_choices = set()
     review_states = set()
@@ -193,13 +225,14 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
             review_states.add(info["state"])
             if any(d.judgment in (Judgment.INCORRECT, Judgment.PARTIAL) for d in info["revision"].dimensions):
                 error_choices.add("error")
-        question_label = qlabels.get(attempt.question_id, attempt.question_id)
+        question_revision_id = current.question_revision_id
+        question_label = qlabels.get(question_revision_id, attempt.question_id)
         attempt_infos.append({
             "attempt": attempt,
             "revision": current,
             "question_label": question_label,
-            "knowledge_labels": knowledge_by_question.get(attempt.question_id, ()),
-            "type_labels": types_by_question.get(attempt.question_id, ()),
+            "knowledge_labels": knowledge_by_question.get(question_revision_id, ()),
+            "type_labels": types_by_question.get(question_revision_id, ()),
             "assessments": assessment_rows,
             "independent_success": _independent_success(actor, household_id, bundle, attempt, assessment_rows),
             "sort_date": current.actual_date or current.header.recorded_at[:10],
@@ -216,7 +249,7 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
             "question_options": question_options}
 
 
-def _published_node_labels(household_id, revision_to_question, bundle):
+def _published_node_labels(household_id, bundle):
     names = {}
     for item in bundle.knowledge_items:
         for revision in item.revisions:
@@ -234,18 +267,26 @@ def _published_node_labels(household_id, revision_to_question, bundle):
             continue
         payload = revision.payload
         qrev_id = payload.get("question_revision_id")
-        question_id = revision_to_question.get(qrev_id)
-        if not question_id:
+        question_revision = RevisionRecord.objects.filter(pk=qrev_id,
+            entity__household_id=household_id, entity__kind="question").select_related(
+                "entity", "review_projection").first()
+        if question_revision is None:
             continue
         target_id = payload.get("knowledge_revision_id") if row.kind == "knowledge_question" else payload.get("question_type_revision_id")
-        target = EntityRecord.objects.filter(household_id=household_id,
-                    kind="knowledge" if row.kind == "knowledge_question" else "question_type",
-                    published_revision_id=target_id).select_related("published_revision", "published_revision__review_projection").first()
-        if target is None or target.published_revision.review_projection.state != "accepted":
+        target_kind = "knowledge" if row.kind == "knowledge_question" else "question_type"
+        target_revision = RevisionRecord.objects.filter(pk=target_id,
+            entity__household_id=household_id, entity__kind=target_kind).select_related(
+                "entity", "review_projection").first()
+        if target_revision is None:
             continue
         label = names.get(target_id, "知识点/题型")
+        if (question_revision.entity.published_revision_id != question_revision.pk
+                or question_revision.review_projection.state != "accepted"
+                or target_revision.entity.published_revision_id != target_revision.pk
+                or target_revision.review_projection.state != "accepted"):
+            label += "（历史关系）"
         bucket = questions_for_knowledge if row.kind == "knowledge_question" else questions_for_type
-        bucket.setdefault(question_id, set()).add(label)
+        bucket.setdefault(qrev_id, set()).add(label)
     return ({key: tuple(sorted(value)) for key, value in questions_for_knowledge.items()},
             {key: tuple(sorted(value)) for key, value in questions_for_type.items()})
 
@@ -344,7 +385,8 @@ def _attempt_choices(actor, household_id, bundle, learner_id=None):
         current = attempt.revisions[-1]
         prior.append((attempt.attempt_id, f"{attempt.question_id} · {current.attempt_kind.value} · {current.actual_date or '日期未知'}"))
     token_context = {
-        "question_heads": {item["question_id"]: item["revision_id"] for item in questions},
+        "question_versions": {item["question_id"]: item["revision_id"] for item in questions},
+        "question_heads": {item["question_id"]: item["head_revision_id"] for item in questions},
         "observation_heads": obs_heads,
         "attempt_ids": [item[0] for item in prior],
     }
@@ -457,9 +499,12 @@ def create_attempt(actor, learner_id, *, question_id, attempt_kind, source_kind,
         learner = _learner(bundle, learner_id)
         if learner is None:
             raise core.PersistenceError("not_found", "学习者档案不存在。")
-        expected_revision = context.get("question_heads", {}).get(question_id)
+        expected_revision = context.get("question_versions", {}).get(question_id)
+        expected_head = context.get("question_heads", {}).get(question_id)
+        if expected_head is None:
+            raise core.PersistenceError("stale_context", "题目版本已改变，请重新打开页面。")
         question_revision = _confirm_question(bundle, household_id, question_id, expected_revision)
-        heads = {ObjectKey("question", question_id): expected_revision}
+        heads = {ObjectKey("question", question_id): expected_head}
         _confirm_observations(bundle, selected_refs, context.get("observation_heads", {}), learner_id, household_id, heads)
         _validate_attempt_source(bundle, selected_refs, learner_id, legibility, answer_text)
         if previous_attempt_id:

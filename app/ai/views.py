@@ -132,9 +132,9 @@ def run_create(request, household_id, task_kind):
         run = services.queue_run(request.user, household_id, task_kind=task_kind,
             source_revision_ids=form.cleaned_data["source_revision_ids"],
             question_revision_ids=form.cleaned_data["question_revision_ids"],
-            attempt_revision_id=form.cleaned_data["attempt_revision_id"] or None,
+            attempt_revision_id=form.cleaned_data.get("attempt_revision_id") or None,
             selected_region_revision_ids=form.cleaned_data["selected_region_revision_ids"],
-            include_attempt_text=form.cleaned_data["include_attempt_text"],
+            include_attempt_text=form.cleaned_data.get("include_attempt_text", False),
             selection_token=form.cleaned_data["selection_token"],
             request_key=form.cleaned_data["request_key"])
     except core.PersistenceError as exc:

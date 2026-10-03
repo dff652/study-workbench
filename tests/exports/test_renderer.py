@@ -16,6 +16,7 @@ from PIL import Image as PillowImage, ImageDraw
 from app.exports import render_document
 from app.exports.contracts import Block, ExportDocument, ExportError, SourceRef
 from app.exports.fonts import prepare_fonts
+from app.domain.arithmetic import formula_ast
 
 
 MATH_FONT = Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf")
@@ -207,6 +208,32 @@ class RendererTests(unittest.TestCase):
                 self.render(bad_doc, bad_output, asset_root=assets)
             self.assertEqual(caught.exception.code, "fallback_hash_mismatch")
             self.assertEqual(list(bad_output.iterdir()), [])
+
+    def test_power_base_grouping_is_visible_in_pdf_and_word_math(self):
+        expressions = ("(-2)^2", "(-x)^2", "(x^2)^3", "-x^2")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for index, expression in enumerate(expressions):
+                output = Path(temp_dir) / f"power-{index}"
+                doc = document([[Block("math", formula_ast(expression), "answer")]],
+                    document_id=f"power-{index}")
+                result = self.render(doc, output)
+                text = pdf_text(result["pdf"]).replace(" ", "")
+                expected = {
+                    "(-2)^2": "(-2)",
+                    "(-x)^2": "(-x)",
+                    "(x^2)^3": "(x)",
+                    "-x^2": "-x",
+                }[expression]
+                self.assertIn(expected, text)
+                xml_root, _ = word_xml(result["docx"])
+                ns = {"m": "http://schemas.openxmlformats.org/officeDocument/2006/math"}
+                math_text = "".join(xml_root.xpath(".//m:t/text()", namespaces=ns))
+                self.assertEqual(math_text, {
+                    "(-2)^2": "(-2)2",
+                    "(-x)^2": "(-x)2",
+                    "(x^2)^3": "(x2)3",
+                    "-x^2": "-x2",
+                }[expression])
 
     def test_missing_glyph_fails_before_creating_output(self):
         doc = document([[Block("p", "unsupported \U0010ffff", "body")]], document_id="missing-glyph")

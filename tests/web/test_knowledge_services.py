@@ -14,7 +14,7 @@ from app.imports.package import prepare_legacy_import
 from app.imports.services import import_prepared
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
-from app.persistence.models import EntityRecord, EvidenceRecord, HouseholdMember
+from app.persistence.models import EntityRecord, EvidenceRecord, HouseholdMember, RevisionRecord
 from app.web import knowledge_services as knowledge
 from app.web import services as materials
 from tests.imports.fixtures import source_fixture
@@ -67,6 +67,12 @@ class KnowledgeServicesTests(TransactionTestCase):
         return core.review_revision(self.owner, self.household.pk, revision_id, action="accept",
             expected_head=context["expected_head"], expected_dependencies=context["expected_dependencies"],
             expected_decision_id=context["expected_decision_id"], request_key=request_key(), reason="合成验收")
+
+    def withdraw(self, revision_id):
+        context = core.review_context(self.owner, self.household.pk, revision_id)
+        return core.review_revision(self.owner, self.household.pk, revision_id, action="withdraw",
+            expected_head=context["expected_head"], expected_dependencies=context["expected_dependencies"],
+            expected_decision_id=context["expected_decision_id"], request_key=request_key(), reason="撤回关系")
 
     def test_all_node_kinds_keep_native_revisions_and_definition_source_refs(self):
         source = self.source()
@@ -203,4 +209,78 @@ class KnowledgeServicesTests(TransactionTestCase):
         detail = knowledge.question_detail(self.owner, old.pk)
         self.assertTrue(detail["current"]["missing_fields"])
         self.assertIsNone(old.published_revision_id)
+        self.assertEqual(indexed_rows[0]["state"], "draft")
         self.assertTrue(LegacyIndexEntry.objects.filter(question_revision_id=old.head_revision_id).exists())
+
+        for entry in LegacyIndexEntry.objects.filter(batch__household=self.household):
+            for revision_id in (entry.primary_method_revision_id, *entry.auxiliary_method_revision_ids):
+                if not revision_id:
+                    continue
+                method = RevisionRecord.objects.get(pk=revision_id).entity
+                self.assertIn(entry.question_revision.entity_id,
+                    knowledge._question_entities_for_node(self.owner, self.household.pk,
+                        "method", method.stable_id))
+
+    def test_index_filters_only_published_exact_links_for_all_node_kinds(self):
+        question = self.question()
+        question_entity = EntityRecord.objects.get(household=self.household, kind="question",
+            stable_id=question["question_id"])
+        self.accept(question_entity, question["revision_id"])
+        cases = (
+            ("knowledge", {"definition": "精确知识点", "conditions": "", "common_errors": ""}, "applies"),
+            ("method", {"name": "精确方法", "conditions": "", "steps": "", "notes": ""}, "primary"),
+            ("question_type", {"name": "精确题型", "structural_features": "", "conditions": ""}, "belongs"),
+        )
+        for kind, values, role in cases:
+            with self.subTest(kind=kind):
+                node = self.save_node(kind, values)
+                node_entity = EntityRecord.objects.get(household=self.household, kind=kind,
+                    stable_id=node["stable_id"])
+                self.accept(node_entity, node["revision_id"])
+                filter_key = {"knowledge": "knowledge_id", "method": "method_id",
+                    "question_type": "question_type_id"}[kind]
+
+                link = knowledge.create_link(self.owner, self.household.pk, kind=kind,
+                    node_revision_id=node["revision_id"], question_revision_id=question["revision_id"],
+                    role=role, request_key=request_key(), reason="精确发布关系")
+                self.assertEqual(knowledge.index_data(self.owner, self.household.pk,
+                    {filter_key: node["stable_id"]})["questions"], [])
+                link_entity = EntityRecord.objects.get(household=self.household,
+                    kind={"knowledge": "knowledge_question", "method": "method_question",
+                        "question_type": "question_type_link"}[kind], stable_id=link["stable_id"])
+                self.accept(link_entity, link["revision_id"])
+                filtered = knowledge.index_data(self.owner, self.household.pk,
+                    {filter_key: node["stable_id"]})["questions"]
+                self.assertEqual([row["entity"].pk for row in filtered], [question_entity.pk])
+
+                detail = knowledge.node_detail(self.owner, node_entity.pk)
+                updated_values = {**values}
+                if kind == "knowledge":
+                    updated_values["definition"] = "精确知识点修订"
+                else:
+                    updated_values["name"] += "修订"
+                updated = self.save_node(kind, updated_values, stable_id=node["stable_id"],
+                    expected_context=detail["edit_context"])
+                self.accept(node_entity, updated["revision_id"])
+                filtered = knowledge.index_data(self.owner, self.household.pk,
+                    {filter_key: node["stable_id"]})["questions"]
+                self.assertEqual(filtered, [])
+
+                if kind == "method":
+                    self.withdraw(link["revision_id"])
+
+                current_link = knowledge.create_link(self.owner, self.household.pk, kind=kind,
+                    node_revision_id=updated["revision_id"], question_revision_id=question["revision_id"],
+                    role=role, request_key=request_key(), reason="新节点版本关系")
+                current_link_entity = EntityRecord.objects.get(household=self.household,
+                    kind={"knowledge": "knowledge_question", "method": "method_question",
+                        "question_type": "question_type_link"}[kind], stable_id=current_link["stable_id"])
+                self.accept(current_link_entity, current_link["revision_id"])
+                filtered = knowledge.index_data(self.owner, self.household.pk,
+                    {filter_key: node["stable_id"]})["questions"]
+                self.assertEqual([row["entity"].pk for row in filtered], [question_entity.pk])
+
+                self.withdraw(current_link["revision_id"])
+                filtered = knowledge.index_data(self.owner, self.household.pk,
+                    {filter_key: node["stable_id"]})["questions"]
+                self.assertEqual(filtered, [])

@@ -13,7 +13,7 @@ from app.persistence.models import EntityRecord, RevisionRecord
 from app.web import knowledge_services
 from app.web import records
 from app.web.models import QuestionSource
-from .models import QuestionLineage
+from .models import QuestionLabel, QuestionLineage
 
 
 MAX_SOURCES = 20
@@ -155,6 +155,12 @@ def _attach_sources(target_revision_ids, metadata):
             original_number=original_number, sources=sources)
 
 
+def _attach_labels(actor, target_revision_ids, original_numbers):
+    for revision_id, number in zip(target_revision_ids, original_numbers, strict=True):
+        QuestionLabel.objects.create(revision_id=revision_id, original_number=number,
+            created_by=actor)
+
+
 @transaction.atomic
 def split_question(actor, household_id, *, source_revision_id, context_token, children,
                    reason, request_key):
@@ -213,6 +219,8 @@ def split_question(actor, household_id, *, source_revision_id, context_token, ch
         _save_lineage(actor, household.pk, "split", result["source_revision_ids"],
             result["target_revision_ids"], reason)
         _attach_sources(result["target_revision_ids"], build_state["source_metadata"])
+        _attach_labels(actor, result["target_revision_ids"],
+            [child["original_number"] for child in normalized_children])
     return result
 
 
@@ -259,6 +267,7 @@ def merge_questions(actor, household_id, *, source_revision_ids, context_token,
         _save_lineage(actor, household.pk, "merge", result["source_revision_ids"],
             result["target_revision_ids"], reason)
         _attach_sources(result["target_revision_ids"], build_state["source_metadata"])
+        _attach_labels(actor, result["target_revision_ids"], [original_number])
     return result
 
 

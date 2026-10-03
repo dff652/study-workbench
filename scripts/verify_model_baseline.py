@@ -59,6 +59,11 @@ def validate_example(example, split):
     require(len(source_ids) == len(set(source_ids)), f"{case_id}: duplicate source revision id")
     require(isinstance(region_ids, list) and set(region_ids) <= set(source_ids),
         f"{case_id}: region revisions must be included in allowed source ids")
+    method_ids = example.get("method_revision_ids", [])
+    require(isinstance(method_ids, list) and all(isinstance(item, str) for item in method_ids)
+        and len(method_ids) == len(set(method_ids)) and set(method_ids) <= set(source_ids),
+        f"{case_id}: selected method revisions must be unique allowed source ids")
+    require(task != "variant" or method_ids, f"{case_id}: variant needs explicitly selected methods")
     require(isinstance(example.get("source_unknowns"), dict) and example["source_unknowns"],
         f"{case_id}: expected source unknowns must be recorded")
     require(isinstance(example.get("case_tags"), list), f"{case_id}: case tags are missing")
@@ -85,7 +90,7 @@ def validate_example(example, split):
         f"{case_id}: probe must carry the exact selected source ids")
 
     parsed = parse_response(json.dumps(probe, ensure_ascii=False), task=task,
-        allowed_sources=source_ids, allowed_regions=region_ids,
+        allowed_sources=source_ids, allowed_regions=region_ids, allowed_methods=method_ids,
         attempt_legibility=example.get("attempt_legibility"))
     verify_unknown_probe(example, parsed)
     verify_rejections(example, source_ids, region_ids)
@@ -131,6 +136,7 @@ def verify_rejections(example, source_ids, region_ids):
     try:
         parse_response(json.dumps(bad_source, ensure_ascii=False), task=example["task"],
             allowed_sources=source_ids, allowed_regions=region_ids,
+            allowed_methods=example.get("method_revision_ids", []),
             attempt_legibility=example.get("attempt_legibility"))
     except InvalidProposal as exc:
         require(str(exc) == "response_unknown_source", f"{example['case_id']}: unexpected source rejection")
@@ -142,11 +148,26 @@ def verify_rejections(example, source_ids, region_ids):
     try:
         parse_response(json.dumps(bad_shape, ensure_ascii=False), task=example["task"],
             allowed_sources=source_ids, allowed_regions=region_ids,
+            allowed_methods=example.get("method_revision_ids", []),
             attempt_legibility=example.get("attempt_legibility"))
     except InvalidProposal as exc:
         require(str(exc) == "response_schema_invalid", f"{example['case_id']}: unexpected schema rejection")
     else:
         raise ValueError(f"{example['case_id']}: parser accepted an unapproved proposal field")
+
+    if example["task"] == "variant":
+        method_ids = example["method_revision_ids"]
+        non_methods = [source for source in source_ids if source not in method_ids]
+        require(non_methods, f"{example['case_id']}: variant needs a non-method rejection probe")
+        bad_method = deepcopy(probe)
+        bad_method["proposal"]["target_method_revision_id"] = non_methods[0]
+        try:
+            parse_response(json.dumps(bad_method, ensure_ascii=False), task="variant",
+                allowed_sources=source_ids, allowed_regions=region_ids, allowed_methods=method_ids)
+        except InvalidProposal as exc:
+            require(str(exc) == "response_unknown_source", f"{example['case_id']}: unexpected method rejection")
+        else:
+            raise ValueError(f"{example['case_id']}: parser accepted a question as a target method")
 
 
 def validate_fixtures():

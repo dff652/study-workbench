@@ -56,3 +56,6 @@ class RunSelectionForm(forms.Form):
         self.fields["question_revision_ids"].choices = questions
         self.fields["attempt_revision_id"].choices = attempts
         self.fields["selected_region_revision_ids"].choices = regions
+        if context["task_kind"] != "assessment":
+            self.fields.pop("attempt_revision_id")
+            self.fields.pop("include_attempt_text")

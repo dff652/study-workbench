@@ -170,11 +170,15 @@ def apply_erratum(actor, household_id, erratum_revision_id, *, expected, request
         return replace(bundle,questions=questions),heads,{'question_id':question.question_id,'revision_id':revision.header.revision_id}
     result=records.command(actor,household_id,request_key,'apply_erratum',
         {'erratum':erratum_revision_id,'expected':expected},build)
+    from app.catalogue.models import QuestionLabel
     from app.web.models import QuestionSource
     row=RevisionRecord.objects.get(pk=result['revision_id'])
     old=QuestionSource.objects.filter(revision_id=row.previous_id).first()
     if old and not QuestionSource.objects.filter(revision=row).exists():
         QuestionSource.objects.create(revision=row,material=old.material,original_number=old.original_number,sources=old.sources)
+    old_label=QuestionLabel.objects.filter(revision_id=row.previous_id).first()
+    if old_label and not QuestionLabel.objects.filter(revision=row).exists():
+        QuestionLabel.objects.create(revision=row,original_number=old_label.original_number,created_by=actor)
     return result
 
 
@@ -216,16 +220,18 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
                 Block('small',escape('依据：'+answer.basis),'answer')])
         else:
             links=EntityRecord.objects.filter(household=owner,kind__in=('knowledge_question','method_question','question_type_link'),
-                published_revision__isnull=False).select_related('published_revision')
+                published_revision__isnull=False).select_related('published_revision','published_revision__review_projection')
             for link in links:
                 payload=link.published_revision.payload
                 if link.published_revision.review_projection.state!='accepted': continue
                 if payload.get('question_revision_id')!=question.pk: continue
                 keys={'knowledge_question':'knowledge_revision_id','method_question':'method_revision_id','question_type_link':'question_type_revision_id'}
-                target=RevisionRecord.objects.select_related('entity').get(pk=payload[keys[link.kind]],entity__household=owner)
+                target=RevisionRecord.objects.select_related('entity','review_projection').get(pk=payload[keys[link.kind]],entity__household=owner)
                 if target.entity.published_revision_id!=target.pk or target.review_projection.state!='accepted': continue
-                provenance['links'].append({'revision_id':link.published_revision_id,'content_hash':link.published_revision.content_hash})
-                provenance['nodes'].append({'revision_id':target.pk,'content_hash':target.content_hash})
+                provenance['links'].append({'revision_id':link.published_revision_id,'content_hash':link.published_revision.content_hash,
+                    'review_decision_id':str(link.published_revision.review_projection.decision_id)})
+                provenance['nodes'].append({'revision_id':target.pk,'content_hash':target.content_hash,
+                    'review_decision_id':str(target.review_projection.decision_id)})
                 text=target.payload.get('definition') or target.payload.get('name')
                 if purpose=='knowledge_summary':
                     text+='\n'+str(target.payload.get('conditions',''))+'\n'+str(target.payload.get('steps',''))

@@ -12,6 +12,7 @@ from PIL import Image
 
 from app.persistence import services as core
 from app.persistence.models import EntityRecord, ReviewProjection
+from app.web import knowledge_services as knowledge
 from app.web import learning_services as learning
 from app.web import services as materials
 
@@ -57,6 +58,7 @@ class LearningServiceTests(TransactionTestCase):
             action="accept", reason="合成题干和区域已核对",
             context=question_detail["review_context"], request_key=key())
         self.question_id = question["question_id"]
+        self.question_revision_id = question["revision_id"]
 
         profile = learning.create_profile(self.owner, self.household.pk,
             display_name="小禾", grade="三年级", request_key=key())
@@ -68,11 +70,11 @@ class LearningServiceTests(TransactionTestCase):
             notes="合成原图中的一次作答", sources=[self.source], reason="录入来源观察", request_key=key())
         self.observation_id = observation["observation_id"]
 
-    def create_attempt(self, *, source_kind="independent_answer", independence="confirmed_independent",
+    def create_attempt(self, *, choices=None, source_kind="independent_answer", independence="confirmed_independent",
                        prompt_status="none_confirmed", actual_date_state="known", actual_date=None):
         if actual_date is None and actual_date_state == "known":
             actual_date = date(2026, 10, 3)
-        choices = learning.learner_create_choices(self.owner, self.learner_id)
+        choices = choices or learning.learner_create_choices(self.owner, self.learner_id)
         observation_value = choices["observation_choices"][0][0]
         return learning.create_attempt(self.owner, self.learner_id, question_id=self.question_id,
             attempt_kind="first", source_kind=source_kind, independence=independence,
@@ -81,6 +83,18 @@ class LearningServiceTests(TransactionTestCase):
             legibility="readable", answer_text="5", authorship_basis="家长当面确认",
             observation_values=[observation_value], previous_attempt_id=None,
             context=choices["context"], request_key=key())
+
+    def save_question_revision(self, printed_text, original_number, *, accept=False):
+        detail = materials.question_detail(self.owner, self.question_id)
+        saved = materials.save_question(self.owner, self.material.pk, printed_text=printed_text,
+            original_number=original_number, sources=[self.source], question_id=self.question_id,
+            expected_context=detail["edit_context"], request_key=key(), reason="修订合成题目")
+        if accept:
+            detail = materials.question_detail(self.owner, self.question_id)
+            materials.review_question(self.owner, self.question_id, saved["revision_id"],
+                action="accept", reason="核对合成题目修订", context=detail["review_context"],
+                request_key=key())
+        return saved
 
     def accept_correct_assessment(self, attempt_id):
         context = learning.assessment_context(self.owner, attempt_id)
@@ -182,6 +196,55 @@ class LearningServiceTests(TransactionTestCase):
                          first_detail["current_revision"].header.revision_id)
         self.assertFalse(learning.attempt_detail(self.owner, first["attempt_id"])["independent_success"])
         self.assertTrue(learning.attempt_detail(self.owner, second["attempt_id"])["independent_success"])
+
+    def test_question_choices_pin_publication_and_entity_head_separately(self):
+        draft = self.save_question_revision("2 + 3 = 5", "J1-2")
+        choices = learning.learner_create_choices(self.owner, self.learner_id)
+        self.assertEqual(choices["context"]["question_versions"][self.question_id],
+            self.question_revision_id)
+        self.assertEqual(choices["context"]["question_heads"][self.question_id], draft["revision_id"])
+
+        attempt = self.create_attempt(choices=choices)
+        detail = learning.attempt_detail(self.owner, attempt["attempt_id"])
+        self.assertEqual(detail["current_revision"].question_revision_id, self.question_revision_id)
+
+        self.save_question_revision("2 + 3 = 6", "J1-3")
+        with self.assertRaises(core.PersistenceError) as raised:
+            self.create_attempt(choices=choices)
+        self.assertEqual(raised.exception.code, "head_conflict")
+
+    def test_profile_uses_exact_question_revision_and_marks_old_relation_as_history(self):
+        first = self.create_attempt()
+        node = knowledge.save_node(self.owner, self.household.pk, "knowledge", data={
+            "definition": "加法知识", "conditions": "", "common_errors": "", "sources": "[]"},
+            request_key=key(), reason="建立合成知识点")
+        review = core.review_context(self.owner, self.household.pk, node["revision_id"])
+        core.review_revision(self.owner, self.household.pk, node["revision_id"], action="accept",
+            expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
+            expected_decision_id=review["expected_decision_id"], request_key=key(), reason="确认知识点")
+        link = knowledge.create_link(self.owner, self.household.pk, kind="knowledge",
+            node_revision_id=node["revision_id"], question_revision_id=self.question_revision_id,
+            role="applies", request_key=key(), reason="对应合成题目")
+        review = core.review_context(self.owner, self.household.pk, link["revision_id"])
+        core.review_revision(self.owner, self.household.pk, link["revision_id"], action="accept",
+            expected_head=review["expected_head"], expected_dependencies=review["expected_dependencies"],
+            expected_decision_id=review["expected_decision_id"], request_key=key(), reason="确认题目关系")
+
+        self.save_question_revision("2 + 3 = 5", "J1-2", accept=True)
+        second = self.create_attempt()
+        profile = learning.profile_detail(self.owner, self.learner_id)
+        attempts = {item["attempt"].attempt_id: item for item in profile["attempts"]}
+
+        old = attempts[first["attempt_id"]]
+        current = attempts[second["attempt_id"]]
+        self.assertIn("J1-1", old["question_label"])
+        self.assertIn("r1", old["question_label"])
+        self.assertIn("J1-2", current["question_label"])
+        self.assertIn("r2", current["question_label"])
+        self.assertEqual(len(old["knowledge_labels"]), 1)
+        self.assertIn("加法知识", old["knowledge_labels"][0])
+        self.assertIn("历史关系", old["knowledge_labels"][0])
+        self.assertEqual(current["knowledge_labels"], ())
 
     def test_identity_correction_withdraws_old_attempt_and_keeps_its_assessment_link(self):
         original = self.create_attempt()

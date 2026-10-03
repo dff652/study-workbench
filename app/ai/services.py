@@ -31,10 +31,13 @@ from app.web import records
 from app.web import services as materials
 from app.web.models import QuestionSource
 from .models import ModelBudgetReservation, ModelConfig, ModelRun
-from .provider import ProviderFailure, chat_completion, validate_config_url, _endpoint
+from .provider import (ProviderFailure, chat_completion, prepare_request_payload,
+    validate_config_url, _endpoint)
 from .schema import InvalidProposal, parse_response
 
 CONTEXT_SALT = "study-workbench.ai.selection.v1"
+MAX_TOTAL_CROP_PIXELS = 8_000_000
+MAX_TOTAL_CROP_PNG_BYTES = 4 * 1024 * 1024
 
 
 def _error(code, message="模型任务无法完成，请重新打开页面并检查选择。"):
@@ -332,6 +335,8 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
               attempt_revision_id=None, selected_region_revision_ids=(), include_attempt_text=False,
               selection_token, request_key):
     records.household(actor, household_id, write=True)
+    if task_kind != ModelRun.TaskKind.ASSESSMENT and (attempt_revision_id or include_attempt_text):
+        _error("invalid_input", "只有作答评价任务可以选择或外发作答内容。")
     try:
         selection = signing.loads(selection_token, salt=CONTEXT_SALT, max_age=3600)
     except signing.BadSignature:
@@ -483,8 +488,9 @@ def _safe_payload(row):
 
 
 def _crop_regions(actor, household_id, run):
-    from app.domain.contracts import Granularity
     images = []
+    total_pixels = 0
+    total_png_bytes = 0
     for region_id in run.selected_region_revision_ids:
         evidence = None
         if run.task_kind != ModelRun.TaskKind.ASSESSMENT:
@@ -499,11 +505,6 @@ def _crop_regions(actor, household_id, run):
                 evidence = None
         if evidence is None or evidence.region.payload.get("coordinate_space") != "original_pixels":
             _error("stale_context", "所选图像区域已改变。")
-        key = evidence.image.payload.get("storage_key")
-        try:
-            path = materials.asset_path(key, evidence.image.sha256)
-        except (OSError, ValueError, core.PersistenceError):
-            _error("stale_image", "所选图像文件无法安全读取。")
         geometry = evidence.region.payload.get("geometry")
         if (not isinstance(geometry, (list, tuple)) or len(geometry) != 4
                 or any(type(v) not in (int, float) or not math.isfinite(v) for v in geometry)):
@@ -513,18 +514,32 @@ def _crop_regions(actor, household_id, run):
         if (type(width) is not int or type(height) is not int
                 or not (0 <= x0 < x1 <= width and 0 <= y0 < y1 <= height)):
             _error("invalid_region", "图像区域超出原始图像边界。")
+        box = (floor(x0), floor(y0), ceil(x1), ceil(y1))
+        crop_width, crop_height = box[2] - box[0], box[3] - box[1]
+        crop_pixels = crop_width * crop_height
+        if crop_width < 1 or crop_height < 1 or crop_pixels > 12_000_000:
+            _error("invalid_region", "图像区域尺寸无效。")
+        total_pixels += crop_pixels
+        if total_pixels > MAX_TOTAL_CROP_PIXELS:
+            _error("input_too_large", "所选图像区域的总像素数超过单次请求上限。")
+        key = evidence.image.payload.get("storage_key")
+        try:
+            path = materials.asset_path(key, evidence.image.sha256)
+        except (OSError, ValueError, core.PersistenceError):
+            _error("stale_image", "所选图像文件无法安全读取。")
         try:
             with Image.open(path) as original:
-                original.load()
-                crop = original.convert("RGB").crop((floor(x0), floor(y0), ceil(x1), ceil(y1)))
-                if crop.width < 1 or crop.height < 1 or crop.width * crop.height > 12_000_000:
-                    _error("invalid_region", "图像区域尺寸无效。")
+                crop = original.crop(box).convert("RGB")
                 output = BytesIO()
                 crop.save(output, format="PNG", optimize=True)
         except (OSError, ValueError, DecompressionBombError):
             _error("invalid_region", "原始图像无法解码。")
+        png_bytes = output.getvalue()
+        total_png_bytes += len(png_bytes)
+        if total_png_bytes > MAX_TOTAL_CROP_PNG_BYTES:
+            _error("input_too_large", "所选图像区域的编码总大小超过单次请求上限。")
         images.append({"type": "image_url", "image_url": {"url": "data:image/png;base64,"+
-            base64.b64encode(output.getvalue()).decode("ascii")}})
+            base64.b64encode(png_bytes).decode("ascii")}})
     return images
 
 
@@ -595,10 +610,11 @@ def _still_current(run):
 
 
 def _cost(config, usage, contains_images):
-    if contains_images:
-        return Decimal(config.reserved_per_call)
-    return (Decimal(usage["prompt_tokens"]) * Decimal(config.input_price_per_million)
+    measured = (Decimal(usage["prompt_tokens"]) * Decimal(config.input_price_per_million)
         + Decimal(usage["completion_tokens"]) * Decimal(config.output_price_per_million)) / Decimal(1_000_000)
+    if contains_images:
+        return max(measured, Decimal(config.reserved_per_call))
+    return measured
 
 
 @transaction.atomic
@@ -705,6 +721,15 @@ def _claim(run_id):
         run.status, run.error_code, run.completed_at = ModelRun.Status.FAILED, "input_preparation_failed", timezone.now()
         run.save(update_fields=("status", "error_code", "completed_at"))
         return None
+    provider_config = _provider_config(run.config)
+    try:
+        prepared_payload = prepare_request_payload(provider_config, messages)
+    except ProviderFailure as exc:
+        run.status = ModelRun.Status.FAILED
+        run.error_code = "input_too_large" if exc.code == "request_payload_too_large" else exc.code
+        run.completed_at = timezone.now()
+        run.save(update_fields=("status", "error_code", "completed_at"))
+        return None
     if not os.environ.get("SWB_MODEL_API_KEY"):
         run.status, run.error_code, run.completed_at = ModelRun.Status.FAILED, "provider_key_missing", timezone.now()
         run.save(update_fields=("status", "error_code", "completed_at"))
@@ -727,21 +752,26 @@ def _claim(run_id):
     run.reserved_cost = estimate
     run.save(update_fields=("status", "started_at", "call_started_at", "lease_expires_at", "reserved_cost"))
     ModelBudgetReservation.objects.create(run=run, config=run.config, reserved_calls=1, reserved_cost=estimate)
-    return run.pk, _provider_config(run.config), messages, contains_images
+    return run.pk, provider_config, prepared_payload, contains_images
 
 
 def execute_run(run_id):
     claim = _claim(run_id)
     if not claim:
         return ModelRun.objects.filter(pk=run_id).first()
-    run_id, config, messages, contains_images = claim
+    run_id, config, prepared_payload, contains_images = claim
     row = ModelRun.objects.select_related("attempt_revision", "config").get(pk=run_id)
     usage = {}
     try:
-        content, usage = chat_completion(config, messages)
+        content, usage = chat_completion(config, None, prepared_payload=prepared_payload)
         allowed = row.source_revision_ids + row.question_revision_ids + row.selected_region_revision_ids
+        allowed_methods = []
+        if row.task_kind == ModelRun.TaskKind.VARIANT:
+            allowed_methods = list(RevisionRecord.objects.filter(pk__in=row.source_revision_ids,
+                entity__household_id=row.household_id, entity__kind="method").values_list("pk", flat=True))
         parsed = parse_response(content, task=row.task_kind, allowed_sources=allowed,
             max_tool_calls=row.config.max_calls, allowed_regions=row.selected_region_revision_ids,
+            allowed_methods=allowed_methods,
             attempt_legibility=(row.attempt_revision.payload.get("legibility") if row.attempt_revision_id else None))
         results = _execute_tools(row, parsed["tool_calls"])
         cost = _cost(row.config, usage, contains_images)

@@ -39,6 +39,27 @@ class ClosedResponseTests(unittest.TestCase):
         with self.assertRaises(InvalidProposal):
             parse_response("not json", task="question", allowed_sources=["question-r1"])
 
+    def test_variant_method_must_be_an_explicitly_allowed_method_revision(self):
+        data = {"schema_version": "study-workbench.ai.v1", "task": "variant",
+            "source_revision_ids": ["method-r1", "question-r1", "region-r1"],
+            "proposal": {"text": "3 + 4 = ?", "answer_expression": "3 + 4",
+                "check_expression": "7", "target_method_revision_id": "method-r1"},
+            "tool_calls": []}
+        raw = json.dumps(data)
+        accepted = parse_response(raw, task="variant", allowed_sources=data["source_revision_ids"],
+            allowed_methods=["method-r1"])
+        self.assertEqual(accepted["proposal"]["target_method_revision_id"], "method-r1")
+
+        for invalid_method in ("question-r1", "region-r1"):
+            data["proposal"]["target_method_revision_id"] = invalid_method
+            with self.assertRaises(InvalidProposal):
+                parse_response(json.dumps(data), task="variant",
+                    allowed_sources=data["source_revision_ids"], allowed_methods=["method-r1"])
+
+        data["proposal"]["target_method_revision_id"] = "method-r1"
+        with self.assertRaises(InvalidProposal):
+            parse_response(json.dumps(data), task="variant", allowed_sources=data["source_revision_ids"])
+
     def test_assessment_references_must_be_selected_regions_and_match_evidence_rules(self):
         dimensions = [{"dimension": name, "judgment": "unknown", "basis": "undetermined",
             "source_region_revision_ids": [], "rationale": "选择保留未知",

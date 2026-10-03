@@ -4,7 +4,7 @@
 
 当前阶段：**知识与题库、逐次作答／评价、打印、复习／报告及容器服务的主要人工流程已实现并通过对应工程验收。本轮已补齐公式打印、检索、手机放大、外发确认和三类持久派生处理，并完成工程验收；实体手机及真实家庭流程仍待人工试用，M1a 尚未判全部通过。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
 
-GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。已完成首次完整审查、修复和独立复验，源码已手动推送至 public 仓库的 `main`。36 测试服务已备份并升级至审查后源码 `4f145ef`，恢复演练、历史数据及手机业务复验通过。本轮 T-01～T-07 的工程改动已验收，当前正在提交；升级前的 36 仍为上述旧版本。交付状态及下一步见[仓库交付记录](docs/repository-handoff.md)。
+GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。本轮补齐源码 `ce698f9` 已审查、独立验收并手动推送 public 仓库 `main`。36 已备份、恢复演练并升级到同一源码，16 项运行复验及升级后备份通过；原记录、资料和历史导出保持。交付状态及人工下一步见[仓库交付记录](docs/repository-handoff.md)。
 
 两条核心主线：
 

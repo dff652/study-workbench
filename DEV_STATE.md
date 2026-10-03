@@ -8,12 +8,12 @@
 
 ## GitHub 仓库与首次推送审查
 
-- 2026-10-03 已创建 [dff652/study-workbench](https://github.com/dff652/study-workbench)，GitHub API 核对可见性为 public，默认分支名为 `main`；仓库当前为空，未推送源码。
-- 本地 `origin` 为 `https://github.com/dff652/study-workbench.git`；当前分支仍为 `codex/bootstrap-docs`。仓库准备文档已提交为 `ea7bb72`；本次用户另行授权审查提交／改动、修复并手动 push，运行服务升级单独处理。
+- 2026-10-03 已创建 [dff652/study-workbench](https://github.com/dff652/study-workbench)，GitHub API 核对可见性为 public，默认分支为 `main`；本次完整源码及审查修复已手动推送。
+- 本地 `origin` 为 `https://github.com/dff652/study-workbench.git`；工作分支仍为 `codex/bootstrap-docs`，已跟踪 `origin/main`。仓库准备文档为 `ea7bb72`，本次修复为 `5e01af2`；首次 push 后 Git 引用、GitHub API 提交及 README blob 与本地一致。运行服务升级单独处理，交付状态文档随后同步至 `main`。
 - 首次推送审查开始时覆盖全部三份本地提交：272 个唯一历史路径、279 个唯一 blob，均为文本，无照片／PDF／Word／数据库／私有目录文件及常见密钥模式命中。随后核对本轮修复与最终文件；私有来源、环境配置、账号、报告、备份的忽略规则仍有效。
 - 公开文档改用私有运行记录引用本机来源目录和测试连接信息；旧提交仍保留当时开发路径／内网地址。本次未改写历史。源码交付范围及下一步见[仓库交付记录](docs/repository-handoff.md)。
 
-## 本次审查修复（尚未更新 36）
+## 本次审查修复（源码已推送，尚未更新 36）
 
 - 三个 luna6-worker 分别处理知识／学习／复习、AI、打印／公式；主代理负责共享题号模型、原生迁移、基准衔接、完整实际差异及独立运行。10 项问题和对应回归见[审查记录](docs/reviews/pre-push-20261003.md)。
 - 修复当前关系筛选、旧作答的精确题目版本、正式题与待审头分开校验、跨资料题号、幂底数括号、打印审核依据，以及 AI 图像费用结算、方法类别校验、合计输入上限和非评价任务字段。
@@ -36,7 +36,7 @@
 - 五套 Word 在无网络 LibreOffice Writer＋Math 7.4.7.2 实际渲染为 8／12／5／2／2 页，共 29 页；原生分数 canary、边界及全页目视通过。私有报告：`artifacts/word-verification/59d1c17391f64dbfbdef946983b178b7/verification.local.json`。MS Word 未测，历史内容仍为 legacy_unreviewed。
 - 36 局域网测试实例，Compose 项目 `study-workbench-36`；Web／worker／PostgreSQL 及独立持久卷，数据库无发布端口。八个业务模块与原账号／私有预览已核对，手机本地策略及估计耗时流程通过，只有明确标注的虚构示例，模型关闭且无任务。连接信息在私有 `data/runtime-36/deployment.local.json`，配置和账号在同目录（0700／0600）；密码只在 `credentials.local.json`。运行报告：`artifacts/runtime-36/verification-final.local.json`。
 - 初始恢复点 `backups/runtime-36/20261003-initial/` 保留，最终配套备份为 `backups/runtime-36/20261003-final/`。备份期间 Web／worker 停止写入，结束恢复运行；全部私有数据和报告 Git 忽略。
-- 本地基线提交 `1c0c386` 保留实施前源码；功能提交为 `a59e8d7`，服务镜像 `test-20261003-final` 的 source-revision 标签仍对应该功能提交。后续文档提交不自动重建服务；仓库状态见上节，源码尚未推送，应用未公开部署。未调用付费模型或外发孩子照片。
+- 本地基线提交 `1c0c386` 保留实施前源码；功能提交为 `a59e8d7`，服务镜像 `test-20261003-final` 的 source-revision 标签仍对应该功能提交。源码及审查修复已推送 `main`，提交不会自动重建服务；应用未公开部署。未调用付费模型或外发孩子照片。
 
 ## Verified current state
 
@@ -46,7 +46,7 @@
 - 现有五份 PDF 共 29 页，另有五份 Word 和 ZIP；来源位置与代码依赖见 [source-inventory.md](docs/source-inventory.md)。
 - `data/` 保留 23 张原始 JPEG 的字节副本与旧 81 条索引导入包；原照片、原脚本、NAS 资料及历史文档未修改。A2 已在 `data/export-inputs/v3/` 保存五份历史内容／PDF／Word 字节副本和字体包，新打印快照在 `exports/a2-v3/`，全部私有且被 Git 忽略。
 - 此前 v0.1 已由一个 luna6-worker（配置为 gpt-6-luna）完成限定范围的需求独立评审；主代理阅读报告全文并处理全部 5 项发现。这是文档评审，不构成软件运行验收。
-- 本地 Git 分支 `codex/bootstrap-docs`，基线提交 `1c0c386`、功能提交 `a59e8d7`；GitHub public `origin` 已创建，尚无远端源码分支。
+- 本地 Git 分支 `codex/bootstrap-docs` 跟踪 `origin/main`，基线 `1c0c386`、功能提交 `a59e8d7`、仓库文档 `ea7bb72` 和审查修复 `5e01af2` 均已推送 GitHub public 仓库。
 - A0 完成候选固定写入／编辑／复习／导出路径补查及核心数据契约草案 v0.1；该阶段未运行候选或合成测试。
 - A1a 的六个约定文件已实现并由主代理验收：不可变领域记录、封闭引用校验、双向追溯、独立成功事件筛选、依赖版本比较、JSON 往返与幂等关系包合并。Python 3.12.3 下 26 项项目测试及 38 组额外检查通过，无第三方依赖。
 - A1b-P 已采用 Django 5.2.17／psycopg 3.3.6／PostgreSQL 16.14；第三方依赖仅装入被 Git 忽略的项目 `.venv`。主代理从全新隔离实例独立运行 55 项测试（26 领域＋13 schema＋16 服务）全部通过，系统检查、迁移无漂移及触发器迁移正反向通过。实际审核、请求幂等、历史不覆盖、双向来源及真实数据库并发已验证；不扩大为浏览器或完整恢复验收。
@@ -211,7 +211,7 @@ A1b-I 实现与主代理独立验收（2026-10-02）：
 
 ## 后续使用与验证
 
-下一步先完成 public 仓库的首次源码推送并核对远端提交，再在 36 做人工家庭试用。按用户决定，之后手动设置真实供应商、模型、费用和外发范围，再分别测识别／分类／解析／知识草稿／手写评价；不能用离线 JSON 合法率代替准确率。仓库已创建，源码目前仍只在本机提交；真实模型测试继续延期。
+首次源码推送及远端核对已完成。下一步为 36 构建审查修复版本，先配套备份，再升级迁移和复验；当前 36 仍为 `a59e8d7`，不能把本次源码验收当作该实例已更新。随后开展人工家庭试用，补齐旧资料题干、区域及独立作答来源。按用户决定，再手动设置真实供应商、模型、费用和外发范围，分别测识别／分类／解析／知识草稿／手写评价；真实模型测试继续延期，离线 JSON 合法率不代替准确率。
 
 ## 限制与保留的事实
 

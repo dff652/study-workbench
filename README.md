@@ -18,6 +18,8 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 | 文档 | 内容 |
 | --- | --- |
 | [当前进度](DEV_STATE.md) | 已完成事项、验证结果和下一步 |
+| [移动客户端技术方案](docs/mobile-client-technical-plan.md) | 家庭优先的 PWA／Flutter 路线、API／登录、照片／同步、部署分发与阶段边界 |
+| [HTTPS 与最小 PWA](docs/mobile-deployment.md) | MOB-01 配置、缓存／信任边界、隔离验收、手机证书及后续升级步骤 |
 | [缺口补齐与人工待办](docs/gap-closure-20261003.md) | T-01～T-07 的共享契约、最终工程证据和人工试用条件 |
 | [需求与实现核查](docs/requirements-implementation-audit-20261003.md) | 18 FR／6 NFR／24 AC 的实际覆盖、工程缺口及后续任务 |
 | [仓库交付记录](docs/repository-handoff.md) | Public 仓库、源码／私有数据边界与提交／推送状态 |
@@ -61,6 +63,8 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 
 容器交付用 Docker Compose 分开运行 Web、模型任务 worker 和 PostgreSQL；原图、派生文件、导出及数据库使用独立持久化卷。已在独立的 36 局域网实例测试；连接信息在被忽略的 `data/runtime-36/deployment.local.json`，账号在受保护的 `credentials.local.json`。服务状态及验收见 DEV_STATE，启动与恢复见容器说明。
 
+移动交付按家庭自用优先推进：用户同意 MOB-01 后，已实现 [HTTPS 与最小 PWA](docs/mobile-deployment.md)，通过本机合成隔离浏览器验收；36 尚未升级此版本，真机证书／主屏幕安装仍待实际操作。独立 Flutter App、完整原生 API 和离线同步仍为[后续方案](docs/mobile-client-technical-plan.md)，尚未实施；模型继续关闭。
+
 首版流程：上传照片 → 框选题目 → 人工录入或 AI 草稿 → 关联知识点、方法和题型 → 审核及打印 → 评价手写过程并记录个人档案。已加入有来源的变式草稿、手工复习计划及学习证据报告；不生成掌握分数。
 
 照片、个人学习记录和导出文件放运行数据目录，不进入源码版本控制。当前真实照片副本和导入包保存在被忽略的 `data/`，原照片、历史输出与脚本未改动；依赖只装入 `.venv`，没有调用付费推理 API。
@@ -75,7 +79,7 @@ python3 -m unittest discover -s tests/domain -p 'test_*.py' -v
 
 领域测试覆盖双向来源、多次作答、未知、勘误与版本冲突，使用[虚构关系包](tests/fixtures/domain/synthetic-v0.1.json)。审核状态是输入快照，JSON 包不包含真实图像或完整审核／备份记录；完整设计与实现边界见[核心契约](docs/core-data-contract.md)。
 
-更新日期：2026-10-03（Asia/Shanghai）。
+更新日期：2026-10-04（Asia/Shanghai）。
 
 ## 持久化验证
 

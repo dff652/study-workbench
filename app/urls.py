@@ -1,8 +1,12 @@
 from django.urls import include, path
 from django.contrib.auth.views import LoginView, LogoutView
 from app.health import healthz
+from app.web import pwa
 
-urlpatterns = [path('accounts/login/', LoginView.as_view(template_name='web/login.html'), name='login'),
+urlpatterns = [path('manifest.webmanifest', pwa.manifest, name='pwa-manifest'),
+               path('sw.js', pwa.service_worker, name='pwa-worker'),
+               path('mobile/', pwa.mobile_help, name='pwa-help'),
+               path('accounts/login/', LoginView.as_view(template_name='web/login.html'), name='login'),
                path('accounts/logout/', LogoutView.as_view(), name='logout'),
                path('healthz', healthz, name='healthz'),
                path('knowledge/', include('app.web.knowledge_urls')),

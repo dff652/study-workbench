@@ -1,4 +1,4 @@
-"""Keep authenticated learning pages out of shared and browser caches."""
+"""Keep dynamic pages and private login redirects out of browser/shared caches."""
 
 from django.utils.cache import patch_cache_control
 
@@ -9,6 +9,6 @@ class PrivateResponsesMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        if request.user.is_authenticated or request.path.startswith("/accounts/"):
-            patch_cache_control(response, private=True, no_store=True, no_cache=True, max_age=0)
+        # WhiteNoise serves public static assets before this middleware in production.
+        patch_cache_control(response, private=True, no_store=True, no_cache=True, max_age=0)
         return response

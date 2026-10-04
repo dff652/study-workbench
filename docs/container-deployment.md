@@ -2,6 +2,8 @@
 
 This document covers the local Docker Compose service and its private backup and restore workflow. The Compose file binds the Web service to `127.0.0.1:8000` by default; PostgreSQL has no published host port. It is not a public deployment recipe. Put a separately managed TLS reverse proxy in front of the loopback listener before exposing access beyond the machine.
 
+The optional [MOB-01 HTTPS/PWA overlay](mobile-deployment.md) adds an owned non-root Caddy proxy, removes the direct Web host port, and uses a private CA. Its isolated synthetic acceptance is recorded in DEV_STATE; host 36 has not been upgraded with this overlay. Keep both Compose files in subsequent operations and handle the private CA state separately from the database/file backup.
+
 ## Pinned runtime
 
 The image uses the Python 3.12.14 slim Bookworm base by digest, Django and application dependencies from `requirements.txt`, and the pinned runtime-only packages in `requirements-container.txt`. Gunicorn 26.2.0 and WhiteNoise 6.12.0 were checked against their [PyPI release metadata](https://pypi.org/project/gunicorn/26.2.0/) and [PyPI release metadata](https://pypi.org/project/whitenoise/6.12.0/) on 2026-10-03. WhiteNoise follows its [Django integration guidance](https://whitenoise.readthedocs.io/en/stable/django.html): middleware runs after Django's security middleware and serves the collected, manifest-hashed static files.

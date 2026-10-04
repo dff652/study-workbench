@@ -42,3 +42,9 @@ A1b 的 Django、psycopg 及既有依赖继续按原固定版本使用，本轮�
 运行镜像另外固定 [Gunicorn 26.2.0](https://pypi.org/project/gunicorn/26.2.0/) 与 [WhiteNoise 6.12.0](https://pypi.org/project/whitenoise/6.12.0/)，两者发行元数据均为 MIT；安装包自带许可文件留在镜像 dist-info。容器 Debian Noto `1:20220127+repack1-1`／DejaVu `2.37-6` 与上列宿主包修订不同，构建时另复制实际包版权文件到 `/app/licenses/*-Debian-container.txt`，导出快照记录实际字体哈希。Python 基础镜像和 PostgreSQL 镜像固定 digest，完整实际包清单可由容器内 `dpkg-query -W`／`pip freeze` 复核；未发布镜像。
 
 可选 [Word 验收镜像](../Dockerfile.word-verifier) 固定 LibreOffice Writer＋[Math `4:7.4.7-1+deb12u14`](https://packages.debian.org/bookworm/libreoffice-math)、同版 Debian 字体及其系统版权文件，仅在网络关闭的验收容器中运行。没有向宿主机安装 LibreOffice，也不将其纳入 Web 服务镜像。它的包及传递依赖许可保留于镜像 `/usr/share/doc/*/copyright`，不把 LibreOffice 的结果等同于 Microsoft Word 兼容性。
+
+## MOB-01 代理与界面资产（2026-10-04）
+
+[Caddy 2.11.4](https://github.com/caddyserver/caddy/blob/v2.11.4/LICENSE) 的源码许可为 Apache-2.0。本机缓存的官方镜像 `caddy@sha256:df7f1c2fb114453b951de51a98efc010db1655a92c2e86be6706714e2417a78d` 已实际读取版本，用于[最小派生镜像](../deploy/caddy/Dockerfile)：仅删除可执行文件的低端口 capability 标记，不修改其内容、不新增软件包。当前只做本机隔离验收，没有发布代理镜像；将来发布前需按实际基础镜像／依赖清单保留完整许可及声明。
+
+PWA 的 180／192／512 像素图标是项目自绘的书本界面资产，没有使用第三方图标或任何来源照片；它们是明确纳入源码的 UI 资源，不属于私人照片派生／学习导出。浏览器、NSS 和 namespace 工具继续只用于本机验证，不加入服务镜像或源码分发。

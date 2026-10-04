@@ -1,0 +1,17 @@
+{% extends "web/base.html" %}
+{% block title %}手机使用 · 学习资料工作台{% endblock %}
+{% block content %}
+  <section class="panel">
+    <h1>在手机上打开工作台</h1>
+    <p>先连接家庭网络或已配置的 VPN，通过可信 HTTPS 地址打开工作台并登录。</p>
+    <button id="pwa-install" class="primary-button" type="button" hidden>添加到主屏幕</button>
+    <h2>添加主屏幕入口</h2>
+    <p>Android：在浏览器菜单中寻找“安装应用”或“添加到主屏幕”。具体名称随浏览器变化。</p>
+    <p>iPhone：在 Safari 的分享菜单中选择“添加到主屏幕”。入口随系统版本变化；找不到时可继续在浏览器使用。</p>
+    <h2>需要连接家庭服务</h2>
+    <p>主屏幕入口使用同一个工作台和账号。它不保存私人资料供离线阅读；断网时只显示通用提示。</p>
+    <p>未确认保存的操作，请联网后先核对历史记录。照片上传、作答、评价及审核都需要连接服务。</p>
+    <p>不要忽略证书错误。私有证书的安装与核对步骤由家庭服务管理员提供。</p>
+    <a class="secondary-button" href="/">打开工作台</a>
+  </section>
+{% endblock %}

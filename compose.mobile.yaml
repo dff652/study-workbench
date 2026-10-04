@@ -1,0 +1,57 @@
+# Requires Docker Compose >= 2.24.4 for !reset. Apply together with compose.yaml.
+services:
+  web:
+    ports: !reset []
+    environment:
+      SWB_ALLOWED_HOSTS: ${SWB_TLS_HOST:?Set one TLS hostname explicitly}
+      SWB_CSRF_TRUSTED_ORIGINS: https://${SWB_TLS_HOST:?Set one TLS hostname explicitly}:${SWB_TLS_HOST_PORT:-8443}
+      SWB_SECURE_SSL_REDIRECT: "true"
+      SWB_SECURE_COOKIES: "true"
+      SWB_TRUST_PROXY_HEADERS: "true"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os,urllib.request; request=urllib.request.Request('http://127.0.0.1:8000/healthz',headers={'Host':os.environ['SWB_ALLOWED_HOSTS'],'X-Forwarded-Proto':'https'}); urllib.request.urlopen(request,timeout=4)"
+
+  caddy:
+    image: study-workbench-caddy:${SWB_IMAGE_TAG:-local}
+    build:
+      context: ./deploy/caddy
+      dockerfile: Dockerfile
+      args:
+        SWB_RESOURCE_OWNER: ${SWB_RESOURCE_OWNER:-manual}
+    user: ${SWB_PROXY_UID:?Set the owner uid of the private Caddy directory}:${SWB_PROXY_GID:?Set its gid}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    pids_limit: 64
+    cpus: 0.5
+    mem_limit: 128m
+    tmpfs:
+      - /config:rw,noexec,nosuid,size=16m,mode=1777
+      - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+    ports:
+      - "${SWB_TLS_BIND_ADDRESS:-127.0.0.1}:${SWB_TLS_HOST_PORT:-8443}:8443"
+    environment:
+      SWB_TLS_HOST: ${SWB_TLS_HOST:?Set one TLS hostname explicitly}
+      XDG_DATA_HOME: /data
+      XDG_CONFIG_HOME: /config
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${SWB_CADDY_STATE_DIR:?Set an absolute private Caddy state directory}:/data
+    depends_on:
+      web:
+        condition: service_healthy
+    networks: [frontend]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+    labels:
+      com.study-workbench.resource-owner: ${SWB_RESOURCE_OWNER:-manual}
+      com.study-workbench.service: caddy

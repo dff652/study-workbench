@@ -1,16 +1,17 @@
+{% load product %}
 {% if cards %}
   <ul class="evidence-list">
     {% for card in cards %}
       <li class="evidence-card">
         <div class="evidence-heading"><strong>来源 {{ card.ref.sequence }} · {{ card.purpose_label }}</strong>
-          {% if card.region_missing %}<span class="status-badge warning">区域待补</span>{% else %}<span class="status-badge">精确区域</span>{% endif %}</div>
+          {% if card.region_missing %}<span class="status-badge warning">区域待补</span>{% else %}<span class="status-badge">已选区域</span>{% endif %}</div>
         {% if card.preview_url %}
           <a class="evidence-preview" href="{{ card.original_url }}" aria-label="打开原图">
             <img src="{{ card.preview_url }}" alt="原图来源预览">
             {% if card.overlay_style %}<span class="evidence-box" style="{{ card.overlay_style }}" aria-hidden="true"></span>{% endif %}
           </a>
         {% endif %}
-        <p class="muted small-text">{{ card.image.stable_id }} · {{ card.granularity_label }}{% if card.ref.gaps %} · {{ card.ref.gaps|join:"、" }}{% endif %}</p>
+        <p class="muted small-text">{{ card.granularity_label }}{% if card.ref.gaps %} · {{ card.ref.gaps|ui_labels }}{% endif %}</p>
         <div class="evidence-actions"><a href="{{ card.original_url }}">打开原图</a>{% if card.page %}<a href="{{ card.page_url }}">返回资料第 {{ card.page.position }} 页</a>{% endif %}</div>
       </li>
     {% endfor %}

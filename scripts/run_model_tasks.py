@@ -23,17 +23,22 @@ def main():
     django.setup()
     from app.ai.services import execute_next, recover_interrupted
     from app.workflows import services as workflows
+    from app.solutions import jobs as solutions
 
     def work_once():
         recover_interrupted()
         workflows.recover_interrupted()
+        solutions.recover_interrupted()
+        solution = solutions.execute_next()
+        if solution:
+            print(f"solution={solution.pk} state={solution.state} error_code={solution.error_code or '-'}", flush=True)
         workflow = workflows.execute_next()
         if workflow:
             print(f"workflow={workflow.pk} state={workflow.state} error_code={workflow.error_code or '-'}", flush=True)
         run = execute_next()
         if run:
             print(f"run={run.pk} status={run.status} error_code={run.error_code or '-'}", flush=True)
-        return run is not None or workflow is not None
+        return run is not None or workflow is not None or solution is not None
 
     if args.once or not args.watch:
         work_once()

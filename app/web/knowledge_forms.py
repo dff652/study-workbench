@@ -1,5 +1,6 @@
 """Server-validated forms for the manual knowledge map."""
 from django import forms
+from app.web.presentation import distinct_choices, household_choices
 
 from .forms import RequestForm, ReviewForm
 
@@ -28,17 +29,15 @@ class IndexForm(forms.Form):
 
     def __init__(self, *args, households=(), household_id="", nodes=None, materials=(), **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["household_id"].choices = [(str(row.household_id), str(row.household.id)) for row in households]
+        self.fields["household_id"].choices = household_choices(households)
         if household_id:
-            self.fields["material_id"].choices = [("", "全部资料")] + [
-                (str(row.pk), f"{row.title} · {row.pk}") for row in materials
-            ]
+            self.fields["material_id"].choices = [("", "全部资料")] + distinct_choices(
+                (str(row.pk), row.title) for row in materials)
             for kind, field in (("knowledge", "knowledge_id"), ("method", "method_id"),
                                 ("question_type", "question_type_id")):
                 rows = (nodes or {}).get(kind, ())
-                choices = [("", "全部")] + [
-                    (row["stable_id"], f"{row['name']} · …{row['stable_id'][-8:]}") for row in rows
-                ]
+                choices = [("", "全部")] + distinct_choices(
+                    (row["stable_id"], row["name"]) for row in rows)
                 self.fields[field].choices = choices
 
     def clean(self):
@@ -70,7 +69,7 @@ class KnowledgeForm(ScopedRequestForm):
 
 class MethodForm(ScopedRequestForm):
     name = forms.CharField(max_length=200, label="方法名称")
-    parent_revision_id = forms.ChoiceField(required=False, label="上级方法（精确版本）", choices=(("", "无上级"),))
+    parent_revision_id = forms.ChoiceField(required=False, label="上级方法（版本）", choices=(("", "无上级"),))
     conditions = forms.CharField(required=False, max_length=6000, label="适用条件", widget=forms.Textarea(attrs={"rows": 4}),
         help_text="每行一项。")
     steps = forms.CharField(required=False, max_length=12000, label="步骤", widget=forms.Textarea(attrs={"rows": 8}),
@@ -97,8 +96,8 @@ class QuestionTypeForm(ScopedRequestForm):
 
 class LinkForm(ScopedRequestForm):
     kind = forms.ChoiceField(label="节点类型", choices=NODE_KINDS)
-    node_revision_id = forms.ChoiceField(label="节点精确版本", choices=())
-    question_revision_id = forms.ChoiceField(label="题目精确版本", choices=())
+    node_revision_id = forms.ChoiceField(label="条目版本", choices=())
+    question_revision_id = forms.ChoiceField(label="题目版本", choices=())
     role = forms.ChoiceField(label="关系", choices=(
         ("applies", "知识点：适用于题目"), ("primary", "方法：主方法"),
         ("auxiliary", "方法：辅助方法"), ("belongs", "题型：归属题型"),

@@ -28,6 +28,7 @@ from app.persistence.adapter import ObjectKey
 from app.persistence.models import (EntityRecord, EvidenceRecord, Household, HouseholdMember,
     RevisionDependency, RevisionRecord, ReviewProjection)
 from app.web import records
+from app.web.presentation import ui_label
 from app.web import services as materials
 from app.web.models import QuestionSource
 from .models import ModelBudgetReservation, ModelConfig, ModelRun
@@ -263,7 +264,7 @@ def selection_context(actor, household_id, task_kind):
             continue
         seen_regions.add(str(evidence.region_id))
         region_choices.append({"revision_id": str(evidence.region_id),
-            "label": f"{evidence.image.stable_id} · 区域 {evidence.sequence} · {evidence.purpose}"})
+            "label": f"资料区域 {len(region_choices) + 1} · {ui_label(evidence.purpose)}"})
     if attempts:
         observation_ids = RevisionDependency.objects.filter(source_id__in=[x["revision_id"] for x in attempts],
             role=RevisionDependency.Role.ATTEMPT_OBSERVATION).values_list("target_id", flat=True)
@@ -273,7 +274,7 @@ def selection_context(actor, household_id, task_kind):
             if str(evidence.region_id) not in seen_regions:
                 seen_regions.add(str(evidence.region_id))
                 region_choices.append({"revision_id": str(evidence.region_id),
-                    "label": f"作答证据 · {evidence.image.stable_id} · 区域 {evidence.sequence}"})
+                    "label": f"作答原图区域 {len(region_choices) + 1}"})
     return {"household_id": str(household_id), "task_kind": task_kind, "choices": choices,
         "attempts": attempts, "region_choices": region_choices, "config": latest,
         "token": signing.dumps(payload, salt=CONTEXT_SALT)}

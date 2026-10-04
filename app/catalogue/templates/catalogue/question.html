@@ -1,29 +1,29 @@
 {% extends "web/base.html" %}
-{% load static %}
+{% load static product %}
 {% block title %}题目 {{ number }} · 拆分与合题{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><a href="{% url 'catalogue:index' %}?household_id={{ household.pk }}">题目拆分与合题</a><span aria-hidden="true">/</span><span>题目 {{ number }}</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · {{ entity.stable_id }}</p><h1>题目 {{ number }}</h1><p class="muted">当前 r{{ entity.head_revision.revision_no }} · {{ entity.head_revision.review_projection.state }}</p></div>
+  <div class="page-heading"><div><p class="eyebrow">题目整理</p><h1>题目 {{ number }}</h1><p class="muted">当前 r{{ entity.head_revision.revision_no }} · {{ entity.head_revision.review_projection.state|ui_label }}</p></div>
     <a class="primary-button link-button" href="{{ split_url }}">拆分此题</a></div>
   {% if current_missing %}<div class="notice warning-notice" role="status">题干或原图区域存在缺口；新题会保留未知状态，不会自动补全。</div>{% endif %}
   <section class="panel question-content"><h2>当前题目</h2>
-    {% if current.printed_text %}<div class="long-text">{{ current.printed_text|linebreaksbr }}</div>{% elif current.working_text %}<p class="muted">派生题目工作题干（{{ current.header.origin }}）</p><div class="long-text">{{ current.working_text|linebreaksbr }}</div>{% else %}<p class="muted">题干待补。</p>{% endif %}
-    {% if current.missing_fields %}<p><strong>缺失字段：</strong>{{ current.missing_fields|join:"、" }}</p>{% endif %}
-    {% if parent_revision %}<p>来源于 <a href="{% url 'catalogue:question_detail' entity_id=parent_revision.entity.pk %}">题目 {{ parent_revision.entity.stable_id }} · r{{ parent_revision.revision_no }}</a>；此父级版本固定不变。</p>{% endif %}
+    {% if current.printed_text %}<div class="long-text">{{ current.printed_text|linebreaksbr }}</div>{% elif current.working_text %}<p class="muted">派生题目工作题干（{{ current.header.origin|ui_label }}）</p><div class="long-text">{{ current.working_text|linebreaksbr }}</div>{% else %}<p class="muted">题干待补。</p>{% endif %}
+    {% if current.missing_fields %}<p><strong>缺失字段：</strong>{{ current.missing_fields|ui_labels }}</p>{% endif %}
+    {% if parent_revision %}<p>来源于 <a href="{% url 'catalogue:question_detail' entity_id=parent_revision.entity.pk %}">题目 {{ parent_revision.payload.printed_text|default:parent_revision.payload.working_text|default:"题干待补"|truncatechars:50 }} · r{{ parent_revision.revision_no }}</a>；此父级版本固定不变。</p>{% endif %}
     <p><a href="{{ question_url }}">打开题目审核与知识关联页面</a></p>
     <h3>当前来源区域</h3>{% include "knowledge/_sources.html" with cards=current_sources only %}
   </section>
   <section class="panel"><h2>拆分与合题追溯</h2>
     {% if lineages %}{% for row in lineages %}<article class="revision-card">
       <h3>{% if row.lineage.action == "split" %}拆题{% else %}合题{% endif %} · {{ row.lineage.recorded_at }}</h3>
-      <p>{{ row.lineage.reason }} · 操作者 {{ row.lineage.actor_id }}</p>
-      <h4>来源题目版本</h4><ul>{% for revision,link in row.source_links %}<li><a href="{{ link }}">{{ revision.entity.stable_id }} · r{{ revision.revision_no }}</a></li>{% endfor %}</ul>
-      <h4>目标题目版本</h4><ul>{% for revision,link in row.target_links %}<li><a href="{{ link }}">{{ revision.entity.stable_id }} · r{{ revision.revision_no }} · {{ revision.review_projection.state }}</a></li>{% endfor %}</ul>
+      <p>{{ row.lineage.reason }} · 操作者 {{ row.lineage.actor.get_username }}</p>
+      <h4>来源题目版本</h4><ul>{% for revision,link in row.source_links %}<li><a href="{{ link }}">{{ revision.payload.printed_text|default:revision.payload.working_text|default:"题干待补"|truncatechars:50 }} · r{{ revision.revision_no }}</a></li>{% endfor %}</ul>
+      <h4>目标题目版本</h4><ul>{% for revision,link in row.target_links %}<li><a href="{{ link }}">{{ revision.payload.printed_text|default:revision.payload.working_text|default:"题干待补"|truncatechars:50 }} · r{{ revision.revision_no }} · {{ revision.review_projection.state|ui_label }}</a></li>{% endfor %}</ul>
     </article>{% endfor %}{% else %}<p class="muted">此题目版本尚无拆分或合题记录。</p>{% endif %}
   </section>
   <section class="panel"><h2>题目修订记录</h2>
-    {% for row in history %}<article class="revision-card"><h3>r{{ row.revision_no }} · {{ row.pk }} · {{ row.review_projection.state }}</h3>
+    {% for row in history %}<article class="revision-card"><h3>r{{ row.revision_no }} · {{ row.review_projection.state|ui_label }}</h3>
       <p>{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }}</p>
       {% if row.payload.printed_text %}<div class="long-text">{{ row.payload.printed_text|linebreaksbr }}</div>{% elif row.payload.working_text %}<p class="muted">派生题目工作题干</p><div class="long-text">{{ row.payload.working_text|linebreaksbr }}</div>{% else %}<p class="muted">题干待补。</p>{% endif %}
       {% if row.web_sources %}<details><summary>查看此修订来源</summary>{% include "knowledge/_sources.html" with cards=row.web_sources only %}</details>{% endif %}

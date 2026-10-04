@@ -387,10 +387,11 @@ class KnowledgeServicesTests(TransactionTestCase):
             households=[HouseholdMember.objects.get(household=self.household, user=self.owner)],
             household_id=str(self.household.pk), nodes=home["nodes"], materials=home["materials"])
         material_choices = dict(form.fields["material_id"].choices)
-        self.assertIn(str(self.material.pk), material_choices[str(self.material.pk)])
-        self.assertIn(str(alternate.pk), material_choices[str(alternate.pk)])
+        self.assertNotIn(str(self.material.pk), material_choices[str(self.material.pk)])
+        self.assertNotIn(str(alternate.pk), material_choices[str(alternate.pk)])
+        self.assertNotEqual(material_choices[str(self.material.pk)], material_choices[str(alternate.pk)])
         method_choices = dict(form.fields["method_id"].choices)
-        self.assertIn(method["stable_id"][-8:], method_choices[method["stable_id"]])
+        self.assertEqual(method_choices[method["stable_id"]], '同名方法')
 
         foreign_owner = get_user_model().objects.create_user(username=f"foreign-{uuid.uuid4().hex[:8]}")
         foreign_household = core.create_household(foreign_owner, f"foreign-{uuid.uuid4().hex}")

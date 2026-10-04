@@ -142,9 +142,9 @@ def _required_glyphs(document, snapshot):
                         _add_glyphs(required["bold"], line)
                     for line in group["detail"]:
                         _add_glyphs(required["regular"], line)
-            elif kind in {"formula_image", "diagram"}:
-                _add_glyphs(required["regular"], (_DIAGRAM_IMAGE_LABEL if kind=='diagram' else _FORMULA_IMAGE_LABEL) + content["alt"])
-                _add_glyphs(required["regular"], (_DIAGRAM_SOURCE_LABEL if kind=='diagram' else _FORMULA_SOURCE_LABEL) + content["source_ref"])
+            elif kind in {"formula_image", "diagram", "companion_image"}:
+                _add_glyphs(required["regular"], (_DIAGRAM_IMAGE_LABEL if kind in {'diagram','companion_image'} else _FORMULA_IMAGE_LABEL) + content["alt"])
+                _add_glyphs(required["regular"], (_DIAGRAM_SOURCE_LABEL if kind in {'diagram','companion_image'} else _FORMULA_SOURCE_LABEL) + content["source_ref"])
                 if kind=='diagram':_add_glyphs(required['regular'],'条件：'+'；'.join(content['conditions']))
     return required
 
@@ -158,9 +158,8 @@ def _check_glyphs(required, cmap_by_role):
 
 
 def _footer_status(document):
-    if document.source.state == "legacy_unreviewed":
-        return _FOOTER_STATUS_UNREVIEWED
-    return document.source.state
+    return {"legacy_unreviewed": _FOOTER_STATUS_UNREVIEWED,
+            "draft": "草稿", "accepted": "已审核"}[document.source.state]
 
 
 def _paragraph_styles(fonts):
@@ -256,7 +255,7 @@ class _MathLine(Flowable):
         paint(self.canv, self.node, 7, self.baseline, self.font_size, self.font_name)
 
 
-def _formula_image_flowables(content, path, styles, *, diagram=False):
+def _formula_image_flowables(content, path, styles, *, diagram=False, companion=False):
     with PillowImage.open(path) as image:
         original_width, original_height = image.size
     width = float(content["width_points"])
@@ -265,8 +264,8 @@ def _formula_image_flowables(content, path, styles, *, diagram=False):
         raise ExportError("fallback_too_tall", "Formula image exceeds the supported printable height")
     return [
         Image(str(path), width=width, height=height),
-        Paragraph(pdf_markup((_DIAGRAM_IMAGE_LABEL if diagram else _FORMULA_IMAGE_LABEL) + content["alt"]), styles["small"]),
-        Paragraph(pdf_markup((_DIAGRAM_SOURCE_LABEL if diagram else _FORMULA_SOURCE_LABEL) + content["source_ref"]), styles["small"]),
+        Paragraph(pdf_markup((_DIAGRAM_IMAGE_LABEL if diagram or companion else _FORMULA_IMAGE_LABEL) + content["alt"]), styles["small"]),
+        Paragraph(pdf_markup((_DIAGRAM_SOURCE_LABEL if diagram or companion else _FORMULA_SOURCE_LABEL) + content["source_ref"]), styles["small"]),
     ] + ([Paragraph(pdf_markup('条件：'+'；'.join(content['conditions'])),styles['small'])] if diagram else [])
 
 
@@ -309,16 +308,16 @@ def _build_pdf(document, output_path, fonts, styles, snapshot, assets):
                 if sum(content[1]) > usable_width + 0.1:
                     raise ExportError("table_too_wide", "Table exceeds the A4 printable width")
                 story.extend((_pdf_table(content, styles), Spacer(1, 6)))
-            elif kind in {"formula_image", "diagram"}:
+            elif kind in {"formula_image", "diagram", "companion_image"}:
                 path = assets[id(block)]
-                story.extend(_formula_image_flowables(content, path, styles,diagram=kind=='diagram'))
+                story.extend(_formula_image_flowables(content, path, styles,diagram=kind=='diagram',companion=kind=='companion_image'))
             else:
                 story.append(Paragraph(pdf_markup(content), styles[kind]))
 
     actual_pages = []
     expected_pages = len(document.pages)
     status = _footer_status(document)
-    footer_right = f"{status} | {snapshot[:12]} | {expected_pages}/{expected_pages}"
+    footer_right = f"{status} | {expected_pages}/{expected_pages}"
     if pdfmetrics.stringWidth(document.title, fonts["regular"], 8) + pdfmetrics.stringWidth(footer_right, fonts["regular"], 8) + 10 > A4[0] - 94:
         raise ExportError("footer_too_wide", "Document title and source reference do not fit the footer")
 
@@ -331,7 +330,7 @@ def _build_pdf(document, output_path, fonts, styles, snapshot, assets):
         canvas.setFillColor(colors.HexColor("#555555"))
         canvas.setFont(fonts["regular"], 8)
         canvas.drawString(47, 23, document.title)
-        canvas.drawRightString(A4[0] - 47, 23, f"{status} | {snapshot[:12]} | {template.page}/{expected_pages}")
+        canvas.drawRightString(A4[0] - 47, 23, f"{status} | {template.page}/{expected_pages}")
         canvas.restoreState()
 
     template = SimpleDocTemplate(
@@ -393,13 +392,13 @@ def _write_space(document, points):
     run.font.size = Pt(1)
 
 
-def _write_formula_image(document, content, path, family, *, diagram=False):
+def _write_formula_image(document, content, path, family, *, diagram=False, companion=False):
     paragraph = document.add_paragraph()
     inline = paragraph.add_run().add_picture(str(path), width=Pt(float(content["width_points"])))
     inline._inline.docPr.set("descr", content["alt"])
     inline._inline.docPr.set("title", content["source_ref"])
-    _word_rich(document.add_paragraph(), (_DIAGRAM_IMAGE_LABEL if diagram else _FORMULA_IMAGE_LABEL) + content["alt"], family)
-    _word_rich(document.add_paragraph(), (_DIAGRAM_SOURCE_LABEL if diagram else _FORMULA_SOURCE_LABEL) + content["source_ref"], family)
+    _word_rich(document.add_paragraph(), (_DIAGRAM_IMAGE_LABEL if diagram or companion else _FORMULA_IMAGE_LABEL) + content["alt"], family)
+    _word_rich(document.add_paragraph(), (_DIAGRAM_SOURCE_LABEL if diagram or companion else _FORMULA_SOURCE_LABEL) + content["source_ref"], family)
     if diagram:_word_rich(document.add_paragraph(),'条件：'+'；'.join(content['conditions']),family)
 
 
@@ -507,9 +506,9 @@ def _build_docx(document, output_path, word_family, map_fonts, snapshot, assets,
                 _write_space(word, content)
             elif kind == "table":
                 _word_table(word, content, word_family)
-            elif kind in {"formula_image", "diagram"}:
+            elif kind in {"formula_image", "diagram", "companion_image"}:
                 path = assets[id(block)]
-                _write_formula_image(word, content, path, word_family,diagram=kind=='diagram')
+                _write_formula_image(word, content, path, word_family,diagram=kind=='diagram',companion=kind=='companion_image')
             else:
                 style_name = "Title" if kind == "title" else "Heading 1" if kind == "h" else "Normal"
                 paragraph = word.add_paragraph(style=style_name)
@@ -531,7 +530,7 @@ def _build_docx(document, output_path, word_family, map_fonts, snapshot, assets,
     update_fields.set(qn("w:val"), "true")
 
     footer = section.footer.paragraphs[0]
-    footer.add_run(document.title + " | " + _footer_status(document) + " | " + snapshot[:12] + " | ")
+    footer.add_run(document.title + " | " + _footer_status(document) + " | ")
     for instruction in ("PAGE", "NUMPAGES"):
         field = OxmlElement("w:fldSimple")
         field.set(qn("w:instr"), instruction)
@@ -552,7 +551,7 @@ def _stage_formula_images(document, asset_root, work_dir):
     index = 0
     for page in document.pages:
         for block in page:
-            if block.kind not in {"formula_image", "diagram"}:
+            if block.kind not in {"formula_image", "diagram", "companion_image"}:
                 continue
             if block.kind=='diagram':
                 from .contracts import resolve_diagram

@@ -53,6 +53,7 @@ INSTALLED_APPS += ['app.study.apps.StudyConfig']
 INSTALLED_APPS += ['app.ai.apps.AIConfig']
 INSTALLED_APPS += ['app.operations.apps.OperationsConfig']
 INSTALLED_APPS += ['app.workflows.apps.WorkflowsConfig']
+INSTALLED_APPS += ['app.solutions.apps.SolutionsConfig']
 FILE_UPLOAD_MAX_MEMORY_SIZE = 512 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FILES = 30

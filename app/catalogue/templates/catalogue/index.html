@@ -1,4 +1,4 @@
-{% extends "web/base.html" %}
+{% extends "web/base.html" %}{% load product %}
 {% block title %}题目拆分与合题{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><span>题目拆分与合题</span></nav>
@@ -13,7 +13,7 @@
         {% for row in home.questions %}<tr>
           <td>{{ row.number }}{% if row.legacy %}<span class="status-badge warning">旧索引</span>{% endif %}</td>
           <td><a href="{% url 'catalogue:question_detail' entity_id=row.entity.pk %}">{{ row.title|truncatechars:100 }}</a></td>
-          <td>{{ row.state }}</td>
+          <td>{{ row.state|ui_label }}</td>
           <td>{% if row.missing %}<span class="status-badge warning">题干或来源区域待补</span>{% else %}有原图区域{% endif %}</td>
           <td><a href="{% url 'catalogue:question_split' entity_id=row.entity.pk %}">拆分</a></td>
         </tr>{% endfor %}

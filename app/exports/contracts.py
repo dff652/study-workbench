@@ -11,7 +11,7 @@ from PIL import Image
 
 
 SCHEMA_VERSION = "study-workbench.print.v0.1"
-GENERATOR_VERSION = "study-workbench.renderer.a2.v3"
+GENERATOR_VERSION = "study-workbench.renderer.a2.v4"
 PURPOSES = {"knowledge_summary", "classification_index", "evidence_report", "independent_practice", "parent_answers"}
 TEXT_KINDS = {"title", "sub", "h", "p", "small", "key", "warn", "bridge", "erratum"}
 INDEPENDENT_ROLES = {"title", "instruction", "question", "answer_space"}
@@ -215,7 +215,9 @@ def validate_document(document):
                         _text(value)
                         if plain_text(value) != value:
                             raise ExportError("invalid_map", "Map labels are literal text")
-            elif kind in {"formula_image", "diagram"}:
+            elif kind in {"formula_image", "diagram", "companion_image"}:
+                if kind == "companion_image" and document.purpose != "parent_answers":
+                    raise ExportError("companion_purpose", "Companion PNG figures are restricted to parent answers")
                 diagram_fields={"vector_storage_key", "vector_sha256", "conditions", "min_label_points", "independent_safe"} if kind=="diagram" else set()
                 if not isinstance(content, dict) or set(content) != {"storage_key", "sha256", "source_ref", "alt", "width_points"} | diagram_fields:
                     raise ExportError("invalid_fallback", "Formula image needs local bytes, source and alternative text")

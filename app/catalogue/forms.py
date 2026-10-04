@@ -2,6 +2,7 @@
 import json
 
 from django import forms
+from app.web.presentation import household_choices
 from django.core.exceptions import ValidationError
 
 from app.web.forms import RequestForm
@@ -12,9 +13,7 @@ class HouseholdForm(forms.Form):
 
     def __init__(self, *args, households=(), **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["household_id"].choices = [
-            (str(row.household_id), str(row.household.id)) for row in households
-        ]
+        self.fields["household_id"].choices = household_choices(households)
 
 
 class SplitForm(RequestForm):

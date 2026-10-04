@@ -264,6 +264,25 @@ for export in ExportSnapshot.objects.order_by('pk'):
 for archive in ExportArchiveRecord.objects.order_by('pk'):
     for filename, sha256 in archive.file_hashes.items():
         asset_refs[archive.archive_storage_key + '/' + filename] = sha256
+from app.solutions.models import SolutionAsset, SolutionOutput
+from app.solutions import rendering
+from app.exports.snapshots import verify_snapshot
+from app.exports.contracts import canonical, digest
+for asset in SolutionAsset.objects.order_by('pk'):
+    asset_refs[asset.storage_key] = asset.sha256
+for output in SolutionOutput.objects.filter(state__in=('output_check', 'complete')).order_by('pk'):
+    for document in output.result['documents']:
+        for filename, record in document['files'].items():
+            asset_refs[record['key']] = record['sha256']
+        pdf = asset_path(document['files']['document.pdf']['key'], document['files']['document.pdf']['sha256'])
+        verify_snapshot(pdf.parent)
+        output_root = pdf.parents[2]
+        recipe = json.loads((output_root / 'recipe.json').read_text())
+        assert digest(canonical(recipe)) == output.result['recipe_sha256']
+        for path in output_root.rglob('*'):
+            if path.is_file():
+                asset_refs[str(path.relative_to(settings.SWB_DATA_ROOT))] = digest(path.read_bytes())
+    assert rendering.archive(output).getbuffer().nbytes > 0
 asset_files = []
 for storage_key, expected_hash in sorted(asset_refs.items()):
     path = asset_path(storage_key, expected_hash)

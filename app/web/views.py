@@ -25,6 +25,13 @@ CONTEXT_SALT = "study-workbench.question-context.v1"
 CONTEXT_MAX_AGE = 60 * 60
 
 
+@login_required(login_url=LOGIN_URL)
+@never_cache
+@require_GET
+def help_page(request):
+    return render(request, "web/help.html")
+
+
 def _failure(request, error, *, json_response=False):
     code = getattr(error, "code", "")
     if code in {"not_found", "permission_denied", "unauthorized", "object_not_found"}:

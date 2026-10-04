@@ -186,7 +186,7 @@ function ScheduleCard({
         <div className='flex flex-wrap items-start justify-between gap-3'>
           <div className='min-w-0'>
             <div className='flex flex-wrap items-center gap-2'>
-              <Badge variant={item.state === 'completed' ? 'secondary' : item.state === 'cancelled' ? 'outline' : 'default'}>{STATE_LABELS[item.state]}</Badge>
+              <Badge variant={item.state === 'completed' ? 'secondary' : item.state === 'cancelled' ? 'outline' : 'default'}>{STATE_LABELS[item.state] || '未确定状态'}</Badge>
               {item.target_stale ? <Badge variant='outline' className='border-amber-300 text-amber-900'>题目内容已更新</Badge> : null}
             </div>
             <CardTitle className='mt-2 text-base leading-6'>{item.question_text || '题干未记录'}</CardTitle>
@@ -206,7 +206,7 @@ function ScheduleCard({
           <ol className='space-y-3'>
             {item.history.map((entry) => (
               <li key={entry.revision_no} className='border-l-2 border-muted pl-3 text-sm'>
-                <p className='font-medium'>第 {entry.revision_no} 次 · {ACTION_LABELS[entry.action] || '计划更新'} · 计划日期 {entry.due_date || '未安排'}</p>
+                <p className='font-medium'>第 {entry.revision_no} 次 · {ACTION_LABELS[entry.action] || '未确定状态'} · 计划日期 {entry.due_date || '未安排'}</p>
                 {entry.action === 'completed' ? (
                   <p className='mt-1 text-muted-foreground'>实际作答日期：{entry.actual_date || '未知'}{entry.attempt_revision_id === null ? ' · 未关联作答版本' : ' · 已关联真实作答'}。</p>
                 ) : null}
@@ -369,7 +369,7 @@ function CreateScheduleForm({
     <Card className='gap-0 border-primary/30 py-0 shadow-sm'>
       <CardHeader className='border-b py-4'>
         <CardTitle className='text-base'>新建复测计划</CardTitle>
-        <CardDescription>题目与版本选项来自服务端；填写计划日期、目标、提示安排和原因。</CardDescription>
+        <CardDescription>题目和可选版本来自已保存记录；填写计划日期、目标、提示安排和原因。</CardDescription>
       </CardHeader>
       <CardContent className='px-5 py-4'>
         {options.status === 'loading' ? <LoadingState label='正在读取可创建计划的题目…' /> : null}
@@ -377,7 +377,7 @@ function CreateScheduleForm({
         {options.status === 'loaded' ? (
           options.data.questions.length === 0 ? (
             <div className='space-y-3'>
-              <EmptyState title='没有可创建计划的题目' detail='需要先有服务端认可的题目版本，再从这里建立复测计划。' icon={CircleHelp} />
+              <EmptyState title='没有可创建计划的题目' detail='需要先有可选题目，再从这里建立复测计划。' icon={CircleHelp} />
               <Button type='button' variant='outline' disabled={busy} onClick={() => setOptionsRetry((value) => value + 1)}>重新读取题目</Button>
             </div>
           ) : (

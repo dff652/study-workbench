@@ -16,6 +16,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         fonts-dejavu-core=2.37-6 \
+        poppler-utils \
         fonts-noto-cjk=1:20220127+repack1-1 \
     && rm -rf /var/lib/apt/lists/*
 

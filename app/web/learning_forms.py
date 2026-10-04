@@ -4,6 +4,7 @@ import math
 from uuid import UUID
 
 from django import forms
+from app.web.presentation import household_choices
 
 from app.domain import (
     ActualDateState, AttemptKind, BasisKind, DimensionKind, Independence,
@@ -26,7 +27,7 @@ class ProfileForm(RequestForm):
 
     def __init__(self, *args, households=(), **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["household_id"].choices = [(str(row.household_id), str(row.household.id)) for row in households]
+        self.fields["household_id"].choices = household_choices(households)
 
 
 class SourceFieldsMixin:
@@ -188,14 +189,14 @@ class AssessmentForm(RequestForm):
             defaults = {"judgment": Judgment.UNKNOWN.value, "basis": BasisKind.UNDETERMINED.value,
                         "unknown_reason": "当前证据不足，保留未知。", "rationale": ""}
             defaults.update(values)
-            self.fields[f"{key}_judgment"] = forms.ChoiceField(label=f"{key}判断", choices=choices["judgment"], initial=defaults["judgment"])
-            self.fields[f"{key}_basis"] = forms.ChoiceField(label=f"{key}依据", choices=choices["basis"], initial=defaults["basis"])
-            self.fields[f"{key}_evidence"] = forms.MultipleChoiceField(required=False, label=f"{key}原图证据",
+            self.fields[f"{key}_judgment"] = forms.ChoiceField(label=f"{DIMENSION_LABELS[key]}判断", choices=choices["judgment"], initial=defaults["judgment"])
+            self.fields[f"{key}_basis"] = forms.ChoiceField(label=f"{DIMENSION_LABELS[key]}依据", choices=choices["basis"], initial=defaults["basis"])
+            self.fields[f"{key}_evidence"] = forms.MultipleChoiceField(required=False, label=f"{DIMENSION_LABELS[key]}原图证据",
                 choices=list(evidence_choices), widget=forms.CheckboxSelectMultiple, initial=defaults.get("evidence", []))
             self.fields[f"{key}_rationale"] = forms.CharField(required=False, max_length=2000,
-                widget=forms.Textarea(attrs={"rows": 2}), label=f"{key}判断依据", initial=defaults["rationale"])
+                widget=forms.Textarea(attrs={"rows": 2}), label=f"{DIMENSION_LABELS[key]}判断依据", initial=defaults["rationale"])
             self.fields[f"{key}_unknown_reason"] = forms.CharField(required=False, max_length=1000,
-                widget=forms.Textarea(attrs={"rows": 2}), label=f"{key}未知原因", initial=defaults["unknown_reason"])
+                widget=forms.Textarea(attrs={"rows": 2}), label=f"{DIMENSION_LABELS[key]}未知原因", initial=defaults["unknown_reason"])
             self.dimension_fields.append({"key": key, "label": DIMENSION_LABELS[key], **{
                 name: self[f"{key}_{name}"]
                 for name in ("judgment", "basis", "evidence", "rationale", "unknown_reason")}})

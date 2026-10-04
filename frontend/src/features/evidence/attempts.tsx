@@ -7,6 +7,13 @@ import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table'
 
+const ATTEMPT_KIND_LABELS: Record<string, string> = { first: '首次', correction: '订正', retry: '重做', retest: '复测' }
+const INDEPENDENCE_LABELS: Record<string, string> = { confirmed_independent: '人工确认独立', not_independent: '确认非独立', unknown: '未知／未确认' }
+const PROMPT_LABELS: Record<string, string> = { none_confirmed: '人工确认无提示', given: '有提示', unknown: '提示情况未知' }
+const LEGIBILITY_LABELS: Record<string, string> = { readable: '清楚可辨', partial: '部分可辨', illegible: '看不清', blank: '空白', missing: '缺少证据', unknown: '未知' }
+const ATTEMPT_STATE_LABELS: Record<string, string> = { active: '有效', withdrawn: '已撤回' }
+const REVIEW_STATE_LABELS: Record<string, string> = { draft: '待审核', accepted: '已接受', rejected: '已退回', stale: '依赖已变化', withdrawn: '已撤回' }
+
 function AttemptDetails({ attempt }: { attempt: Attempt }) {
   const actualDate = attempt.actual_date_state === 'known' && attempt.actual_date
     ? attempt.actual_date
@@ -18,10 +25,10 @@ function AttemptDetails({ attempt }: { attempt: Attempt }) {
         <dl className='grid gap-3 text-sm sm:grid-cols-2'>
           <div><dt className='text-muted-foreground'>题目版本</dt><dd className='mt-1'>{attempt.question_text || '题干未记录'}</dd></div>
           <div><dt className='text-muted-foreground'>实际作答日期</dt><dd className='mt-1'>{actualDate}</dd></div>
-          <div><dt className='text-muted-foreground'>独立性</dt><dd className='mt-1'>{attempt.independence_label || attempt.independence || '未记录'}</dd></div>
-          <div><dt className='text-muted-foreground'>提示情况</dt><dd className='mt-1'>{attempt.prompt_status_label || attempt.prompt_status || '未知 / 未测'}</dd></div>
-          <div><dt className='text-muted-foreground'>笔迹可读性</dt><dd className='mt-1'>{attempt.legibility_label || attempt.legibility || '未知 / 未测'}</dd></div>
-          <div><dt className='text-muted-foreground'>记录状态</dt><dd className='mt-1'>{attempt.state_label || attempt.state}</dd></div>
+          <div><dt className='text-muted-foreground'>独立性</dt><dd className='mt-1'>{displayLabel(attempt.independence_label, attempt.independence, INDEPENDENCE_LABELS)}</dd></div>
+          <div><dt className='text-muted-foreground'>提示情况</dt><dd className='mt-1'>{displayLabel(attempt.prompt_status_label, attempt.prompt_status, PROMPT_LABELS)}</dd></div>
+          <div><dt className='text-muted-foreground'>笔迹可读性</dt><dd className='mt-1'>{displayLabel(attempt.legibility_label, attempt.legibility, LEGIBILITY_LABELS)}</dd></div>
+          <div><dt className='text-muted-foreground'>记录状态</dt><dd className='mt-1'>{displayLabel(attempt.state_label, attempt.state, ATTEMPT_STATE_LABELS)}</dd></div>
         </dl>
         <div className='rounded-lg bg-muted/40 p-3'>
           <p className='mb-1 text-xs font-medium text-muted-foreground'>作答内容</p>
@@ -42,7 +49,7 @@ function AttemptDetails({ attempt }: { attempt: Attempt }) {
       <section className='space-y-3'>
         <div>
           <h3 className='font-semibold'>评价历史</h3>
-          <p className='mt-1 text-xs leading-5 text-muted-foreground'>每份评价按后端返回的修订独立展示；未知和未测状态会保留。</p>
+          <p className='mt-1 text-xs leading-5 text-muted-foreground'>每份评价按保存的修订分别展示；未知和未测状态会保留。</p>
         </div>
         {attempt.assessments.length === 0 ? (
           <p className='rounded-lg border border-dashed p-4 text-sm text-muted-foreground'>尚无评价记录，不能据此推断掌握状态。</p>
@@ -60,7 +67,7 @@ function AssessmentHistory({ assessment }: { assessment: Assessment }) {
   return (
     <article className='rounded-lg border bg-background p-4'>
       <div className='flex flex-wrap items-center gap-2'>
-        <span className='text-sm font-semibold'>{assessment.review_state_label || assessment.review_state}</span>
+        <span className='text-sm font-semibold'>{displayLabel(assessment.review_state_label, assessment.review_state, REVIEW_STATE_LABELS)}</span>
         {assessment.current ? <Badge variant='secondary'>当前</Badge> : null}
         {assessment.published ? <Badge variant='outline'>已发布</Badge> : null}
       </div>
@@ -152,7 +159,7 @@ export function Attempts({
 function AttemptRow({ attempt }: { attempt: Attempt }) {
   const [expanded, setExpanded] = useState(false)
   const unknownDate = attempt.actual_date_state !== 'known' || !attempt.actual_date
-  const sourceLabel = SOURCE_LABELS[attempt.source_kind] || attempt.source_kind_label || '来源未知'
+  const sourceLabel = SOURCE_LABELS[attempt.source_kind] || attempt.source_kind_label || '未确定状态'
   const ratingLabel = attempt.assessments.length === 0
     ? '未评价'
     : attempt.independent_success
@@ -164,7 +171,7 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
       <TableRow>
         <TableCell className='max-w-md py-4'>
           <p className='line-clamp-2 font-medium'>{attempt.question_text || '题干未记录'}</p>
-          <p className='mt-1 text-xs text-muted-foreground'>{attempt.attempt_kind_label || attempt.attempt_kind}</p>
+          <p className='mt-1 text-xs text-muted-foreground'>{displayLabel(attempt.attempt_kind_label, attempt.attempt_kind, ATTEMPT_KIND_LABELS)}</p>
         </TableCell>
         <TableCell><Badge variant={attempt.source_kind === 'unknown' ? 'outline' : 'secondary'}>{sourceLabel}</Badge></TableCell>
         <TableCell>
@@ -186,4 +193,9 @@ function AttemptRow({ attempt }: { attempt: Attempt }) {
       ) : null}
     </>
   )
+}
+
+function displayLabel(label: string | undefined, value: string, knownLabels: Record<string, string>) {
+  if (label?.trim()) return label
+  return knownLabels[value] || '未确定状态'
 }

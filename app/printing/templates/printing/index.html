@@ -1,5 +1,5 @@
-{% extends 'web/base.html' %}
+{% extends 'web/base.html' %}{% load product %}
 {% block content %}<h1>打印与家长答案</h1><p>仅使用当前已审核题目；家长答案须单独录入并审核。独立练习隐藏分类、方法和答案。<a href="{% url 'printing:arithmetic' %}">算术复算</a></p>
 <form method="post">{% csrf_token %}{{ form.as_p }}<button>生成 PDF／Word</button></form>
 <h2>题目答案与讲义勘误</h2>{% for q in questions %}<p>{{ q.published_revision.payload.working_text|truncatechars:100 }} <a href="{% url 'printing:answer' q.published_revision_id %}">家长答案</a> · <a href="{% url 'printing:erratum' q.published_revision_id %}">讲义勘误</a></p>{% empty %}<p>暂无当前已审核题目。</p>{% endfor %}
-<h2>历史快照</h2>{% for s in snapshots %}<p><a href="{% url 'printing:snapshot' s.pk %}">{{ s.title }}</a> {{ s.purpose }} · {{ s.created_at }}</p>{% endfor %}{% endblock %}
+<h2>历史快照</h2>{% for s in snapshots %}<p><a href="{% url 'printing:snapshot' s.pk %}">{{ s.title }}</a> {{ s.purpose|ui_label }} · {{ s.created_at }}</p>{% endfor %}{% endblock %}

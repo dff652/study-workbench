@@ -7,7 +7,7 @@ import type { WorkflowDetailResponse, WorkflowJob, WorkflowPreparationResponse }
 const initialJob: WorkflowJob = {
   id: 'job-1', material_id: 'material-1', state: 'needs_review',
   context: { version: 4, source_stamp: 'stamp-current' }, created_at: '2026-10-04T10:00:00Z',
-  updated_at: '2026-10-04T10:00:00Z', error_code: null, record_count: 7, result: { learner_id: null },
+  updated_at: '2026-10-04T10:00:00Z', error_code: null, record_count: 8, result: { learner_id: null },
 }
 
 const records = [
@@ -15,9 +15,12 @@ const records = [
   { id: 'k', kind: 'knowledge', data: { definition: '知识定义', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
   { id: 'm', kind: 'method', data: { name: '方法名称', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
   { id: 't', kind: 'question_type', data: { name: '题型名称', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
-  { id: 'a', kind: 'answer', data: { question: 'q', body: '答案内容', basis: '答案依据' } },
+  { id: 'a', kind: 'answer', data: { question: 'q', body: '答案内容', basis: '答案依据', formulas: [
+    ['r', ['t', 'x'], ['t', '+'], ['t', '1']], ['f', ['t', '1'], ['t', '2']], ['u', ['t', 'x'], ['t', '2']],
+  ] } },
   { id: 'l', kind: 'link', data: { question: 'q', node: 'm', role: 'primary' } },
   { id: 'o', kind: 'observation', data: { sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }], notes: '观察内容' } },
+  { id: 'd', kind: 'diagram', data: { question: 'q', placement: 'question', png_asset: 'figure.png', vector_asset: 'figure.pdf', source: { source_id: 's', bbox: [10, 10, 80, 80] }, alt: '平行线辅助线图', conditions: ['延长线相交'], basis: '原图区域可追溯', width_points: 240, min_label_points: 12, independent_safe: true } },
 ] as WorkflowDetailResponse['records']
 
 const pages = [{ id: 'page-1', position: 1, sha256: 'secret-hash', width: 100, height: 100, page_url: '/page/', preview_url: '/preview/' }]
@@ -25,6 +28,7 @@ const pages = [{ id: 'page-1', position: 1, sha256: 'secret-hash', width: 100, h
 function detail(job: WorkflowJob): WorkflowDetailResponse {
   return {
     schema_version: 'swb.api.v1', job, records, sources: [{ id: 's', page_id: 'page-1', sha256: 'secret-hash' }],
+    assets: { 'figure.png': { media_type: 'image/png', preview_url: '/api/v1/workflows/job-1/assets/?key=figure.png' } },
     readiness: { ready: true, gaps: [], content_gaps: [], questions: [] },
     links: { material_url: '/materials/material-1/', prepare_url: '/prepare/', ai_url: '/ai/', preview_url: job.state === 'output_check' ? '/preview-packet/' : undefined, download_url: job.state === 'complete' ? '/download/' : undefined },
     events: [{ version: 1, action: 'created', details: {}, created_at: job.created_at }],
@@ -71,9 +75,14 @@ describe('WorkflowPanel', () => {
     const onBusyChange = vi.fn()
     render(<WorkflowPanel jobId='job-1' csrfToken='csrf-test' canWrite pages={pages} onUnauthorized={onUnauthorized} onJobUpdated={onJobUpdated} onBusyChange={onBusyChange} onOpenContent={vi.fn()} />)
 
-    for (const text of ['题面', '知识定义', '方法名称', '题型名称', '答案内容', '主要方法', '观察内容']) {
+    for (const text of ['题面', '知识定义', '方法名称', '题型名称', '答案内容', '主要方法', '观察内容', '平行线辅助线图', '延长线相交', '原图区域可追溯']) {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
     }
+    expect(screen.getByLabelText('公式 x+1')).toBeTruthy()
+    expect(screen.getByLabelText('公式 (1) / (2)')).toBeTruthy()
+    expect(screen.getByLabelText('公式 x^2')).toBeTruthy()
+    expect(screen.getByRole('img', { name: '待核对教学图' }).getAttribute('src')).toBe('/api/v1/workflows/job-1/assets/?key=figure.png')
+    expect(screen.getAllByAltText('资料页 1 原图').length).toBeGreaterThan(0)
     expect(screen.queryByText('secret-hash')).toBeNull()
     const confirm = screen.getByRole('button', { name: '确认整包内容' })
     expect((confirm as HTMLButtonElement).disabled).toBe(true)

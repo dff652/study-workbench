@@ -49,7 +49,7 @@ export function Overview({
     <div className='space-y-6'>
       <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
         <MetricCard label='作答记录' value={formatCount(metrics.attempt_count)} detail='按真实作答事件计次' icon={ClipboardList} tone='bg-sky-100 text-sky-800' />
-        <MetricCard label='涉及题目' value={formatCount(metrics.question_count)} detail='按稳定题目身份去重' icon={BookOpenCheck} tone='bg-indigo-100 text-indigo-800' />
+        <MetricCard label='涉及题目' value={formatCount(metrics.question_count)} detail='同一道题只计一次' icon={BookOpenCheck} tone='bg-indigo-100 text-indigo-800' />
         <MetricCard label='独立成功证据' value={formatCount(metrics.independent_success_count)} detail='沿用现有成功判定规则' icon={ShieldCheck} tone='bg-emerald-100 text-emerald-800' />
         <MetricCard label='日期未记录' value={formatCount(metrics.unknown_date_count)} detail='不使用录入时间替代实际日期' icon={CalendarDays} tone='bg-amber-100 text-amber-900' />
       </div>
@@ -58,7 +58,7 @@ export function Overview({
         <Card>
           <CardHeader className='border-b pb-4'>
             <CardTitle className='text-base'>作答来源</CardTitle>
-            <CardDescription>按当前筛选范围显示后端返回的事件数</CardDescription>
+            <CardDescription>按当前筛选条件汇总已记录的作答</CardDescription>
           </CardHeader>
           <CardContent className='grid gap-3 pt-5 sm:grid-cols-2'>
             {SOURCE_KINDS.map((kind) => (
@@ -74,8 +74,8 @@ export function Overview({
             ))}
             <p className='sm:col-span-2 text-xs leading-5 text-muted-foreground'>
               {metrics.independent_success_rate === null
-                ? '独立成功比例：尚未定义统计口径。'
-                : `独立成功比例：${String(metrics.independent_success_rate)}。`}比例口径由服务端提供，页面不作推算。
+                ? '暂不显示独立成功比例；目前没有经过确认的统计定义。'
+                : `独立成功比例：${String(metrics.independent_success_rate)}。`}只显示已有记录提供的结果，不进行推算。
             </p>
           </CardContent>
         </Card>

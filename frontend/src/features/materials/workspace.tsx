@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { FilePlus2, ImagePlus, RefreshCw } from 'lucide-react'
+import { FilePlus2, RefreshCw } from 'lucide-react'
 import { api, getErrorMessage } from '../../api'
-import { EmptyState, isUnauthorized, LoadingState, RetryState } from '../../components/shared'
+import { ApiLink, EmptyState, isUnauthorized, LoadingState, RetryState } from '../../components/shared'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -11,6 +11,7 @@ import { MaterialReadiness } from './readiness'
 import { ProposalPicker } from './proposal-picker'
 import { WorkflowPanel } from './workflow-panel'
 import { ContentWorkspace } from '../content/workspace'
+import { MaterialUploadQueue } from './page'
 
 type Remote<T> = { status: 'loading' } | { status: 'loaded'; data: T } | { status: 'error'; message: string }
 
@@ -22,6 +23,7 @@ export function MaterialWorkspace({
   learners,
   selectedLearnerId,
   onUnauthorized,
+  onOpenSolutions,
 }: {
   householdId: string
   householdName: string
@@ -30,6 +32,7 @@ export function MaterialWorkspace({
   learners: Learner[]
   selectedLearnerId: string
   onUnauthorized: () => void
+  onOpenSolutions: (materialId: string) => void
 }) {
   const [materials, setMaterials] = useState<Remote<MaterialListResponse>>({ status: 'loading' })
   const [selectedMaterialId, setSelectedMaterialId] = useState('')
@@ -41,10 +44,7 @@ export function MaterialWorkspace({
   const [title, setTitle] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [createError, setCreateError] = useState('')
-  const [file, setFile] = useState<File | null>(null)
-  const [uploadBusy, setUploadBusy] = useState(false)
-  const [uploadError, setUploadError] = useState('')
-  const [uploadNotice, setUploadNotice] = useState('')
+  const [uploadQueueBusy, setUploadQueueBusy] = useState(false)
   const [jobId, setJobId] = useState('')
   const [workflowBusy, setWorkflowBusy] = useState(false)
   const [workflowActionBusy, setWorkflowActionBusy] = useState(false)
@@ -56,8 +56,6 @@ export function MaterialWorkspace({
   const [learnerId, setLearnerId] = useState(selectedLearnerId)
   const materialCreateKey = useRef<RequestKeyState>(null)
   const workflowCreateKey = useRef<RequestKeyState>(null)
-  const uploadKey = useRef<RequestKeyState>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -106,17 +104,12 @@ export function MaterialWorkspace({
   }, [selectedMaterialId, detailRetry, onUnauthorized])
 
   useEffect(() => {
-    setFile(null)
     setProposal(null)
-    setUploadError('')
-    setUploadNotice('')
     setWorkflowError('')
     setCreateWorkflowOpen(false)
     setContentOpen(false)
     setContentBusy(false)
-    uploadKey.current = null
     workflowCreateKey.current = null
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }, [selectedMaterialId])
 
   const refreshMaterials = () => setListRetry((value) => value + 1)
@@ -139,20 +132,15 @@ export function MaterialWorkspace({
     setDetailMaterialId('')
     setJobId('')
     setProposal(null)
-    setFile(null)
-    setUploadError('')
-    setUploadNotice('')
     setWorkflowError('')
     setCreateWorkflowOpen(false)
-    uploadKey.current = null
     workflowCreateKey.current = null
-    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const currentDetail: Remote<MaterialDetailResponse> = detailMaterialId === selectedMaterialId
     ? detail
     : { status: 'loading' }
-  const scopeBusy = createBusy || uploadBusy || workflowBusy || workflowActionBusy || contentBusy
+  const scopeBusy = createBusy || uploadQueueBusy || workflowBusy || workflowActionBusy || contentBusy
 
   const createMaterial = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -180,42 +168,6 @@ export function MaterialWorkspace({
       setCreateError(getErrorMessage(cause))
     } finally {
       setCreateBusy(false)
-    }
-  }
-
-  const selectFile = (next: File | undefined) => {
-    setFile(next || null)
-    setUploadError('')
-    setUploadNotice('')
-    uploadKey.current = null
-  }
-
-  const uploadFile = async () => {
-    if (!selectedMaterialId || !file || uploadBusy) return
-    setUploadBusy(true)
-    setUploadError('')
-    setUploadNotice('')
-    let key: string
-    try {
-      key = requestKeyFor(uploadKey, `${selectedMaterialId}:${file.name}:${file.size}:${file.lastModified}`)
-    } catch (cause) {
-      setUploadError(getErrorMessage(cause))
-      setUploadBusy(false)
-      return
-    }
-    try {
-      const response = await api.uploadPage(selectedMaterialId, file, key, csrfToken)
-      uploadKey.current = null
-      setUploadNotice(response.duplicate ? '这张原图此前已收妥，资料页清单已刷新。' : '原图上传完成，资料页清单已刷新。')
-      setFile(null)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-      refreshDetail()
-      refreshMaterials()
-    } catch (cause) {
-      if (isUnauthorized(cause)) onUnauthorized()
-      setUploadError(getErrorMessage(cause))
-    } finally {
-      setUploadBusy(false)
     }
   }
 
@@ -261,7 +213,7 @@ export function MaterialWorkspace({
           {materials.status === 'loading' ? <LoadingState label='正在读取当前家庭的资料…' /> : null}
           {materials.status === 'error' ? <RetryState message={materials.message} onRetry={refreshMaterials} title='无法读取资料列表' /> : null}
           {materials.status === 'loaded' ? <>
-            {materials.data.total > materials.data.items.length ? <p className='rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'>已显示最近 {materials.data.items.length} 份资料；更多资料请从旧版资料库进入。</p> : null}
+            {materials.data.total > materials.data.items.length ? <p className='flex flex-wrap items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'>当前列表显示最近 {materials.data.items.length} 份资料。<ApiLink href='/materials/'>查看全部资料</ApiLink></p> : null}
             {materials.data.items.length === 0 ? <EmptyState title='这个家庭还没有资料' detail='新建一份资料后，可以从本机逐张上传原始图片。' icon={FilePlus2} /> : (
               <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
                 {materials.data.items.map((item) => <button key={item.id} type='button' aria-pressed={selectedMaterialId === item.id} onClick={() => selectMaterial(item.id)} disabled={scopeBusy} className={`rounded-lg border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selectedMaterialId === item.id ? 'border-primary bg-primary/[0.04] ring-1 ring-primary/30' : 'bg-background hover:bg-muted/40'}`}><span className='flex items-center justify-between gap-2'><span className='truncate font-semibold'>{item.title}</span>{selectedMaterialId === item.id ? <Badge variant='secondary'>当前资料</Badge> : null}</span><span className='mt-2 block text-xs text-muted-foreground'>{item.page_count} 张原图页</span></button>)}
@@ -277,20 +229,13 @@ export function MaterialWorkspace({
       </Card>
 
       {selectedMaterialId ? <>
-        <Card>
-          <CardHeader className='border-b pb-4'><CardTitle className='flex items-center gap-2 text-base'><ImagePlus className='size-4 text-primary' aria-hidden='true' />上传一张原图</CardTitle><CardDescription>选择单张图片。原图不经前端裁切或改写；更复杂的来源整理继续使用旧版资料页。</CardDescription></CardHeader>
-          <CardContent className='space-y-3 pt-4'>
-            <div className='flex flex-wrap items-center gap-3'><input ref={fileInputRef} aria-label='选择原图' type='file' accept='image/*' onChange={(event) => selectFile(event.currentTarget.files?.[0])} disabled={!canWrite || scopeBusy} className='block max-w-full text-sm file:mr-3 file:rounded-md file:border file:bg-background file:px-3 file:py-2 file:text-sm file:font-medium' /><Button type='button' onClick={() => void uploadFile()} disabled={!canWrite || !file || scopeBusy}>{uploadBusy ? '正在上传…' : '上传原图'}</Button></div>
-            {file ? <p className='text-xs text-muted-foreground'>当前选择：{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MiB</p> : null}
-            {uploadNotice ? <p role='status' className='text-sm text-emerald-800'>{uploadNotice}</p> : null}
-            {uploadError ? <p role='alert' className='rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'>{uploadError} 可使用同一文件重试。</p> : null}
-          </CardContent>
-        </Card>
+        <MaterialUploadQueue materialId={selectedMaterialId} csrfToken={csrfToken} canWrite={canWrite} onUnauthorized={onUnauthorized} onBusyChange={setUploadQueueBusy} onUploaded={() => { refreshDetail(); refreshMaterials() }} />
 
         {currentDetail.status === 'loading' ? <LoadingState label='正在读取资料页、完整度和任务历史…' /> : null}
         {currentDetail.status === 'error' ? <RetryState message={currentDetail.message} onRetry={refreshDetail} title='无法读取资料详情' /> : null}
         {currentDetail.status === 'loaded' ? <>
           <div key={selectedMaterialId} className='space-y-5'>
+            <Card><CardContent className='flex flex-wrap items-center justify-between gap-3 p-4'><div><h2 className='font-semibold'>逐题解析与文档</h2><p className='mt-1 text-sm text-muted-foreground'>在原图核对后，可把题干、讲义解法和答案整理为独立解析版本。</p></div><Button type='button' onClick={() => onOpenSolutions(selectedMaterialId)}>整理解析</Button></CardContent></Card>
             {canWrite ? <ProposalPicker pages={currentDetail.data.pages} value={proposal} onChange={setProposal} /> : <p className='rounded-md border bg-muted/20 p-4 text-sm text-muted-foreground'>当前为只读成员，可以查看原图、任务和输出；内容修改由家庭所有者或审核成员操作。</p>}
             <MaterialReadiness detail={currentDetail.data} selectedJobId={jobId} onSelectJob={setJobId} busy={scopeBusy} />
             <Card className='gap-0 py-0 shadow-sm'>

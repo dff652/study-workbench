@@ -1,4 +1,4 @@
-{% extends "web/base.html" %}
+{% extends "web/base.html" %}{% load product %}
 {% block title %}学习档案 · 学习资料工作台{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>学习档案</span></nav>
@@ -6,7 +6,7 @@
   {% if households %}
     <section class="panel">
       <form method="get" class="inline-form">
-        <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>{{ member.household_id }}</option>{% endfor %}</select></div>
+        <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>家庭 {{ forloop.counter }}</option>{% endfor %}</select></div>
         <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>
       </form>
     </section>
@@ -30,7 +30,7 @@
   </section>
   <section class="panel">
     <h2>来源观察</h2>
-    {% if observations %}<ul class="history-list">{% for observation in observations %}<li><a href="{% url 'learning:observation_detail' observation.observation_id %}">来源观察 {{ observation.observation_id }}</a><span class="muted">{{ observation.revisions.0.actual_date|default:"发生日期未知" }} · {{ observation.revisions.0.legibility.value }} · {{ observation.revisions.0.notes|truncatechars:100 }}</span></li>{% endfor %}</ul>
+    {% if observations %}<ul class="history-list">{% for observation in observations %}<li><a href="{% url 'learning:observation_detail' observation.observation_id %}">来源观察 {{ forloop.counter }}</a><span class="muted">{{ observation.revisions.0.actual_date|default:"发生日期未知" }} · {{ observation.revisions.0.legibility.value|ui_label }} · {{ observation.revisions.0.notes|truncatechars:100 }}</span></li>{% endfor %}</ul>
     {% else %}<p class="muted">还没有来源观察。看不清、空白或作者不明的笔迹可以先单独记录。</p>{% endif %}
   </section>
 {% endblock %}

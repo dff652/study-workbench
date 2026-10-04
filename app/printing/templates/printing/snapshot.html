@@ -1,4 +1,9 @@
-{% extends 'web/base.html' %}{% block content %}<h1>{{ snapshot.title }}</h1><p>{{ snapshot.purpose }} · {{ snapshot.created_at }}</p>
-{% if availability.status == 'retired' %}<p class="notice">此快照文件已退役，归档副本及不可变退役账本仍保留。</p>{% else %}<p><a href="{% url 'printing:download' snapshot.pk 'document.pdf' %}">PDF</a> · <a href="{% url 'printing:download' snapshot.pk 'document.docx' %}">Word</a> · <a href="{% url 'printing:download' snapshot.pk 'snapshot.json' %}">校验清单</a> · <a href="{% url 'printing:download' snapshot.pk 'content.json' %}">内容快照</a></p>{% if availability.status == 'archived' %}<p>已保留经过哈希核对的归档副本。</p>{% endif %}{% endif %}
-<h2>题目及来源版本</h2>{% for q in snapshot.provenance.questions %}<p>{{ q.revision_id }} · {{ q.content_hash }}</p><pre>{{ q.evidence_refs }}</pre>{% endfor %}
-<p>该快照保留生成时版本；后续编辑不会改写此文件。完整服务恢复使用数据库与私有文件联合备份。</p>{% endblock %}
+{% extends 'web/base.html' %}{% load product %}
+{% block content %}
+<h1>{{ snapshot.title }}</h1><p>{{ snapshot.purpose|ui_label }} · {{ snapshot.created_at }}</p>
+{% if availability.status == 'retired' %}<p class="notice">此文档已移出本机，保留归档和历史记录。</p>
+{% else %}<p><a href="{% url 'printing:download' snapshot.pk 'document.pdf' %}">预览 PDF</a> · <a href="{% url 'printing:download' snapshot.pk 'document.docx' %}">下载 Word</a></p>
+{% if availability.status == 'archived' %}<p>正在使用已核对完整性的归档副本。</p>{% endif %}{% endif %}
+<section class="panel"><h2>本次使用的题目</h2><ol>{% for q in questions %}<li><a href="{% url 'knowledge:question_detail' q.entity.pk %}">{{ q.label|truncatechars:120 }}</a> · 第 {{ q.number }} 版</li>{% empty %}<li>此文档内容保留在生成时的快照中。</li>{% endfor %}</ol></section>
+<p>本次文档保留生成时的内容；后续编辑会生成新文档，历史版本仍可回看。</p>
+{% endblock %}

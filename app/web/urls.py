@@ -7,6 +7,7 @@ from . import page_reading_views
 app_name = "web"
 
 urlpatterns = [
+    path("help/", views.help_page, name="help"),
     path("members/", member_views.index, name="members"),
     path("", views.index, name="index"),
     path("material/new/", views.material_new, name="material_new"),

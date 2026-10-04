@@ -1,13 +1,13 @@
 {% extends "web/base.html" %}
 {% block title %}本机数据与人工记录 · 学习资料工作台{% endblock %}
 {% block content %}
-  <div class="page-heading"><div><p class="eyebrow">家庭数据管理</p><h1>本机数据与人工记录</h1><p class="muted">这里只列出当前账号所属家庭，不要求手工输入家庭 ID。</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">家庭数据管理</p><h1>本机数据与人工记录</h1><p class="muted">这里只列出当前账号所属家庭。</p></div></div>
   <section class="panel"><h2>可管理的家庭</h2>
-    {% if households %}<ul>{% for row in households %}<li><strong>{{ row.household.id }}</strong> · {% if row.role == "owner" %}所有者{% elif row.role == "reviewer" %}审核者{% else %}只读成员{% endif %}<div class="form-actions">
+    {% if households %}<ul>{% for row in households %}<li><strong>家庭 {{ forloop.counter }}</strong> · {% if row.role == "owner" %}所有者{% elif row.role == "reviewer" %}审核者{% else %}只读成员{% endif %}<div class="form-actions">
       {% if row.retention_url %}<a class="secondary-button link-button" href="{{ row.retention_url }}">查看本机导出保留策略</a>{% endif %}
       {% if row.timing_url %}<a class="secondary-button link-button" href="{{ row.timing_url }}">记录人工估计用时</a>{% endif %}
       {% if not row.retention_url and not row.timing_url %}<span class="muted">当前角色没有维护权限。</span>{% endif %}
     </div></li>{% endfor %}</ul>{% else %}<p class="muted">当前账号尚未加入家庭。</p>{% endif %}
   </section>
-  <section class="panel"><h2>数据边界</h2><p>家庭成员只会看到当前角色获准的操作。导出归档、退役和账本维护步骤见“本机数据策略、人工耗时与退役账本”说明；这些操作不会删除原始照片、领域历史或模型提案。</p></section>
+  <section class="panel"><h2>数据边界</h2><p>家庭成员只会看到当前角色获准的操作。导出可选择保留或归档，历史操作可追溯；这些操作不会删除原始照片、领域历史或模型提案。</p></section>
 {% endblock %}

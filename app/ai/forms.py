@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from django import forms
+from app.web.presentation import ui_label
 
 from .models import ModelConfig
 
@@ -79,11 +80,11 @@ class RunSelectionForm(forms.Form):
         self.fields["task_kind"].initial = context["task_kind"]
         self.fields["selection_token"].initial = context["token"]
         self.fields["request_key"].initial = uuid4().hex
-        choices = [(str(row["revision_id"]), f"{row['kind']} · {row['label']}") for row in context["choices"]]
+        choices = [(str(row["revision_id"]), f"{ui_label(row['kind'])} · {row['label']}") for row in context["choices"]]
         questions = [(str(row["revision_id"]), row["label"]) for row in context["choices"] if row["kind"] == "question"]
         attempts = [("", "不选择作答")]
-        attempts.extend((str(row["revision_id"]), f"作答版本 {row['revision_id']} · 题目版本 {row['question_revision_id']}")
-            for row in context["attempts"])
+        attempts.extend((str(row["revision_id"]), f"作答记录 {index} · {row.get('label', '查看固定作答内容')}")
+            for index, row in enumerate(context["attempts"], 1))
         regions = [(str(row["revision_id"]), row["label"]) for row in context["region_choices"]]
         self.fields["source_revision_ids"].choices = choices
         self.fields["question_revision_ids"].choices = questions

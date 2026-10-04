@@ -40,7 +40,7 @@ function fixture(post?: () => Promise<Response>) {
     return Response.json(path.includes('/materials/material-1/') ? detail : { schema_version: 'swb.api.v1', items: [material], total: 1 })
   })
   vi.stubGlobal('fetch', fetchMock)
-  render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} />)
+  render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} />)
   return fetchMock
 }
 

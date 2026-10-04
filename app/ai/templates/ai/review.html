@@ -12,7 +12,7 @@
     {% if block_message %}<p class="notice">{{ block_message }}</p>{% endif %}
 
     <details class="panel"><summary>本任务固定的模型配置与外发确认</summary><dl>
-      <dt>配置 ID · 修订</dt><dd>{{ config.config_id }} · r{{ config.revision_no }}</dd>
+      <dt>配置版本</dt><dd>第 {{ config.revision_no }} 版</dd>
       <dt>供应商 · 模型</dt><dd>{{ config.provider_label }} · {{ config.model }}</dd>
       <dt>外发范围</dt><dd>{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}</dd>
       <dt>外发确认人账号 · 时间</dt><dd>{{ config.outbound_confirmation_by|default:"无新确认" }} · {{ config.outbound_confirmation_at|default:"未知" }}</dd>
@@ -41,7 +41,7 @@
           <h3>常见错误</h3><ul>{% for item in proposal.common_errors %}<li>{{ item }}</li>{% empty %}<li>未提供常见错误。</li>{% endfor %}</ul>
           <p class="notice">确认知识节点时会关联到以下已选来源题目的精确修订；请打开题目版本检查关联。未选择题目时不会推断适用关系。</p>
           {% if source_questions %}<ul>{% for item in source_questions %}<li><a href="{{ item.url }}">题目修订 r{{ item.revision_no }}</a>：{{ item.text }}</li>{% endfor %}</ul>{% else %}<p>没有已选来源题目。</p>{% endif %}
-          <p class="muted">此提案未单列缺口或 unknown 字段；未说明内容不能视为已知。</p>
+          <p class="muted">此提案未单列缺口或未知信息；未说明内容不能视为已知。</p>
         {% elif run.task_kind == "assessment" %}
           <h3>五维作答评价建议</h3>
           <ul class="history-list">{% for item in assessment_dimensions %}<li>
@@ -56,7 +56,7 @@
           <p><strong>答案表达式：</strong><code>{{ proposal.answer_expression }}</code></p>
           <p><strong>检验表达式：</strong><code>{{ proposal.check_expression }}</code></p>
           {% if target_method %}<p><strong>目标方法：</strong><a href="{{ target_method.url }}">方法修订第 {{ target_method.revision_no }} 版</a></p>{% endif %}
-          <p class="muted">变式提案未单列缺口或 unknown 字段；未说明内容仍须人工补充或保留未知。</p>
+          <p class="muted">变式提案未单列缺口或未知信息；未说明内容仍须人工补充或保留未知。</p>
         {% endif %}
       </section>
     {% elif run.error_code %}

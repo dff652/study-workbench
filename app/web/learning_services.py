@@ -21,6 +21,7 @@ from app.catalogue.models import QuestionLabel
 from app.web import services as material_services
 from app.web.models import MaterialPage, PagePreview, QuestionSource
 from . import records
+from .presentation import ui_label
 
 
 DIMENSIONS = (
@@ -244,7 +245,9 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
     obs_infos = []
     for observation in observations:
         latest = observation.revisions[-1]
+        author = _learner(bundle, latest.author_learner_id)
         obs_infos.append({"observation": observation, "revision": latest,
+                          "author_name": author.display_name if author else "未知",
                           "sources": _source_cards(actor, household_id, bundle, latest.evidence_refs)})
     return {"household_id": str(household_id), "profile": profile, "observations": obs_infos,
             "attempts": attempt_infos,
@@ -280,7 +283,7 @@ def _published_node_labels(household_id):
         node_id = target_revision.entity.stable_id
         name = (target_revision.payload.get("definition", "")[:100] or "未命名知识点") if target_kind == "knowledge" else (
             target_revision.payload.get("name", "未命名题型"))
-        label = f"{name} · …{node_id[-8:]} · r{target_revision.revision_no}"
+        label = f"{name} · 第 {target_revision.revision_no} 版"
         historical = (question_revision.entity.published_revision_id != question_revision.pk
                 or question_revision.review_projection.state != "accepted"
                 or target_revision.entity.published_revision_id != target_revision.pk
@@ -292,6 +295,17 @@ def _published_node_labels(household_id):
             "stable_id": node_id, "name": name, "revision_no": target_revision.revision_no,
             "label": label, "historical": historical,
         }
+    from .presentation import distinct_choices
+    nodes = {(item['stable_id'], item['name']): item['name']
+        for bucket in (questions_for_knowledge, questions_for_type)
+        for rows in bucket.values() for item in rows.values()}
+    names = dict(distinct_choices(sorted(nodes.items(), key=lambda item: (item[1].casefold(), item[0]))))
+    for bucket in (questions_for_knowledge, questions_for_type):
+        for values in bucket.values():
+            for item in values.values():
+                item['display_name'] = names[(item['stable_id'], item['name'])]
+                item['label'] = f"{item['display_name']} · 第 {item['revision_no']} 版" + (
+                    '（历史关系）' if item['historical'] else '')
     return ({key: tuple(sorted(value.values(), key=lambda item: (item["name"].casefold(), item["stable_id"])))
              for key, value in questions_for_knowledge.items()},
             {key: tuple(sorted(value.values(), key=lambda item: (item["name"].casefold(), item["stable_id"])))
@@ -309,7 +323,7 @@ def _profile_node_options(relationships_by_question):
             if current is None or relationship["revision_no"] > current["revision_no"]:
                 nodes[relationship["stable_id"]] = relationship
     return [{"stable_id": stable_id,
-        "label": f"{row['name']} · …{stable_id[-8:]}" + ("（含历史关系）" if stable_id in historical_ids else "")}
+        "label": row['display_name'] + ("（含历史关系）" if stable_id in historical_ids else "")}
         for stable_id, row in sorted(nodes.items(), key=lambda item: (item[1]["name"].casefold(), item[0]))]
 
 
@@ -839,7 +853,7 @@ def assessment_context(actor, attempt_id):
 
 def _assessment_evidence_choices(bundle, attempt_revision):
     refs = _evidence_for_attempt(bundle, attempt_revision)
-    return [(str(index), f"{ref.image_id} · {ref.region_id or '整图'} · {ref.purpose.value}")
+    return [(str(index), f"来源 {index + 1} · {'已选区域' if ref.region_id else '整张原图'} · {ui_label(ref.purpose.value)}")
             for index, ref in enumerate(refs)], refs
 
 

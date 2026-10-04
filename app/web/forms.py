@@ -3,6 +3,7 @@ import json
 from uuid import UUID
 
 from django import forms
+from app.web.presentation import household_choices
 
 
 class RequestForm(forms.Form):
@@ -15,9 +16,7 @@ class MaterialForm(RequestForm):
 
     def __init__(self, *args, households=(), **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["household_id"].choices = [
-            (str(member.household_id), str(member.household.id)) for member in households
-        ]
+        self.fields["household_id"].choices = household_choices(households)
         if len(self.fields['household_id'].choices)==1:
             self.fields['household_id'].widget=forms.HiddenInput()
             self.initial['household_id']=self.fields['household_id'].choices[0][0]

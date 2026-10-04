@@ -16,7 +16,7 @@ from app.domain import (
     Judgment, Legibility, PromptStatus, ReviewState, SourceKind,
 )
 from app.persistence import services as core
-from app.persistence.models import EntityRecord
+from app.persistence.models import EntityRecord, RevisionRecord
 from . import learning_services as services, records
 from .learning_forms import (
     AssessmentForm, AttemptForm, CorrectionForm, ObservationForm, ProfileForm, ReviewForm,
@@ -76,6 +76,8 @@ def _household_id_for_kind(actor, kind, stable_id):
 
 def _source_history(actor, household_id, bundle, entity):
     return [{"revision": revision,
+             "author_name": next((profile.display_name for profile in bundle.learners
+                                  if profile.learner_id == getattr(revision, "author_learner_id", None)), "未知"),
              "sources": services._source_cards(actor, household_id, bundle, revision.evidence_refs)}
             for revision in reversed(entity.revisions)]
 
@@ -281,6 +283,9 @@ def observation_detail(request, observation_id):
         return _failure(request, exc)
     data["history"] = _source_history(request.user, data["household_id"], data["bundle"], data["observation"])
     data["current_revision"] = data["observation"].revisions[-1]
+    names = {profile.learner_id: profile.display_name for profile in data["bundle"].learners}
+    data["profile_name"] = names.get(data["observation"].profile_context_id, "学习档案")
+    data["author_name"] = names.get(data["current_revision"].author_learner_id, "未知")
     data["current_legibility_label"] = learning_label(LEGIBILITY_LABELS, data["current_revision"].legibility)
     data["edit_url"] = reverse("learning:observation_edit", kwargs={"observation_id": observation_id})
     return render(request, "learning/observation.html", data)
@@ -390,6 +395,8 @@ def attempt_detail(request, attempt_id):
     data["correction_url"] = reverse("learning:attempt_correct", kwargs={"attempt_id": attempt_id})
     data["assessment_new_url"] = reverse("learning:assessment_new", kwargs={"attempt_id": attempt_id})
     revision = data["current_revision"]
+    data["question_label"] = services._question_revision_labels(data["household_id"], data["bundle"]).get(
+        revision.question_revision_id, "题干待补")
     data["current_labels"] = {
         "attempt_kind": learning_label(ATTEMPT_KIND_LABELS, revision.attempt_kind),
         "source_kind": learning_label(SOURCE_KIND_LABELS, revision.source_kind),
@@ -601,6 +608,8 @@ def assessment_detail(request, assessment_id):
         return _failure(request, exc)
     current_revision = data["current_revision"]
     review_state = review_context["review_context"]
+    data["context_errata"] = RevisionRecord.objects.filter(
+        pk__in=current_revision.context_erratum_revision_ids, entity__household_id=data["household_id"])
     review_form = ReviewForm(initial={"request_key": uuid4(), "revision_id": current_revision.header.revision_id,
         "context_token": records.sign_context(data["household_id"], "assessment", assessment_id,
             "review", review_state)})

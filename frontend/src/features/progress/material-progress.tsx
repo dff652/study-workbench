@@ -25,7 +25,7 @@ export function MaterialProgress({ remote, onRetry }: { remote: Remote<ProgressR
       <div className='flex flex-wrap items-end justify-between gap-2'>
         <div>
           <h2 id='material-progress-title' className='text-lg font-semibold'>资料进度</h2>
-          <p className='mt-1 text-sm text-muted-foreground'>截至 {scope.as_of}；显示服务端记录的资料、页面、题目和任务数量。</p>
+          <p className='mt-1 text-sm text-muted-foreground'>截至 {scope.as_of}；显示已记录的资料、页面、题目和任务数量。</p>
         </div>
         <p className='text-xs text-muted-foreground'>资料 {formatCount(materials.length)} / {formatCount(total)} 项</p>
       </div>
@@ -50,7 +50,7 @@ export function MaterialProgress({ remote, onRetry }: { remote: Remote<ProgressR
         <Card className='gap-0 py-0 shadow-sm'>
           <CardHeader className='border-b py-4'>
             <CardTitle className='text-base'>资料清单</CardTitle>
-            <CardDescription>最多展示服务端返回的 200 项；汇总仍按真实资料总数计算。</CardDescription>
+            <CardDescription>最多展示 200 项；汇总仍按全部资料数计算。</CardDescription>
           </CardHeader>
           <CardContent className='divide-y px-0 py-0'>
             {materials.map((material) => (

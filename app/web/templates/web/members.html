@@ -1,9 +1,9 @@
-{% extends "web/base.html" %}
+{% extends "web/base.html" %}{% load product %}
 {% block title %}家庭成员 · 学习资料工作台{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>家庭成员</span></nav>
   <div class="page-heading">
-    <div><p class="eyebrow">家庭访问</p><h1>成员管理</h1>{% if household %}<p class="muted">家庭 {{ household.pk }}</p>{% endif %}</div>
+    <div><p class="eyebrow">家庭访问</p><h1>成员管理</h1>{% if household %}<p class="muted">当前家庭</p>{% endif %}</div>
   </div>
 
   {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
@@ -14,7 +14,7 @@
       <form method="get" action="{% url 'web:members' %}" class="stack-form">
         <div class="field"><label for="id_household_id">家庭</label><select id="id_household_id" name="household_id" required>
           <option value=""{% if not selected_household_id %} selected{% endif %}>请选择家庭</option>
-          {% for choice in household_choices %}<option value="{{ choice.pk }}"{% if selected_household_id == choice.pk %} selected{% endif %}>{{ choice.pk }}</option>{% endfor %}
+          {% for choice in household_choices %}<option value="{{ choice.pk }}"{% if selected_household_id == choice.pk %} selected{% endif %}>家庭 {{ forloop.counter }}</option>{% endfor %}
         </select></div>
         <button class="secondary-button" type="submit">打开成员管理</button>
       </form>
@@ -65,7 +65,7 @@
 
     <section class="panel">
       <h2>创建家庭成员登录账号</h2>
-      <p class="muted">这里只能创建审核成员或只读成员。密码按 Django 密码策略验证并安全保存；页面不会回显密码。</p>
+      <p class="muted">这里只能创建审核成员或只读成员。密码按账号密码规则验证并安全保存；页面不会回显密码。</p>
       <form method="post" action="{% url 'web:members' %}" class="stack-form">
         {% csrf_token %}{{ create_form.action }}{{ create_form.household_id }}
         {% if create_form.non_field_errors %}<div class="notice error" role="alert">{{ create_form.non_field_errors }}</div>{% endif %}

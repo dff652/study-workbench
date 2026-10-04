@@ -50,6 +50,8 @@ describe('EvidenceWorkspace', () => {
     expect(screen.getByText('作答内容未记录。')).toBeTruthy()
     expect(screen.getByText('尚无评价记录，不能据此推断掌握状态。')).toBeTruthy()
     expect(screen.getByRole('link', { name: '查看这次作答及完整历史' }).getAttribute('href')).toBe('/web/attempts/view/')
+    expect(screen.queryByText('active')).toBeNull()
+    expect(screen.queryByText('unknown')).toBeNull()
 
     fireEvent.change(screen.getByLabelText('实际作答日期起'), { target: { value: '2026-10-01' } })
     await user.selectOptions(screen.getByLabelText('作答来源'), 'unknown')
@@ -77,7 +79,7 @@ describe('EvidenceWorkspace', () => {
   it('uses a plain Chinese note instead of showing a raw success-rate state', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(emptyOverview())))
     render(<EvidenceWorkspace householdId='home-1' learner={learner('learner-1')} activePage='overview' onUnauthorized={vi.fn()} />)
-    expect((await screen.findByText(/独立成功比例：尚未定义统计口径/)).textContent).toContain('尚未定义统计口径')
+    expect((await screen.findByText(/暂不显示独立成功比例/)).textContent).toContain('没有经过确认的统计定义')
     expect(screen.queryByText('not_provided')).toBeNull()
   })
 

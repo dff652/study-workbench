@@ -4,8 +4,8 @@
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识库与题目地图</a><span aria-hidden="true">/</span><span>{% if is_edit %}修订{% else %}新建{% endif %}{{ kind_label }}</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 人工录入</p><h1>{% if is_edit %}修订{{ kind_label }}{% else %}新建{{ kind_label }}{% endif %}</h1><p class="muted">保存会追加一个待审核修订，旧内容与审核记录仍可回看。</p></div></div>
-  {% if source_warning %}<div class="notice warning-notice" role="status">当前没有关联原资料。此条目会标记为人工来源不足；可从下方 B1 原图选区添加定义来源。</div>{% endif %}
+  <div class="page-heading"><div><p class="eyebrow">当前家庭 · 人工录入</p><h1>{% if is_edit %}修订{{ kind_label }}{% else %}新建{{ kind_label }}{% endif %}</h1><p class="muted">保存会追加一个待审核修订，旧内容与审核记录仍可回看。</p></div></div>
+  {% if source_warning %}<div class="notice warning-notice" role="status">当前没有关联原资料。此条目会标记为人工来源不足；可从下方 原图选区添加定义来源。</div>{% endif %}
   <form method="post" class="knowledge-form" id="knowledge-form">
     {% csrf_token %}{{ form.request_key }}{{ form.household_id }}{{ form.context_token }}{{ form.sources }}
     {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
@@ -30,7 +30,7 @@
     </section>
     {% if is_edit and source_cards %}<section class="panel"><h2>当前修订的来源</h2><p class="muted">默认保留这些精确引用；下方新选区域会追加。勾选替换时，当前来源将由本次选择取代。</p>{% include "knowledge/_sources.html" with cards=source_cards only %}</section>{% endif %}
     <section class="panel region-editor knowledge-region-editor" data-storage-key="swb-knowledge-sources-{{ household.pk }}" {% if is_edit %}data-edit="true"{% endif %}>
-      <div class="section-heading"><div><h2>原图定义来源</h2><p class="muted">从 B1 的资料页框选支持此定义、公式或示例的区域。保存时按 `EvidencePurpose.DEFINITION` 记录。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
+      <div class="section-heading"><div><h2>原图定义来源</h2><p class="muted">从资料页框选支持此定义、公式或示例的区域。所选区域会作为定义出处保存。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
       {% if source_pages %}<div class="source-page-grid">{% for card in source_pages %}
         <article class="region-card" data-page-id="{{ card.page_id }}" data-page-label="{{ card.label }}" data-rotation="{{ card.preview.rotation }}" data-preview-sha="{{ card.preview.sha256 }}" data-width="{{ card.preview.width }}" data-height="{{ card.preview.height }}">
           <div class="section-heading compact-heading"><div><h3><a href="{{ card.page_url }}">{{ card.label }}</a></h3><p class="muted">{{ card.original_name }}</p></div>
@@ -40,7 +40,7 @@
           <button type="button" class="secondary-button add-region">加入定义来源</button>
           <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend><label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button></fieldset>
         </article>
-      {% endfor %}</div>{% else %}<p class="muted">当前家庭还没有 B1 人工资料页；条目可先保存为来源不足的草稿。</p>{% endif %}
+      {% endfor %}</div>{% else %}<p class="muted">当前家庭还没有已上传的资料页；条目可先保存为来源不足的草稿。</p>{% endif %}
       <div class="selected-regions"><h3>本次选择的区域</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">还没有新选区域。编辑时现有来源默认保留。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
       {% if form.sources.errors %}<div class="notice error" role="alert">{{ form.sources.errors }}</div>{% endif %}
       {% if is_edit %}<div class="field checkbox-field">{{ form.replace_sources }}<label for="id_replace_sources">用本次选择替换当前来源（没有选择时会清空来源）</label>{{ form.replace_sources.errors }}</div>{% endif %}

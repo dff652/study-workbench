@@ -325,3 +325,43 @@ export const api = {
 export function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '连接暂时不可用，请重试。'
 }
+
+export function getSolutions(materialId: string, signal: AbortSignal) {
+  return getJson<import('./types').SolutionWorkspaceResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/`, signal)
+}
+export function saveSolution(materialId: string, input: import('./types').SaveSolutionInput, csrfToken: string) {
+  return postJson<import('./types').SolutionWorkspaceResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/draft/`, input, csrfToken)
+}
+export function solutionAction(materialId: string, input: import('./types').SolutionActionInput, csrfToken: string) {
+  return postJson<import('./types').SolutionWorkspaceResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/actions/`, input, csrfToken)
+}
+export function solutionOutputAction(outputId: string, input: import('./types').SolutionOutputActionInput, csrfToken: string) {
+  return postJson<import('./types').SolutionWorkspaceResponse>(`/api/v1/solutions/outputs/${encodeURIComponent(outputId)}/actions/`, input, csrfToken)
+}
+export async function uploadSolutionAsset(materialId: string, data: FormData, csrfToken: string) {
+  const response = await fetch(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/assets/`, {
+    method: 'POST', body: data, credentials: 'same-origin', headers: { 'X-CSRFToken': csrfToken, Accept: 'application/json' },
+  })
+  return parseJsonResponse<import('./types').SolutionWorkspaceResponse>(response)
+}
+export function deriveSolutionAsset(materialId: string, input: {
+  kind: 'source_image' | 'source_crop'; source: import('./types').SolutionSource
+  label: string; basis: string; request_key: string
+}, csrfToken: string) {
+  return postJson<import('./types').SolutionWorkspaceResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/source-assets/`, input, csrfToken)
+}
+export function getSolutionRevision(revisionId: number, signal: AbortSignal) {
+  return getJson<{ schema_version: 'swb.api.v1'; revision: import('./types').SolutionRevision }>(`/api/v1/solutions/revisions/${revisionId}/`, signal)
+}
+export function getSolutionHistory(materialId: string, before: number, signal: AbortSignal) {
+  return getJson<import('./types').SolutionHistoryResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/history/?before=${before}`, signal)
+}
+export function getSolutionOutputs(materialId: string, before: string, signal: AbortSignal) {
+  return getJson<import('./types').SolutionOutputsResponse>(`/api/v1/materials/${encodeURIComponent(materialId)}/solutions/outputs/?before=${encodeURIComponent(before)}`, signal)
+}
+export function getSolutionOutput(outputId: string, signal: AbortSignal) {
+  return getJson<{ schema_version: 'swb.api.v1'; output: import('./types').SolutionOutput }>(`/api/v1/solutions/outputs/${encodeURIComponent(outputId)}/`, signal)
+}
+export function previewSolutionFormula(expression: string, csrfToken: string, signal?: AbortSignal) {
+  return postJson<{ schema_version: 'swb.api.v1'; formula: unknown }>('/api/v1/solutions/formula-preview/', { expression }, csrfToken, signal)
+}

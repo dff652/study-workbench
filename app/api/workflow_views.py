@@ -1,6 +1,7 @@
 """Material and SOP adapters. POST commands delegate to authorized services."""
-from django.http import FileResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.urls import reverse
+from urllib.parse import urlencode
 from app.web import services as materials
 from app.web.models import MaterialSet
 from app.web.models import PageReadingRevision
@@ -90,9 +91,23 @@ def detail(request, job_id):
     if job.state == "complete":
         links["download_url"] = reverse("api:workflow_download", args=[job.pk])
     return {"job": job_row(job), "records": job.input["records"], "sources": job.input["sources"],
+        "assets": {key: {"media_type": item["media_type"], "preview_url":
+            reverse("api:workflow_asset", args=[job.pk]) + '?' + urlencode({'key':key})}
+            for key, item in job.input.get('assets', {}).items() if item['media_type'] == 'image/png'},
         "readiness": ready_row(request.user, job.material_id), "links": links,
         "events": [{"version": event.version, "action": event.action, "details": event.details,
                     "created_at": event.created_at} for event in job.events.all()]}
+
+
+@api()
+def asset(request, job_id):
+    job = workflows.detail(request.user, job_id)
+    key = request.GET.get('key', '')
+    item = job.input.get('assets', {}).get(key)
+    if item is None or item['media_type'] != 'image/png':
+        raise Http404
+    from app.workflows.assets import decode_assets
+    return HttpResponse(decode_assets({key:item})[key], content_type='image/png')
 
 
 @api("POST")

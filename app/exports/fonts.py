@@ -29,7 +29,7 @@ def document_characters(documents):
                 elif block.kind == "map":
                     text += "".join(block.content["root"])
                     text += "".join(value for group in block.content["groups"] for key in ("label", "detail") for value in group[key])
-                elif block.kind in {"formula_image", "diagram"}:
+                elif block.kind in {"formula_image", "diagram", "companion_image"}:
                     text += block.content["alt"] + block.content["source_ref"]
                     if block.kind=='diagram':text+=''.join(block.content['conditions'])
                 elif isinstance(block.content, str):

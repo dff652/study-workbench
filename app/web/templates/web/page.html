@@ -42,7 +42,7 @@
     {% for derivative in derivatives %}
       <article><p><a href="{% url 'web:derivative_file' derivative.id %}">{{ derivative.get_operation_display }} · {{ derivative.created_at }}</a></p>
         <p>{{ derivative.lossy_description }}</p>
-        <details><summary>来源与参数</summary><p>原图 SHA：{{ derivative.original_sha256 }}</p><p>派生 SHA：{{ derivative.sha256 }}</p><pre>{{ derivative.parameters }}</pre></details>
+        <p class="muted">保留来源原图及本次处理记录；原始照片保持原样。</p>
         <img src="{% url 'web:derivative_file' derivative.id %}" alt="{{ derivative.get_operation_display }}派生图" loading="lazy" style="max-width:100%;height:auto">
       </article>
     {% empty %}<p class="muted">尚无派生记录。</p>{% endfor %}

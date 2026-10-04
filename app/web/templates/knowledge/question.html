@@ -1,50 +1,50 @@
 {% extends "web/base.html" %}
-{% load static %}
+{% load static product %}
 {% block title %}题目 {{ number }} · 知识地图{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识库与题目地图</a><span aria-hidden="true">/</span><span>题目 {{ number }}</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 题目 · {{ entity.stable_id }}</p><h1>题目 {{ number }}</h1><p class="muted">显示题目各修订与三类节点的精确关联。旧索引不表示题干完整或已审核。</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">题目与知识关联</p><h1>题目 {{ number }}</h1><p class="muted">显示题目各修订与三类节点的精确关联。旧索引不表示题干完整或已审核。</p></div></div>
   {% if current_missing %}<div class="notice warning-notice" role="status">当前题目存在缺失字段或来源区域，不能作为完整已审核题目使用。题干、区域缺口会保留在当前修订中。</div>{% endif %}
   <section class="panel question-content"><div class="section-heading"><h2>当前题目 r{{ entity.head_revision.revision_no }}</h2><span class="status-badge">{{ current_state_label }}</span></div>
     {% if variant %}<h3>AI 生成变式</h3><div class="long-text">{{ current.working_text|linebreaksbr }}</div>
       <p>来自 <a href="{% url 'knowledge:question_detail' entity_id=variant.parent_question_revision.entity_id %}#revision-{{ variant.parent_question_revision_id }}">父题 r{{ variant.parent_question_revision.revision_no }}</a>，目标 <a href="{% url 'knowledge:node_detail' entity_id=variant.target_method_revision.entity_id %}#revision-{{ variant.target_method_revision_id }}">方法 r{{ variant.target_method_revision.revision_no }}</a>。来源区域表示生成依据，题干需人工审核。</p>
     {% elif current.printed_text %}<h3>印刷题干</h3><div class="long-text">{{ current.printed_text|linebreaksbr }}</div>{% else %}<p class="muted">印刷题干待补。</p>{% endif %}
     {% if not variant and current.working_text and current.working_text != current.printed_text %}<h3>工作题干</h3><div class="long-text">{{ current.working_text|linebreaksbr }}</div><p class="muted">原始印刷文本仍保留；工作题干与勘误依据分别记录。</p>{% endif %}
-    {% if current.missing_fields %}<p><strong>缺失字段：</strong>{{ current.missing_fields|join:"、" }}</p>{% endif %}
+    {% if current.missing_fields %}<p><strong>缺失字段：</strong>{{ current.missing_fields|ui_labels }}</p>{% endif %}
     <h3>当前来源</h3>{% include "knowledge/_sources.html" with cards=source_cards only %}
   </section>
   <section class="panel"><h2>当前题目版本的知识、方法與题型</h2>
     {% if current_links %}<ul class="association-list">{% for item in current_links %}<li>
-      <a href="{{ item.node_url }}">{{ item.kind }} · {{ item.node.head_revision.payload.name|default:item.node.stable_id }}</a>
+      <a href="{{ item.node_url }}">{{ item.kind|ui_label }} · {{ item.node.head_revision.payload.name|default:item.node.head_revision.payload.definition|truncatechars:80 }}</a>
       <span class="status-badge {% if item.current %}published-badge{% else %}warning{% endif %}">{{ item.status_label }}</span>
-      <span class="muted">节点 r{{ item.node_revision.revision_no }} · {{ item.link.payload.role }} · 关联 {{ item.link.pk }}</span>
+      <span class="muted">节点 r{{ item.node_revision.revision_no }} · {{ item.link.payload.role|ui_label }}</span>
     </li>{% endfor %}</ul>{% else %}<p class="muted">当前题目修订没有正式发布的节点关联。</p>{% endif %}
     <p class="muted small-text">题目版本发生修订时，旧关联仍固定指向旧版本；需要人工另建关联并审核。</p>
   </section>
-  <section class="panel"><h2>从题目建立节点关联</h2><p class="muted">先选择题目精确版本，再选择知识点、方法或题型的精确版本。关联需另行审核。</p>
+  <section class="panel"><h2>从题目建立节点关联</h2><p class="muted">先选择题目版本，再选择知识点、方法或题型的精确版本。关联需另行审核。</p>
     <form method="post" action="{% url 'knowledge:question_link' entity_id=entity.pk %}" class="link-editor">{% csrf_token %}
       {{ link_form.request_key }}{{ link_form.household_id }}
-      <div class="field"><label for="id_question_revision_id">题目精确版本</label>{{ link_form.question_revision_id }}{{ link_form.question_revision_id.errors }}</div>
+      <div class="field"><label for="id_question_revision_id">题目版本</label>{{ link_form.question_revision_id }}{{ link_form.question_revision_id.errors }}</div>
       <div class="field"><label for="id_kind">节点类型</label>{{ link_form.kind }}{{ link_form.kind.errors }}</div>
-      <div class="field"><label for="id_node_revision_id">节点精确版本</label>{{ link_form.node_revision_id }}{{ link_form.node_revision_id.errors }}</div>
+      <div class="field"><label for="id_node_revision_id">条目版本</label>{{ link_form.node_revision_id }}{{ link_form.node_revision_id.errors }}</div>
       <div class="field"><label for="id_role">关系类型</label>{{ link_form.role }}{{ link_form.role.errors }}</div>
       <div class="field"><label for="id_reason">关联说明</label>{{ link_form.reason }}{{ link_form.reason.errors }}</div>
       <button class="primary-button" type="submit">保存为待审核关联</button>
     </form>
   </section>
   <section class="panel"><h2>题目修订、审核与关联历史</h2>
-    {% for row in history %}<article class="revision-card" id="revision-{{ row.pk }}"><div class="section-heading"><h3>r{{ row.revision_no }} · {{ row.pk }}</h3><span class="status-badge">{{ row.web_review_state_label }}</span></div>
+    {% for row in history %}<article class="revision-card" id="revision-{{ row.pk }}"><div class="section-heading"><h3>r{{ row.revision_no }}</h3><span class="status-badge">{{ row.web_review_state_label }}</span></div>
       {% if row.pk == entity.published_revision_id %}<p class="published-note">当前正式发布版本</p>{% endif %}
-      <p class="muted">{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }} · 依赖状态 {{ row.web_review_context.state }}</p>
+      <p class="muted">{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }} · 依赖状态 {{ row.web_review_context.state|ui_label }}</p>
       {% if variant %}<p>AI 生成题干</p><div class="long-text">{{ row.payload.working_text|linebreaksbr }}</div>{% elif row.payload.printed_text %}<div class="long-text">{{ row.payload.printed_text|linebreaksbr }}</div>{% else %}<p>印刷题干缺失。</p>{% endif %}
       {% if not variant and row.payload.working_text and row.payload.working_text != row.payload.printed_text %}<p>工作题干</p><div class="long-text">{{ row.payload.working_text|linebreaksbr }}</div>{% endif %}
-      {% if row.payload.missing_fields %}<p class="status-badge warning">缺失：{{ row.payload.missing_fields|join:"、" }}</p>{% endif %}
+      {% if row.payload.missing_fields %}<p class="status-badge warning">缺失：{{ row.payload.missing_fields|ui_labels }}</p>{% endif %}
       <h4>此题目版本的知识、方法与题型关联</h4>
       {% if row.web_links %}<ul class="association-list">{% for item in row.web_links %}<li>
-      <a href="{{ item.node_url }}">{{ item.kind }} · {{ item.node.head_revision.payload.name|default:item.node.stable_id }}</a>
+      <a href="{{ item.node_url }}">{{ item.kind|ui_label }} · {{ item.node.head_revision.payload.name|default:item.node.head_revision.payload.definition|truncatechars:80 }}</a>
       <span class="status-badge {% if item.current %}published-badge{% else %}warning{% endif %}">{{ item.status_label }}</span>
-      <span class="muted">题目 r{{ row.revision_no }} → 节点 r{{ item.node_revision.revision_no }} · {{ item.link.payload.role }}</span>
+      <span class="muted">题目 r{{ row.revision_no }} → 节点 r{{ item.node_revision.revision_no }} · {{ item.link.payload.role|ui_label }}</span>
         {% if item.review_form %}<form method="post" action="{{ item.review_url }}" class="inline-review-form">{% csrf_token %}
           {{ item.review_form.request_key }}{{ item.review_form.revision_id }}{{ item.review_form.context_token }}
           <div class="field"><label>审核操作</label>{{ item.review_form.action }}</div><div class="field"><label>审核说明</label>{{ item.review_form.reason }}</div>

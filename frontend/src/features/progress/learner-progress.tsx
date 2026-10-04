@@ -31,12 +31,12 @@ export function LearnerProgress({ remote, onRetry }: { remote: Remote<LearnerPro
               <CardHeader className='border-b py-4'>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <div>
-                    <Badge variant='outline'>{KIND_LABELS[group.kind]}</Badge>
+                    <Badge variant='outline'>{KIND_LABELS[group.kind] || '未确定状态'}</Badge>
                     <CardTitle className='mt-2 text-base'>{group.label || '未命名条目'}</CardTitle>
                   </div>
                   <ApiLink href={group.node_url}>查看关联条目</ApiLink>
                 </div>
-                <CardDescription>只统计当前已确认关系所指向的精确题目版本；题目数按稳定身份去重，多份评价不会重复增加作答数。旧版本仍可从原记录查看。</CardDescription>
+                <CardDescription>只汇总已确认关联的题目和作答；同一道题只计一次，多份评价不会重复计入作答。旧版本仍可从原记录查看。</CardDescription>
               </CardHeader>
               <CardContent className='space-y-4 px-5 py-4'>
                 <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>

@@ -17,7 +17,7 @@ from app.imports.models import LegacyIndexEntry
 from app.catalogue.models import QuestionLabel
 from app.persistence import services as core
 from app.persistence.adapter import ObjectKey
-from app.persistence.models import EntityRecord, EvidenceRecord, ImageRecord, RevisionDependency, RevisionRecord
+from app.persistence.models import EntityRecord, EvidenceRecord, HouseholdMember, ImageRecord, RevisionDependency, RevisionRecord
 from . import records
 from .models import MaterialPage, MaterialSet, PagePreview, QuestionSource
 
@@ -306,7 +306,7 @@ def _home_question_rows(household_id):
             state = "stale"
         result.append({"entity": entity, "revision": current, "number": number or "—",
             "title": (payload.get("working_text") or payload.get("printed_text") or
-                      (f"旧索引 {number}" if legacy else f"题目 {entity.stable_id}")),
+                      (f"旧索引 {number}" if legacy else "题干待补")),
             "state": state,
             "legacy": legacy, "missing": missing,
             "published_revision_id": entity.published_revision_id})
@@ -425,7 +425,9 @@ def index_data(actor, household_id, filters=None):
         raise core.PersistenceError("invalid_input", "方法角色筛选无效。")
     tree = method_tree_data(house.pk)
     materials = list(MaterialSet.objects.filter(household=house).order_by("title", "id"))
-    return {"household": house, "nodes": nodes, "questions": questions,
+    can_write = HouseholdMember.objects.filter(household=house, user=actor,
+        role__in=(HouseholdMember.Role.OWNER, HouseholdMember.Role.REVIEWER)).exists()
+    return {"household": house, "can_write": can_write, "nodes": nodes, "questions": questions,
         "method_tree": tree, "materials": materials}
 
 
@@ -510,7 +512,7 @@ def _question_card(revision, labels):
         .values_list("question_revision__entity_id", flat=True))
     return {"entity": entity, "revision": revision, "number": number,
         "title": payload.get("working_text") or payload.get("printed_text") or
-            (f"旧索引 {number}" if legacy else f"题目 {entity.stable_id}"),
+            (f"旧索引 {number}" if legacy else "题干待补"),
         "state": revision.review_projection.state, "legacy": legacy,
         "missing": bool(payload.get("missing_fields")) or not payload.get("evidence_refs")}
 
@@ -635,7 +637,7 @@ def question_revision_choices(bundle, labels=None):
     labels = labels or {}
     for question in bundle.questions:
         for revision in question.revisions:
-            title = revision.working_text or revision.printed_text or ", ".join(labels.get(question.question_id, ())) or question.question_id
+            title = revision.working_text or revision.printed_text or ", ".join(labels.get(question.question_id, ())) or "题干待补"
             choices.append((revision.header.revision_id, f"{title[:72]} · r{revision.header.revision_no}"))
     return sorted(choices, key=lambda row: (row[1].casefold(), row[0]))
 

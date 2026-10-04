@@ -4,7 +4,7 @@
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><a href="{% url 'catalogue:index' %}?household_id={{ household.pk }}">题目拆分与合题</a><span aria-hidden="true">/</span><a href="{% url 'catalogue:question_detail' entity_id=entity.pk %}">题目 {{ number }}</a><span aria-hidden="true">/</span><span>拆分</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 原题保持不变</p><h1>拆分题目 {{ number }}</h1><p class="muted">子题引用原题的精确修订版本，并复制其来源区域；每个子题都作为待审核草稿建立。</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">当前家庭 · 原题保持不变</p><h1>拆分题目 {{ number }}</h1><p class="muted">子题引用原题的精确修订版本，并复制其来源区域；每个子题都作为待审核草稿建立。</p></div></div>
   <section class="panel"><h2>原题 r{{ entity.head_revision.revision_no }}</h2>
     {% if current.printed_text %}<div class="long-text">{{ current.printed_text|linebreaksbr }}</div>{% else %}<p class="muted">原题题干待补。</p>{% endif %}
     {% include "knowledge/_sources.html" with cards=source_cards only %}

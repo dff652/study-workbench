@@ -81,6 +81,8 @@ printing.review_answer(actor, answer['answer_id'], action='accepted', reason='�
 exports = [printing.export_questions(actor, household_id, [qrow.pk], title='合成练习', purpose='independent_practice'),
            printing.export_questions(actor, household_id, [qrow.pk], title='合成家长答案', purpose='parent_answers'),
            printing.export_evidence_report(actor, learner.pk)]
+from app.printing import packets
+packet = packets.generate(actor, page.material_id, learner_id=learner.pk)
 plan_context = study.new_schedule_context(actor, learner.pk)
 plan = study.create_schedule(actor, learner.pk, question_revision_id=qrow.pk,
     due_date=date(2026, 10, 8), goal='合成独立复测计划', prompt_plan='', reason='合成验收',
@@ -110,7 +112,52 @@ assert operations.verify_retirement_ledger(actor, household_id,
 from app.workflows import services as workflows
 job = workflows.create(actor, page.material_id, request_key=key(), learner_id=learner.stable_id)
 assert job.state == 'ready' and job.events.count() == 1
+from app.web import knowledge_services as knowledge
+node = knowledge.save_node(actor, household_id, 'knowledge', data={
+    'definition': '相同加数的和可以写成乘法。', 'sources': [source]},
+    reason='合成知识依据', request_key=key())
+node_entity = EntityRecord.objects.get(household_id=household_id, kind='knowledge', stable_id=node['stable_id'])
+node_detail = knowledge.node_detail(actor, node_entity.pk)
+knowledge.review_revision(actor, node_entity.pk, node['revision_id'], action='accept',
+    reason='合成知识核对', context=node_detail['review_context'], request_key=key())
+knowledge.create_link(actor, household_id, kind='knowledge', node_revision_id=node['revision_id'],
+    question_revision_id=qrow.pk, role='applies', reason='合成显式关联', request_key=key())
+
+# Persist and render the new companion family as part of the SAME database/files
+# restore boundary. No model calls or real photographs are involved.
+from app.solutions import services as solutions, jobs as solution_jobs
+from django.core.files.uploadedfile import SimpleUploadedFile
+from io import BytesIO
+from PIL import Image
+stream = BytesIO(); Image.new('RGB', (30, 20), 'white').save(stream, format='PNG')
+asset = solutions.upload_asset(actor, page.material_id,
+    SimpleUploadedFile('synthetic-auxiliary.png', stream.getvalue(), content_type='image/png'),
+    kind='auxiliary', label='合成辅助图', basis='人工合成矩形示意', source=None, request_key=key())
+content = {'schema_version': 'swb.solution.v1', 'title': '合成逐题解析',
+    'lectures': [{'id': 'lecture-1', 'title': '乘法入门'}], 'questions': [{
+        'id': 'question-1', 'question_revision_id': qrow.pk, 'lecture_id': 'lecture-1', 'number': '1',
+        'title': '乘法核对', 'statement': {'text': '4 × 2 = ?', 'status': 'complete'},
+        'sources': [{'page_id': str(page.pk), 'region': [2, 2, 28, 20]}],
+        'parts': [{'id': 'part-1', 'parent_id': None, 'label': '（1）', 'statement': '计算结果。', 'answer': '8', 'unit': None}],
+        'thinking': '先找相同加数。', 'lecture_method': '相同加数相加。', 'alternative_method': '',
+        'steps': ['4 + 4 = 8。'], 'pitfalls': ['不要把乘法当作加法。'], 'formulas': ['4*2'],
+        'figures': [{'asset_id': str(asset.pk), 'role': 'method', 'caption': '辅助示意', 'width_mm': 35}],
+        'links': [{'revision_id': node['revision_id'], 'relation': 'knowledge'}],
+        'corrections': [], 'unknowns': ['单位未注明，保持待确认。']}],
+    'outputs': {'per_question': ['pdf', 'docx'], 'per_lecture': ['pdf', 'docx'], 'combined': ['pdf', 'docx']}}
+solution = solutions.save(actor, page.material_id, content=content, expected_version=0,
+    request_key=key(), reason='合成解析保存')
+solutions.action(actor, page.material_id, action='confirm', expected_version=1, request_key=key(), reason='合成对照')
+queued = solutions.action(actor, page.material_id, action='generate', expected_version=1, request_key=key(), reason='合成生成')
+rendered = solution_jobs.execute_next()
+assert str(rendered.pk) == queued['output_id'] and rendered.state == 'output_check', rendered.error_code
 print(json.dumps({'attempts':len(attempts), 'assessment':assessment['assessment_id'],
     'exports':[row.export_id for row in exports], 'schedule':plan['schedule_id'], 'model_disabled':True,
     'local_policy_and_timing':True, 'retired_export_archive_and_ledger':True,
-    'persistent_workflow_and_audit':True}))
+    'persistent_workflow_and_audit':True, 'solution_output':str(rendered.pk),
+    'fixture': {'household':household_id, 'material':str(page.material_id), 'page':str(page.pk),
+        'question':question['question_id'], 'question_revision':qrow.pk, 'question_entity':qrow.entity_id,
+        'learner':learner.stable_id, 'learner_entity':learner.pk, 'observation':obs['observation_id'],
+        'attempt':attempts[-1]['attempt_id'], 'assessment':assessment['assessment_id'],
+        'node':node_entity.pk, 'schedule':plan['schedule_id'],
+        'snapshots':[row.pk for row in exports], 'packet':packet}}))

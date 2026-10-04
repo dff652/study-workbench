@@ -2,7 +2,7 @@
 {% block title %}记录题目处理用时 · 学习资料工作台{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="/">资料</a><span aria-hidden="true">/</span><span>记录题目处理用时</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · 人工估计</p><h1>记录题目处理用时</h1><p class="muted">只记录明确说明的估计秒数，可精确关联题目版本和当前作答版本；不自动推算精确耗时。</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">当前家庭 · 人工估计</p><h1>记录题目处理用时</h1><p class="muted">只记录明确说明的估计秒数，可精确关联题目版本和当前作答版本；不自动推算精确耗时。</p></div></div>
   <section class="panel"><h2>新增记录</h2>
     {% if not question_choices %}<div class="notice">当前家庭没有可选择的已发布题目版本。先审核发布题目，再记录用时。</div>{% endif %}
     <form method="post" class="knowledge-form">{% csrf_token %}{{ form.request_key }}{{ form.context_token }}

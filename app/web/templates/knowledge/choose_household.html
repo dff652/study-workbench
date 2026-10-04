@@ -3,7 +3,7 @@
 {% block content %}
   <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}">知识库与题目地图</a><span aria-hidden="true">/</span><span>选择家庭</span></nav>
   <section class="panel"><h1>为{{ kind_label }}选择家庭</h1>
-    {% if households %}<ul>{% for member in households %}<li><a href="{% url 'knowledge:node_new' kind=kind %}?household_id={{ member.household_id }}">{{ member.household.id }}</a></li>{% endfor %}</ul>
+    {% if households %}<ul>{% for member in households %}<li><a href="{% url 'knowledge:node_new' kind=kind %}?household_id={{ member.household_id }}">家庭 {{ forloop.counter }}</a></li>{% endfor %}</ul>
     {% else %}<p class="muted">当前账号尚未加入家庭。</p>{% endif %}
   </section>
 {% endblock %}

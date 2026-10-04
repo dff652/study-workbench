@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, ArrowDownToLine, CheckCheck, CircleCheck, RefreshCw } from 'lucide-react'
 import { api, ApiError, getErrorMessage } from '../../api'
-import { ApiLink, isUnauthorized, LoadingState, RetryState } from '../../components/shared'
+import { ApiLink, isUnauthorized, LoadingState, RetryState, sameOriginHref } from '../../components/shared'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -9,6 +9,8 @@ import type { MaterialPage, Readiness, SkillImportRecord, WorkflowDetailResponse
 import { requestKeyFor, type RequestKeyState } from './request-keys'
 import { localDateTime, workflowActionLabel, workflowStateLabel } from './workflow-labels'
 import { WorkflowPreparationPanel } from './preparation-panel'
+import { ImageBoxPicker } from '../content/image-box-picker'
+import { FormulaReview } from '../../components/formula-preview'
 
 const RECORD_LABELS: Record<SkillImportRecord['kind'], string> = {
   question: '题目',
@@ -26,6 +28,8 @@ const FIELD_LABELS: Record<string, string> = {
   definition: '定义', conditions: '适用条件', common_errors: '常见错误', name: '名称', steps: '步骤', notes: '说明',
   structural_features: '结构特征', body: '答案内容', basis: '答案依据', formulas: '公式', role: '关系类型',
   legibility: '辨识情况',
+  placement: '放置位置', png_asset: '教学图预览', vector_asset: '矢量图文件', alt: '图示说明',
+  width_points: '排版宽度（pt）', min_label_points: '最小标签字号（pt）', independent_safe: '题面无提示确认',
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -119,7 +123,7 @@ export function WorkflowPanel({
   if (remote.status === 'loading') return <LoadingState label='正在读取任务阶段、内容与历史…' />
   if (remote.status === 'error') return <RetryState message={remote.message} onRetry={refresh} title='无法读取资料任务' />
   const { job, records, sources, links, events } = remote.data
-  const sourcePages = new Map(sources.map((source) => [source.id, pages.find((page) => page.id === source.page_id)?.position]))
+  const sourcePages = new Map(sources.map((source) => [source.id, pages.find((page) => page.id === source.page_id)]))
 
   return (
     <div className='space-y-5'>
@@ -150,7 +154,7 @@ export function WorkflowPanel({
                 <h3 className='font-semibold'>逐项核对本任务的全部内容</h3>
                 <p className='mt-1 text-sm leading-6 text-muted-foreground'>确认会一次保存并确认整包记录。请检查题目、知识、方法、题型、答案、关联和原图观察；确认原因会写入审计记录。</p>
               </div>
-              <RecordReview records={records} sourcePages={sourcePages} />
+              <RecordReview records={records} sourcePages={sourcePages} assets={remote.data.assets || {}} />
               <label className='flex items-start gap-2 text-sm leading-5'><input className='mt-1' type='checkbox' checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} />我已查看并核对上方列出的全部记录类型。</label>
               <label className='block text-sm font-medium'>确认原因
                 <textarea className='mt-1 min-h-20 w-full rounded-md border bg-background px-3 py-2 font-normal' value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} placeholder='说明本次整包确认的依据' />
@@ -214,7 +218,11 @@ export function WorkflowPanel({
   )
 }
 
-function RecordReview({ records, sourcePages }: { records: SkillImportRecord[]; sourcePages: Map<string, number | undefined> }) {
+function RecordReview({ records, sourcePages, assets }: {
+  records: SkillImportRecord[]
+  sourcePages: Map<string, MaterialPage | undefined>
+  assets: NonNullable<WorkflowDetailResponse['assets']>
+}) {
   const labels = new Map(records.map((record, index) => [record.id, `${RECORD_LABELS[record.kind]} ${index + 1}`]))
   if (records.length === 0) return <p className='rounded-md border border-dashed bg-background p-4 text-sm text-muted-foreground'>此任务没有结构化记录；任务只会整理已有的已确认资料。</p>
   return <ol className='max-h-[40rem] space-y-3 overflow-y-auto pr-1'>{records.map((record, index) => (
@@ -222,15 +230,12 @@ function RecordReview({ records, sourcePages }: { records: SkillImportRecord[]; 
       <div className='flex flex-wrap items-center gap-2'><Badge variant='outline'>{RECORD_LABELS[record.kind]}</Badge><span className='text-sm font-semibold'>第 {index + 1} 项</span></div>
       <dl className='mt-3 grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]'>
         {Object.entries(record.data).map(([field, value]) => {
-          if (field === 'sources') return (
-            <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>原图区域</dt><dd className='text-sm'>{Array.isArray(value) && value.length ? value.map((ref, refIndex) => {
-              if (!ref || typeof ref !== 'object' || !('source_id' in ref) || !Array.isArray(ref.bbox)) return <span key={refIndex} className='mr-2'>来源区域待核对</span>
-              const position = sourcePages.get(String(ref.source_id))
-              return <span key={refIndex} className='mr-2 inline-block'>资料页 {position ?? '未映射'} · {ref.bbox.join(', ')} px</span>
-            }) : '未记录'}</dd></div>
-          )
+          if (field === 'sources' || field === 'source') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{record.kind === 'diagram' ? '教学图来源' : '原图来源'}</dt><dd><SourceEvidence value={value} sourcePages={sourcePages} /></dd></div>
           if (field === 'question' || field === 'node') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{field === 'question' ? '关联题目' : '关联节点'}</dt><dd className='text-sm'>{labels.get(String(value)) || '关联对象无法识别'}</dd></div>
           if (field === 'role') value = ROLE_LABELS[String(value)] || String(value)
+          if (field === 'formulas') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>公式</dt><dd><FormulaReview value={value} /></dd></div>
+          if (field === 'png_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>教学图预览</dt><dd><DiagramAssetPreview asset={typeof value === 'string' ? assets[value] : undefined} filename={typeof value === 'string' ? value : ''} /></dd></div>
+          if (field === 'vector_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>矢量图源</dt><dd className='text-sm'>{typeof value === 'string' ? value : '未记录'}<span className='ml-2 text-xs text-muted-foreground'>（用于保留可缩放图源）</span></dd></div>
           return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{FIELD_LABELS[field] || field}</dt><dd className='whitespace-pre-wrap break-words text-sm'>{formatValue(value)}</dd></div>
         })}
       </dl>
@@ -244,6 +249,32 @@ function formatValue(value: unknown) {
   if (Array.isArray(value)) return value.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('；') || '未记录'
   if (value === null || value === undefined) return '未记录'
   return JSON.stringify(value)
+}
+
+function SourceEvidence({ value, sourcePages }: { value: unknown; sourcePages: Map<string, MaterialPage | undefined> }) {
+  const references = Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : []
+  if (!references.length) return <span className='text-sm text-muted-foreground'>未记录</span>
+  return <div className='space-y-3'>
+    {references.map((reference, index) => {
+      if (!reference || typeof reference !== 'object' || !('source_id' in reference) || !Array.isArray(reference.bbox)) {
+        return <p key={index} className='text-sm text-amber-900'>第 {index + 1} 个来源区域格式待核对。</p>
+      }
+      const page = sourcePages.get(String(reference.source_id))
+      const bbox = reference.bbox as number[]
+      return <section key={index} className='space-y-1 rounded-md border p-2'>
+        <p className='text-xs text-muted-foreground'>资料页 {page?.position ?? '未映射'} · 原图像素区域：{bbox.join(', ')}</p>
+        {page ? <ImageBoxPicker page={page} boxes={[{ bbox: bbox as [number, number, number, number], label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm text-amber-900'>找不到该来源对应的原图页。</p>}
+      </section>
+    })}
+  </div>
+}
+
+function DiagramAssetPreview({ asset, filename }: { asset: NonNullable<WorkflowDetailResponse['assets']>[string] | undefined; filename: string }) {
+  const src = asset?.media_type === 'image/png' ? sameOriginHref(asset.preview_url) : null
+  return src ? <figure className='space-y-1'>
+    <img src={src} alt='待核对教学图' className='max-h-72 max-w-full rounded-md border bg-white object-contain' />
+    <figcaption className='text-xs text-muted-foreground'>导入图像：{filename || '教学图'}</figcaption>
+  </figure> : <div className='rounded-md border border-dashed px-3 py-2 text-sm text-amber-900'>教学图预览暂不可用：{filename || '未记录图像文件'}。</div>
 }
 
 function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {

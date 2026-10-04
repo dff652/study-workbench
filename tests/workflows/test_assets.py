@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
-from django.test import TransactionTestCase
+from django.test import Client, TransactionTestCase
 
 from app.exports.contracts import digest, ExportError
 from app.persistence import services as core
@@ -37,6 +37,28 @@ class AssetExchangeTests(TransactionTestCase):
     create_observation = workflow_fixtures.WorkflowTests.create_observation
     proposal = workflow_fixtures.WorkflowTests.proposal
     do = workflow_fixtures.WorkflowTests.do
+
+    def test_pending_png_preview_has_exact_bytes_and_household_scope(self):
+        value = with_diagram(self.proposal())
+        job = workflows.create(self.owner, self.material.pk, request_key=key(), proposal=value)
+        client = Client()
+        detail_url = f'/api/v1/workflows/{job.pk}/'
+        self.assertEqual(client.get(detail_url).status_code, 401)
+        client.force_login(self.owner)
+        detail = client.get(detail_url).json()
+        self.assertEqual(set(detail['assets']), {'figure.png'})
+        url = detail['assets']['figure.png']['preview_url']
+        response = client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'image/png')
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertEqual(response.content, base64.b64decode(value['assets']['figure.png']['base64']))
+        self.assertEqual(client.get(url.replace('figure.png', 'figure.svg')).status_code, 404)
+        client.force_login(self.viewer)
+        self.assertEqual(client.get(url).status_code, 200)
+        client.force_login(self.other)
+        self.assertEqual(client.get(url).status_code, 404)
+        self.assertEqual(EntityRecord.objects.filter(kind='attempt').count(), 0)
 
     def test_confirm_replay_exact_native_diagram_source_and_private_bytes(self):
         value = with_diagram(self.proposal())

@@ -1,10 +1,10 @@
 {% extends "web/base.html" %}
-{% load static %}
+{% load static product %}
 {% block title %}{{ title }} · {{ kind_label }}{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识库与题目地图</a><span aria-hidden="true">/</span><span>{{ kind_label }}</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">{{ household.id }} · {{ kind_label }} · {{ entity.stable_id }}</p><h1>{{ title }}</h1><p class="muted">当前 r{{ entity.head_revision.revision_no }} · 审核状态：{{ current_state_label }}</p></div><a class="primary-button link-button" href="{{ edit_url }}">追加修订</a></div>
+  <div class="page-heading"><div><p class="eyebrow">{{ kind_label }}</p><h1>{{ title }}</h1><p class="muted">当前 r{{ entity.head_revision.revision_no }} · 审核状态：{{ current_state_label }}</p></div><a class="primary-button link-button" href="{{ edit_url }}">追加修订</a></div>
   {% if not current_sources %}<div class="notice warning-notice" role="status">当前修订没有资料来源，人工依据尚未关联；来源不足状态会随此修订保留。</div>{% endif %}
   <section class="panel node-content">
     {% if entity.kind == "knowledge" %}
@@ -19,18 +19,18 @@
       <h2>适用条件</h2>{% include "knowledge/_lines.html" with lines=current.conditions only %}
     {% endif %}
   </section>
-  {% if entity.kind == "method" %}<section class="panel"><h2>精确父级</h2>
-    {% if current.parent_revision_id %}<p>固定到 <code>{{ current.parent_revision_id }}</code></p>
+  {% if entity.kind == "method" %}<section class="panel"><h2>上级方法</h2>
+    {% if current.parent_revision_id %}<p>关联建立时的上级方法版本：</p>
       {% if parent_revision %}<p><a href="{% url 'knowledge:node_detail' entity_id=parent_revision.entity.pk %}#revision-{{ parent_revision.pk|urlencode }}">{{ parent_revision.payload.name }} · r{{ parent_revision.revision_no }}</a></p>
       {% else %}<p class="muted">该父级修订当前不可用。</p>{% endif %}<p class="muted">父级修订不会随父方法的新修订自动替换。</p>
     {% else %}<p class="muted">根方法。旧资料中的六组方法在此树中保留。</p>{% endif %}
   </section>{% endif %}
   <section class="panel"><h2>当前修订来源</h2><p class="muted">来源存在不表示来源足以支持结论；审核仍由家庭成员决定。</p>{% include "knowledge/_sources.html" with cards=current_sources only %}</section>
-  <section class="panel"><div class="section-heading"><div><h2>题目关联</h2><p class="muted">当前地图仅包含节点、题目和关联三方的精确已发布版本；其余修订列在历史区。</p></div></div>
+  <section class="panel"><div class="section-heading"><div><h2>题目关联</h2><p class="muted">当前地图仅包含已核对的节点、题目和关联；其余修订列在历史区。</p></div></div>
     {% if links %}<ul class="association-list">{% for item in links %}<li>
       <a href="{{ item.question_url }}">{{ item.question.number }} · {{ item.question.title|truncatechars:90 }}</a>
       <span class="status-badge {% if item.current %}published-badge{% else %}warning{% endif %}">{{ item.status_label }}</span>
-      <span class="muted">题目 {{ item.question_revision.revision_id }} · {{ item.link.payload.role }} · 关联 {{ item.link.pk }}</span>
+      <span class="muted">题目版本 {{ item.question_revision.revision_no }} · {{ item.link.payload.role|ui_label }}</span>
       {% if item.review_form %}<form method="post" action="{% url 'knowledge:review' entity_id=item.link.entity.pk %}" class="inline-review-form">{% csrf_token %}
         {{ item.review_form.request_key }}{{ item.review_form.revision_id }}{{ item.review_form.context_token }}
         <div class="field"><label>审核操作</label>{{ item.review_form.action }}</div><div class="field"><label>审核说明</label>{{ item.review_form.reason }}</div>
@@ -38,20 +38,20 @@
       </form>{% endif %}
     </li>{% endfor %}</ul>{% else %}<p class="muted">还没有题目关联。</p>{% endif %}
   </section>
-  <section class="panel"><h2>关联一个精确题目版本</h2><p class="muted">待审核关联可以先保存；审核通过时系统会要求题目版本与此节点版本均已实际发布。</p>
+  <section class="panel"><h2>关联题目</h2><p class="muted">待审核关联可以先保存；审核通过时系统会要求题目版本与此节点版本均已实际发布。</p>
     <form method="post" action="{{ link_url }}" class="link-editor">{% csrf_token %}
       {{ link_form.request_key }}{{ link_form.household_id }}{{ link_form.kind }}
-      <div class="field"><label for="id_node_revision_id">本节点精确版本</label>{{ link_form.node_revision_id }}{{ link_form.node_revision_id.errors }}</div>
-      <div class="field"><label for="id_question_revision_id">题目精确版本</label>{{ link_form.question_revision_id }}{{ link_form.question_revision_id.errors }}</div>
+      <div class="field"><label for="id_node_revision_id">条目版本</label>{{ link_form.node_revision_id }}{{ link_form.node_revision_id.errors }}</div>
+      <div class="field"><label for="id_question_revision_id">题目版本</label>{{ link_form.question_revision_id }}{{ link_form.question_revision_id.errors }}</div>
       <div class="field"><label for="id_role">关系类型</label>{{ link_form.role }}{{ link_form.role.errors }}</div>
       <div class="field"><label for="id_reason">关联说明</label>{{ link_form.reason }}{{ link_form.reason.errors }}</div>
       <button type="submit" class="primary-button">保存为待审核关联</button>
     </form>
   </section>
   <section class="panel"><h2>条目修订与审核记录</h2>
-    {% for row in history %}<article id="revision-{{ row.pk }}" class="revision-card"><div class="section-heading"><h3>r{{ row.revision_no }} · {{ row.pk }}</h3><span class="status-badge">{{ row.web_review_state_label }}</span></div>
+    {% for row in history %}<article id="revision-{{ row.pk }}" class="revision-card"><div class="section-heading"><h3>r{{ row.revision_no }}</h3><span class="status-badge">{{ row.web_review_state_label }}</span></div>
       {% if row.pk == entity.published_revision_id %}<p class="published-note">当前正式发布版本</p>{% endif %}
-      <p class="muted">{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }} · 依赖状态 {{ row.web_review_context.state }}</p>
+      <p class="muted">{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }} · 依赖状态 {{ row.web_review_context.state|ui_label }}</p>
       <details><summary>查看该版本内容</summary>
         {% if entity.kind == 'knowledge' %}<div class="long-text">{{ row.payload.definition|linebreaksbr }}</div><h4>适用条件</h4>{% include 'knowledge/_lines.html' with lines=row.payload.conditions only %}<h4>易错点</h4>{% include 'knowledge/_lines.html' with lines=row.payload.common_errors only %}
         {% elif entity.kind == 'method' %}<p>{{ row.payload.name }}</p><h4>适用条件</h4>{% include 'knowledge/_lines.html' with lines=row.payload.conditions only %}<h4>步骤</h4>{% include 'knowledge/_lines.html' with lines=row.payload.steps only %}<h4>备注</h4>{% include 'knowledge/_lines.html' with lines=row.payload.notes only %}

@@ -50,7 +50,7 @@ def _signed(row, purpose, context):
 @transaction.atomic
 def index(request):
     houses=_households(request.user)
-    choices=[(h.pk,str(h.pk)) for h in houses]
+    choices=[(h.pk,"我的家庭" if len(houses)==1 else f"家庭 {index}") for index,h in enumerate(houses,1)]
     selected=request.POST.get('household') if request.method=='POST' else request.GET.get('household')
     selected=selected or (houses[0].pk if houses else None)
     questions=[];snapshots=[]
@@ -81,7 +81,18 @@ def snapshot(request,pk):
         records.household(request.user,row.household_id)
     except (ObjectDoesNotExist,core.PersistenceError):raise Http404
     from app.operations.services import snapshot_availability
+    revision_ids = [item.get('revision_id') for item in row.provenance.get('questions', [])]
+    revisions = {item.pk: item for item in RevisionRecord.objects.filter(
+        pk__in=revision_ids, entity__household_id=row.household_id).select_related('entity')}
+    questions = []
+    for revision_id in revision_ids:
+        revision = revisions.get(revision_id)
+        if revision is not None:
+            questions.append({'entity': revision.entity,
+                'number': revision.revision_no,
+                'label': revision.payload.get('printed_text') or revision.payload.get('working_text') or '题干待补'})
     return render(request,'printing/snapshot.html',{'snapshot':row,
+        'questions': questions,
         'availability':snapshot_availability(request.user,pk)})
 
 
@@ -95,7 +106,9 @@ def download(request,pk,name):
             return render(request,'web/message.html',{'title':'导出已退役',
                 'message':'此导出文件已按本地策略退役，来源版本及退役账本仍保留。'},status=410)
         return _failure(request,exc)
-    return FileResponse(path.open('rb'),as_attachment=True,filename=name)
+    inline_pdf = name == 'document.pdf' and request.GET.get('preview') == '1'
+    return FileResponse(path.open('rb'), as_attachment=not inline_pdf, filename=name,
+        content_type='application/pdf' if inline_pdf else None)
 
 
 @login_required

@@ -29,7 +29,7 @@
   {% for row in history %}<article id="reading-version-{{ row.revision_no }}"><h3>第 {{ row.revision_no }} 版 · {{ row.get_reading_display }} · {{ row.get_coverage_display }}</h3>
     <p>{{ row.created_by.username }} · {{ row.created_at }} · 依据：{{ row.basis|linebreaksbr }}</p>
     {% if row.pending_items %}<p>待补：{{ row.pending_items|linebreaksbr }}</p>{% endif %}
-    <ul>{% for part in row.display_parts %}<li>{{ part.label }}<details><summary>原图区域与来源</summary><p>原图坐标：{{ part.original_bbox }}；显示方向：{{ part.rotation }}°</p><p>原图 SHA：{{ part.original_sha256 }}</p></details></li>{% empty %}<li>未记录内容分区。</li>{% endfor %}</ul>
+    <ul>{% for part in row.display_parts %}<li>{{ part.label }}<details><summary>原图区域与来源</summary><p>原图坐标：{{ part.original_bbox }}；显示方向：{{ part.rotation }}°</p><p>已保留当时的原图版本。</p></details></li>{% empty %}<li>未记录内容分区。</li>{% endfor %}</ul>
   </article>{% empty %}<p>尚无整页记录。</p>{% endfor %}
 </section>
 {% endblock %}

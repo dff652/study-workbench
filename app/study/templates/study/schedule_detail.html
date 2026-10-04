@@ -1,16 +1,16 @@
 {% extends "web/base.html" %}
-{% load static %}
+{% load static product %}
 {% block title %}复习计划 · {{ learner.display_name }}{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="{{ index_url }}">复习安排</a><span aria-hidden="true">/</span><span>复习计划</span></nav>
   <h1>{{ learner.display_name }}的复习计划</h1>
   <section class="panel study-plan-detail">
     <h2>{{ target_question_revision.payload.printed_text|default:target_question_revision.payload.working_text|default:"题干待补" }}</h2>
-    <dl class="study-facts"><dt>固定题目版本</dt><dd>{{ target_question_revision_id }}</dd><dt>计划日期</dt><dd>{{ current_revision.due_date }}</dd><dt>状态</dt><dd>{{ current_revision.get_action_display }}</dd><dt>目标</dt><dd>{{ current_revision.goal }}</dd><dt>提示安排</dt><dd>{{ current_revision.prompt_plan|default:"未指定" }}</dd><dt>变更依据</dt><dd>{{ current_revision.reason }}</dd></dl>
+    <dl class="study-facts"><dt>题目版本</dt><dd>计划建立时的题目内容</dd><dt>计划日期</dt><dd>{{ current_revision.due_date }}</dd><dt>状态</dt><dd>{{ current_revision.action|ui_label }}</dd><dt>目标</dt><dd>{{ current_revision.goal }}</dd><dt>提示安排</dt><dd>{{ current_revision.prompt_plan|default:"未指定" }}</dd><dt>变更依据</dt><dd>{{ current_revision.reason }}</dd></dl>
     {% if target_stale %}<p class="study-stale">当前题目已发布新版本。本计划仍固定到原题目版本，不会自动切换。</p>{% endif %}
   </section>
-  {% if completion_history %}<section class="panel"><h2>完成记录</h2><ol class="study-events">{% for item in completion_history %}<li><strong>{{ item.event.recorded_at }}</strong>{% if item.revision %}<span>作答版本：{{ item.revision.header.revision_id }}</span><span>实际作答日期：{% if item.actual_date %}{{ item.actual_date }}{% else %}未知{% endif %} · 录入日期：{{ item.recorded_at }}</span><span>来源：{{ item.revision.source_kind.value }} · 提示：{{ item.revision.prompt_status.value }}{% if item.revision.prompts %}（{{ item.revision.prompts|join:"、" }}）{% endif %} · 独立性：{{ item.revision.independence.value }} · 可读性：{{ item.revision.legibility.value }}</span>{% else %}<span>作答历史无法定位；完成事件仍保留。</span>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
-  <section class="panel"><h2>计划历史</h2><ol class="study-events">{% for event in history %}<li><strong>{{ event.get_action_display }} · {{ event.recorded_at }}</strong><span>日期：{{ event.due_date }} · 目标：{{ event.goal }}</span><span>提示安排：{{ event.prompt_plan|default:"未指定" }} · 依据：{{ event.reason }}</span>{% if event.completed_attempt_revision_id %}<span>绑定的作答版本：{{ event.completed_attempt_revision_id }}</span>{% endif %}</li>{% endfor %}</ol></section>
+  {% if completion_history %}<section class="panel"><h2>完成记录</h2><ol class="study-events">{% for item in completion_history %}<li><strong>{{ item.event.recorded_at }}</strong>{% if item.revision %}<span>实际作答日期：{% if item.actual_date %}{{ item.actual_date }}{% else %}未知{% endif %} · 录入日期：{{ item.recorded_at }}</span><span>来源：{{ item.revision.source_kind.value|ui_label }} · 提示：{{ item.revision.prompt_status.value|ui_label }}{% if item.revision.prompts %}（{{ item.revision.prompts|join:"、" }}）{% endif %} · 独立性：{{ item.revision.independence.value|ui_label }} · 可读性：{{ item.revision.legibility.value|ui_label }}</span>{% else %}<span>作答历史无法定位；完成事件仍保留。</span>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
+  <section class="panel"><h2>计划历史</h2><ol class="study-events">{% for event in history %}<li><strong>{{ event.action|ui_label }} · {{ event.recorded_at }}</strong><span>日期：{{ event.due_date }} · 目标：{{ event.goal }}</span><span>提示安排：{{ event.prompt_plan|default:"未指定" }} · 依据：{{ event.reason }}</span>{% if event.completed_attempt_revision_id %}<span>已关联实际作答，详情见完成记录。</span>{% endif %}</li>{% endfor %}</ol></section>
   {% if current_revision.action == "planned" or current_revision.action == "rescheduled" %}<form method="post" class="study-form panel">
     <h2>追加计划事件</h2><p class="muted">改期、取消和完成会新增历史记录；旧计划事件不会被覆盖。</p>
     {% csrf_token %}{{ form.request_key }}{{ form.context_token }}

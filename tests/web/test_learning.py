@@ -259,7 +259,9 @@ class LearningServiceTests(TransactionTestCase):
         self.assertEqual(len(old["knowledge_labels"]), 2)
         self.assertTrue(all("加法知识" in label and "历史关系" in label for label in old["knowledge_labels"]))
         self.assertEqual(old["knowledge_ids"], frozenset((node["stable_id"], same_name_node["stable_id"])))
-        self.assertTrue(all(stable_id[-8:] in " ".join(old["knowledge_labels"])
+        self.assertEqual(len(set(old["knowledge_labels"])), 2)
+        self.assertTrue(all('同名条目' in label for label in old['knowledge_labels']))
+        self.assertTrue(all(stable_id[-8:] not in " ".join(old["knowledge_labels"])
             for stable_id in (node["stable_id"], same_name_node["stable_id"])))
         self.assertEqual({item["stable_id"] for item in profile["knowledge_options"]},
             {node["stable_id"], same_name_node["stable_id"]})

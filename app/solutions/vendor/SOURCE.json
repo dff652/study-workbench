@@ -1,0 +1,30 @@
+{
+  "repository": "https://github.com/dff652/study-material-workflow",
+  "commit": "72e9a3d178859d47581db17a71bee3babaa31ee8",
+  "adaptations": [
+    "Relative package imports",
+    "code_records names the four retained pure modules; Workbench renders with its existing engine"
+  ],
+  "files": {
+    "model.py": {
+      "upstream_path": "skills/study-material-workflow/scripts/solution_companion/model.py",
+      "upstream_sha256": "516a6015ae573c448d61b63e290776b8d4632563af97e2ff9bcd8d25722cb941",
+      "adapted_sha256": "493019bd73f64cba68feed1ff2fd362de61ebfa047ffbb8ccf81be4525f236ab"
+    },
+    "contracts.py": {
+      "upstream_path": "skills/study-material-workflow/scripts/print_backend/contracts.py",
+      "upstream_sha256": "743fb0c451248983507ea0851c5bcb577f143c4feb596200b2ea5d827113bd75",
+      "adapted_sha256": "cd0d0c2b3dce5f0e5fe130966c0b5ac3a494e249a5bf9aad8608eeeafc51c288"
+    },
+    "sources.py": {
+      "upstream_path": "skills/study-material-workflow/scripts/collect_sources.py",
+      "upstream_sha256": "0699193829a89bea23e5144c886296f0c1e9dc15765537930bdb812fecb7f52f",
+      "adapted_sha256": "689dba9f39746a722acf3b2e0c79a9dfdc150f4e33078c235f63f5f36edfca44"
+    },
+    "common.py": {
+      "upstream_path": "skills/study-material-workflow/scripts/workflow_common.py",
+      "upstream_sha256": "569fea45c5cf24d4ebce439491f07bee57bc1e665f01d29bb43f4348b68ab5f4",
+      "adapted_sha256": "569fea45c5cf24d4ebce439491f07bee57bc1e665f01d29bb43f4348b68ab5f4"
+    }
+  }
+}

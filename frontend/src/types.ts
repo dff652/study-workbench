@@ -547,6 +547,7 @@ export type WorkflowDetailResponse = {
   job: WorkflowJob
   records: SkillImportRecord[]
   sources: SkillImportSource[]
+  assets?: Record<string, { media_type: 'image/png'; preview_url: string }>
   readiness: Readiness
   links: WorkflowLinks
   events: WorkflowEvent[]
@@ -615,4 +616,67 @@ export type CancelPreparationInput = {
   expected: unknown
   request_key: string
   reason: string
+}
+
+export type SolutionSource = { page_id: string; region: [number, number, number, number] | null }
+export type SolutionPart = {
+  id: string; parent_id: string | null; label: string
+  statement: string | null; answer: string | null; unit: string | null
+}
+export type SolutionQuestion = {
+  id: string; question_revision_id: string | null; lecture_id: string; number: string; title: string
+  statement: { text: string | null; status: 'complete' | 'partial' | 'unknown' }
+  sources: SolutionSource[]; parts: SolutionPart[]
+  thinking: string; lecture_method: string; alternative_method: string
+  steps: string[]; pitfalls: string[]; formulas: string[]
+  figures: Array<{ asset_id: string; role: 'question' | 'method' | 'answer'; caption: string; width_mm: number }>
+  links: Array<{ revision_id: string; relation: 'knowledge' | 'primary_method' | 'secondary_method' | 'question_type' }>
+  corrections: Array<{ kind: 'printing_error' | 'naming' | 'draft_correction'; original: string; replacement: string; basis: string }>
+  unknowns: string[]
+}
+export type SolutionContent = {
+  schema_version: 'swb.solution.v1'; title: string
+  lectures: Array<{ id: string; title: string }>; questions: SolutionQuestion[]
+  outputs: Record<'per_question' | 'per_lecture' | 'combined', Array<'pdf' | 'docx'>>
+}
+export type SolutionAsset = {
+  id: string; kind: 'source_crop' | 'source_image' | 'auxiliary'; label: string; basis: string
+  source: SolutionSource | null; width: number; height: number; url: string
+}
+export type SolutionRevision = {
+  id: number; version: number; created_at: string; author: string; reason: string
+  content: SolutionContent; confirmed: boolean; gaps: Array<{ question_id: string; message: string }>
+}
+export type SolutionOutput = {
+  id: string; revision_id: number; revision_version: number; version: number
+  state: 'queued' | 'running' | 'output_check' | 'complete' | 'failed' | 'cancelled'
+  state_label: string; message: string; created_at: string
+  documents: Array<{ id: string; title: string; organization: 'per_question' | 'per_lecture' | 'combined'; question_ids: string[]; page_count: number; pdf_url: string | null; docx_url: string | null; previews: string[] }>
+  checks: Record<'content' | 'math' | 'pdf_visual' | 'word_pc' | 'word_macos', { status: 'pass' | 'fail' | 'not_tested'; notes: string }>
+  zip_url: string | null
+}
+export type SolutionWorkspaceResponse = {
+  schema_version: 'swb.api.v1'; material: { id: string; title: string }; writable: boolean
+  revision: SolutionRevision | null; initial_content: SolutionContent
+  history: Array<Omit<SolutionRevision, 'content' | 'gaps'>>; outputs: SolutionOutput[]
+  history_next_before?: number | null; output_next_before?: string | null
+  assets: SolutionAsset[]
+  pages: Array<{ id: string; label: string; width: number; height: number; preview_url: string; detail_url: string }>
+  questions: Array<{ revision_id: string; label: string; statement: string; sources: SolutionSource[]; detail_url: string }>
+  nodes: Array<{ revision_id: string; kind: 'knowledge' | 'method' | 'question_type'; label: string; detail_url: string }>
+}
+export type SolutionHistoryResponse = {
+  schema_version: 'swb.api.v1'; history: SolutionWorkspaceResponse['history']
+  nodes: SolutionWorkspaceResponse['nodes']; history_next_before: number | null
+}
+export type SolutionOutputsResponse = {
+  schema_version: 'swb.api.v1'; outputs: SolutionOutput[]; output_next_before: string | null
+}
+export type SaveSolutionInput = { expected_version: number; request_key: string; content: SolutionContent; reason: string }
+export type SolutionActionInput = {
+  action: 'confirm' | 'generate'; expected_version: number; request_key: string; reason: string
+}
+export type SolutionOutputActionInput = {
+  action: 'cancel' | 'retry' | 'check'; expected_version: number; request_key: string; reason: string
+  checks?: SolutionOutput['checks']
 }

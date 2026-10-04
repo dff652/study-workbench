@@ -4,7 +4,7 @@
   <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ context.household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><span>{{ task_title }}</span></nav>
   <section class="panel narrow-panel">
     <p class="eyebrow">只使用以下明确选择的版本</p><h1>{{ task_title }}</h1>
-    <p class="muted">提交只会建立排队任务，不会立即访问模型服务。创建后需由受控后台 worker 执行。</p>
+    <p class="muted">提交只会建立排队任务，不会立即访问模型服务。创建后需由受控后台处理。</p>
     <form method="post" action="{% url 'ai:run_create' household_id=context.household_id task_kind=context.task_kind %}" class="stack-form">
       {% csrf_token %}{{ form.task_kind }}{{ form.selection_token }}{{ form.request_key }}
       {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}

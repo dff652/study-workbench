@@ -99,6 +99,17 @@ class PreparedImport:
     catalog_bytes: bytes
 
 
+def _convert(entries, groups, images, *, household_id, dataset_key, recorded_at, profile=None):
+    if profile is None:
+        return build_legacy_bundle(entries, groups, images, household_id=household_id,
+            dataset_key=dataset_key, recorded_at=recorded_at)
+    if not isinstance(profile, dict) or set(profile) != {"format_id", "auxiliary_mapping"} or profile["format_id"] != "geometry.v1":
+        fail("invalid_catalog_profile", "sources.profile", "Unsupported historical topic format")
+    from .geometry import build_geometry_bundle
+    return build_geometry_bundle(entries, groups, images, household_id=household_id,
+        dataset_key=dataset_key, recorded_at=recorded_at, auxiliary_mapping=profile["auxiliary_mapping"])
+
+
 def verify_prepared(prepared):
     """Rebuild the row mapping; callers cannot substitute a different bundle."""
     manifest, conversion = prepared.manifest, prepared.conversion
@@ -111,9 +122,10 @@ def verify_prepared(prepared):
     images = {photo["token"]: SourceImage(photo["image_id"], manifest["household_id"], photo["sha256"],
         photo["storage_key"], "image/jpeg", photo["width"], photo["height"], manifest["sources"]["image_recorded_at"])
         for photo in manifest["sources"]["photos"]}
-    rebuilt = build_legacy_bundle([row["raw"] for row in manifest["index_rows"]],
+    rebuilt = _convert([row["raw"] for row in manifest["index_rows"]],
         {int(k): v for k, v in manifest["sources"]["groups"].items()}, images,
-        household_id=manifest["household_id"], dataset_key=manifest["dataset_key"], recorded_at=manifest["prepared_at"])
+        household_id=manifest["household_id"], dataset_key=manifest["dataset_key"], recorded_at=manifest["prepared_at"],
+        profile=manifest["sources"].get("profile"))
     _verify_counts(rebuilt, manifest["sources"]["expected_counts"])
     if (rebuilt != conversion or manifest["index_rows"] != list(rebuilt.index_rows) or
         manifest["counts"] != rebuilt.counts or
@@ -164,8 +176,8 @@ def load_prepared_import(package_dir, data_root):
             fail("image_metadata_mismatch", "package", "Image dimensions do not match their source record")
         images[photo["token"]] = SourceImage(photo["image_id"], manifest["household_id"], photo["sha256"],
             photo["storage_key"], "image/jpeg", photo["width"], photo["height"], manifest["sources"]["image_recorded_at"])
-    conversion = build_legacy_bundle(read_json(raw_catalog), groups, images, household_id=manifest["household_id"],
-        dataset_key=manifest["dataset_key"], recorded_at=manifest["prepared_at"])
+    conversion = _convert(read_json(raw_catalog), groups, images, household_id=manifest["household_id"],
+        dataset_key=manifest["dataset_key"], recorded_at=manifest["prepared_at"], profile=manifest["sources"].get("profile"))
     _verify_counts(conversion, manifest["sources"]["expected_counts"])
     saved = package_bytes("bundle.json")
     if digest(saved) != manifest["bundle_sha256"] or deserialize_bundle(saved.decode()) != conversion.bundle:
@@ -187,7 +199,9 @@ def _write_private(path, raw):
         raise
 
 
-def prepare_legacy_import(inventory_path, data_root, *, household_id, dataset_key):
+def prepare_legacy_import(inventory_path, data_root, *, household_id, dataset_key,
+                          catalog_path="documents/v3/question_catalog.json",
+                          groups_path="documents/v3/question_catalog.py", profile=None):
     """Copy only original JPEG bytes and index data; never execute the old scripts."""
     inventory_raw = Path(inventory_path).read_bytes()
     inventory = read_json(inventory_raw)
@@ -198,8 +212,8 @@ def prepare_legacy_import(inventory_path, data_root, *, household_id, dataset_ke
         if len(matches) != 1:
             fail("missing_source", suffix, "Expected exactly one inventoried source")
         return matches[0]
-    catalog_record = source_file("documents/v3/question_catalog.json")
-    groups_record = source_file("documents/v3/question_catalog.py")
+    catalog_record = source_file(catalog_path)
+    groups_record = source_file(groups_path)
     catalog_raw = checked_bytes(source, catalog_record)
     groups_source = checked_bytes(source, groups_record)
     try:
@@ -225,8 +239,8 @@ def prepare_legacy_import(inventory_path, data_root, *, household_id, dataset_ke
         photo = {**record, "token": token, "image_id": f"image-{sha}", "storage_key": key, "width": width, "height": height}
         photos.append(photo)
         images[token] = SourceImage(photo["image_id"], household_id, sha, key, "image/jpeg", width, height, inventory["created_at"])
-    conversion = build_legacy_bundle(read_json(catalog_raw), groups, images, household_id=household_id,
-                                     dataset_key=dataset_key, recorded_at=now)
+    conversion = _convert(read_json(catalog_raw), groups, images, household_id=household_id,
+                          dataset_key=dataset_key, recorded_at=now, profile=profile)
     _verify_counts(conversion, inventory["counts"])
     groups_raw = canonical(groups)
     manifest = {"schema": PACKAGE_SCHEMA, "household_id": household_id, "dataset_key": dataset_key, "prepared_at": now,
@@ -234,6 +248,8 @@ def prepare_legacy_import(inventory_path, data_root, *, household_id, dataset_ke
             "groups_source": groups_record, "groups": groups, "photos": photos,
             "image_recorded_at": inventory["created_at"], "expected_counts": inventory["counts"]},
         "groups_sha256": digest(groups_raw), "counts": conversion.counts, "index_rows": list(conversion.index_rows)}
+    if profile is not None:
+        manifest["sources"]["profile"] = read_json(canonical(profile))
     manifest["source_digest"] = _source_fingerprint(manifest)
     scope = digest(canonical([household_id, dataset_key]))[:24]
     data_root = Path(data_root).resolve()

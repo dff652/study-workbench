@@ -4,6 +4,7 @@ import argparse
 from fractions import Fraction
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import zipfile
@@ -101,7 +102,10 @@ def pdf_checks(path, expected_pages):
             assert '\ufffd' not in ''.join(word.itertext()), 'PDF text contains replacement characters'
             count += 1
     fonts = run('pdffonts', path).splitlines()[2:]
-    embedded = [line for line in fonts if 'StudyWorkbench' in line or 'DejaVu' in line]
+    # Current renderer identifies ReportLab faces by verified file digest so
+    # separately subsetted documents cannot accidentally share a cached face.
+    embedded = [line for line in fonts if 'StudyWorkbench' in line or 'DejaVu' in line
+                or re.search(r'(?:^|\+)SWB[0-9a-f]{60}\b', line)]
     assert embedded and all('yes' in line.split()[3:-2] for line in embedded), 'Required fonts must be embedded'
     return {'pages': len(pages), 'bbox_words': count, 'embedded_fonts': embedded}
 

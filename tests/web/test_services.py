@@ -81,6 +81,34 @@ class ManualServicesTests(TransactionTestCase):
         return services.save_question(self.owner,self.material.pk,printed_text=text,original_number='J1-1',sources=sources,
             request_key=key(),reason='按原图录入')
 
+    def test_save_and_confirm_is_atomic_idempotent_and_preserves_history(self):
+        source=self.source(self.page());request=key()
+        inputs=dict(printed_text='2＋3＝？',original_number='合成1',sources=[source],
+            request_key=request,reason='已对照原图核对',confirm=True)
+        first=services.save_question(self.owner,self.material.pk,**inputs)
+        self.assertEqual(first,services.save_question(self.owner,self.material.pk,**inputs))
+        entity=EntityRecord.objects.get(stable_id=first['question_id'],household=self.house)
+        self.assertEqual(entity.published_revision_id,first['revision_id'])
+        self.assertEqual(ReviewDecision.objects.filter(revision_id=first['revision_id']).count(),1)
+        context=services.question_detail(self.owner,entity.stable_id)['edit_context']
+        second=services.save_question(self.owner,self.material.pk,**{**inputs,'printed_text':'2＋4＝？',
+            'question_id':entity.stable_id,'expected_context':context,'request_key':key()})
+        entity.refresh_from_db();self.assertEqual(entity.published_revision_id,second['revision_id'])
+        self.assertEqual(entity.revisions.count(),2)
+        self.assertEqual(entity.revisions.get(pk=first['revision_id']).payload['printed_text'],'2＋3＝？')
+
+    def test_confirmation_does_not_accept_blank_or_leave_a_partial_save(self):
+        source=self.source(self.page());before=EntityRecord.objects.count()
+        with self.assertRaises(core.PersistenceError):
+            services.save_question(self.owner,self.material.pk,printed_text='',original_number='合成空白',
+                sources=[source],request_key=key(),reason='来源待补',confirm=True)
+        self.assertEqual(EntityRecord.objects.count(),before)
+        with patch('app.web.services.core.review_revision',side_effect=core.PersistenceError('probe','合成失败')):
+            with self.assertRaises(core.PersistenceError):
+                services.save_question(self.owner,self.material.pk,printed_text='2＋3＝？',original_number='合成回滚',
+                    sources=[source],request_key=key(),reason='合成事务回滚',confirm=True)
+        self.assertEqual(EntityRecord.objects.count(),before)
+
     def test_duplicate_bytes_reuse_image_but_keep_source_associations_and_replay(self):
         request_key=key()
         first=services.upload_page(self.owner,self.material.pk,upload(),request_key)

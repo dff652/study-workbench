@@ -232,7 +232,7 @@ def selection_context(actor, household_id, task_kind):
     choice_context = {row.pk: {"kind": row.entity.kind, "stable_id": row.entity.stable_id,
         "head_revision_id": row.entity.head_revision_id}
         for row in rows.filter(entity__kind__in=("question", "knowledge", "method"))}
-    if task_kind == ModelRun.TaskKind.QUESTION:
+    if task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL):
         for row in RevisionRecord.objects.filter(entity__household_id=household_id,
                 entity__kind="question", entity__head_revision_id=F("pk"),
                 review_projection__state="draft").select_related("entity"):
@@ -432,7 +432,7 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
     if len(regions) > 20:
         _error("invalid_input", "最多可选择 20 个图像区域。")
     rows = [_current_published(household_id, rid) for rid in sources]
-    if task_kind == ModelRun.TaskKind.QUESTION:
+    if task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL):
         rows = [row or _question_candidate(household_id, rid, allow_ocr_draft=True)
             for row, rid in zip(rows, sources)]
     if any(row is None for row in rows):
@@ -447,7 +447,7 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
     if any(row.entity.kind in ("attempt", "assessment", "learner") for row in rows):
         _error("invalid_input", "不能选择个人档案或作答作为普通文本来源。")
     question_rows = [_question_candidate(household_id, qid,
-        allow_ocr_draft=task_kind == ModelRun.TaskKind.QUESTION) for qid in questions]
+        allow_ocr_draft=task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL)) for qid in questions]
     if any(row is None for row in question_rows):
         _error("stale_context", "题目来源必须是当前已接受并发布版本。")
     for row in question_rows:
@@ -457,11 +457,11 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
                 or captured.get("head_revision_id") != row.entity.head_revision_id
                 or captured.get("state", "accepted") != row.review_projection.state):
             _error("stale_context", "所选题目或其当前版本已改变。")
-    if task_kind in ("question", "assessment", "variant") and len(questions) != 1:
+    if task_kind in ("question", "material", "assessment", "variant") and len(questions) != 1:
         _error("invalid_input", "该任务必须绑定一个精确题目版本。")
     if task_kind in ("question", "knowledge") and not questions:
         _error("invalid_input", "请选择题目来源。")
-    if task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.ASSESSMENT) and sources != questions:
+    if task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL, ModelRun.TaskKind.ASSESSMENT) and sources != questions:
         _error("invalid_input", "该任务只可外发固定题目版本。")
     if task_kind == ModelRun.TaskKind.KNOWLEDGE and (
             set(sources) != set(questions) or any(row.entity.kind != "question" for row in rows)):
@@ -492,7 +492,7 @@ def queue_run(actor, household_id, *, task_kind, source_revision_ids, question_r
             _error("invalid_input", "变式必须选择一个已发布题目和一个已发布方法。")
     if task_kind == "question" and not any(row.entity.kind == "question" for row in rows):
         _error("invalid_input", "题目草稿来源必须包含当前题目。")
-    draft_ocr = task_kind == ModelRun.TaskKind.QUESTION and any(
+    draft_ocr = task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL) and any(
         row.review_projection.state == "draft" for row in question_rows)
     if draft_ocr and (len(questions) != 1 or sources != questions or not regions
             or config.outbound_scope != ModelConfig.OutboundScope.SELECTED_REGIONS):
@@ -616,7 +616,7 @@ def _messages(actor, run):
     for row in rows:
         if row.review_projection.state == "accepted" and row.entity.published_revision_id == row.pk:
             safe.append(_safe_payload(row))
-    draft_question = (run.task_kind == ModelRun.TaskKind.QUESTION and any(
+    draft_question = (run.task_kind in (ModelRun.TaskKind.QUESTION, ModelRun.TaskKind.MATERIAL) and any(
         row.entity.kind == "question" and row.review_projection.state == "draft" for row in rows))
     if draft_question:
         text = json.dumps({"task": run.task_kind,
@@ -632,6 +632,7 @@ def _messages(actor, run):
     allowed_ids = list(dict.fromkeys(run.source_revision_ids + run.question_revision_ids
         + run.selected_region_revision_ids))
     task_schema = {
+        "material": 'proposal={"printed_text":string|null,"missing_fields":string[],"nodes":[{kind:knowledge|method|question_type,data:{definition/name:string,conditions/common_errors/steps/notes/structural_features:optional newline strings}}],"answer":null|{body:string,formulas:bounded formula AST[],basis:string}}. At most 3 nodes. Transcribe printed content only; never treat handwriting as the printed question. A missing printed_text must be null and listed in missing_fields. Answer is an independent proposed teacher solution, never a child assessment.',
         "question": 'proposal={"printed_text":string|null,"missing_fields":string[],"classification_suggestion":string|null,"analysis_suggestion":string|null}',
         "knowledge": 'proposal={"definition":string,"conditions":string[],"common_errors":string[]}',
         "assessment": 'proposal={"dimensions":[5 objects with dimension in answer/method/process/calculation/notation, judgment in correct/incorrect/partial/unknown, basis in observed/inferred/undetermined, source_region_revision_ids:string[], rationale:string, unknown_reason:string|null]}',
@@ -762,6 +763,12 @@ def _authorize_external_send(run_id, reservation_id):
         code = "model_consent_required"
     elif code is None and not _still_current(run):
         code = "stale_context"
+    if code is None and run.task_kind == ModelRun.TaskKind.MATERIAL:
+        from app.workflows.preparation import check_send
+        try:
+            check_send(run)
+        except core.PersistenceError as exc:
+            code = exc.code
     if code is None:
         reservation = ModelBudgetReservation.objects.select_for_update().filter(
             pk=reservation_id, run=run, state=ModelBudgetReservation.State.HELD).first()
@@ -1066,6 +1073,8 @@ def apply_run(actor, run_id, *, request_key):
         .filter(pk=run_id).first())
     if not run:
         _error("not_found")
+    if run.task_kind == ModelRun.TaskKind.MATERIAL:
+        _error("invalid_input", "资料草稿须在对应资料任务中对照来源确认。")
     if run.actor_id != actor.pk and not HouseholdMember.objects.filter(household_id=run.household_id,
             user=actor, role="owner", user__is_active=True).exists():
         _error("permission_denied")

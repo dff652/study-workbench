@@ -129,7 +129,8 @@ def answer(request,pk):
                 else:formulas=[formula_ast(line) for line in form.cleaned_data['formulas'].splitlines() if line.strip()]
                 if current and not formulas:formulas=current.formulas
                 services.save_answer(request.user,row.entity.household_id,row.pk,body=form.cleaned_data['body'],formulas=formulas,
-                    basis=form.cleaned_data['basis'],expected=expected,request_key=form.cleaned_data['request_key'])
+                    basis=form.cleaned_data['basis'],expected=expected,request_key=form.cleaned_data['request_key'],
+                    confirm=request.POST.get('action')=='save_confirm')
                 return redirect('printing:answer',pk=pk)
         except (ValueError,KeyError,ExportError) as exc:form.add_error(None,str(exc))
         except core.PersistenceError as exc:return _failure(request,exc)

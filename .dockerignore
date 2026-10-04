@@ -6,9 +6,13 @@
 !requirements-container.txt
 !licenses/
 !licenses/**
+!frontend/
+!frontend/**
 !scripts/
 !scripts/container_entrypoint.sh
 !scripts/run_model_tasks.py
 !scripts/manage_private_retention.py
 **/__pycache__/
+**/node_modules/
+frontend/dist/
 *.py[cod]

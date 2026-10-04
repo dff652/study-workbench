@@ -25,14 +25,19 @@
       {% elif run.task_kind == "assessment" %}<ul class="history-list">{% for item in proposal.dimensions %}<li><strong>{{ item.dimension }}</strong> · {{ item.judgment }} · {{ item.basis }}<p>{{ item.rationale }}</p>{% if item.unknown_reason %}<p class="muted">未知原因：{{ item.unknown_reason }}</p>{% endif %}</li>{% endfor %}</ul>
       {% elif run.task_kind == "variant" %}<dl><dt>变式题干</dt><dd>{{ proposal.text }}</dd><dt>答案表达式</dt><dd><code>{{ proposal.answer_expression }}</code></dd><dt>检验表达式</dt><dd><code>{{ proposal.check_expression }}</code></dd></dl>{% endif %}
       <p class="notice">此建议尚未被接受或发布。应用后也只创建草稿，仍须人工复核。</p>
-    {% elif run.status == "queued" %}<p class="muted">此任务正在等待后台 worker。</p>
-    {% elif run.status == "running" %}<p class="muted">任务正在处理。离开页面不会取消任务。</p>
+    {% elif run.status == "queued" %}
+      {% if run.execution_requested_at %}<p class="muted">已请求后台执行；页面每 3 秒检查一次状态。<a href="{{ request.path }}">立即刷新</a></p>
+      {% else %}<p class="muted">任务尚未请求执行，后台不会自动运行。请求后可手动刷新查看状态。</p><a href="{{ request.path }}">手动刷新</a>{% endif %}
+    {% elif run.status == "running" %}<p class="muted">任务正在处理；页面每 3 秒检查一次状态。离开页面不会取消任务。<a href="{{ request.path }}">立即刷新</a></p>
     {% endif %}
     {% if output_links %}<h2>已生成的待复核内容</h2><ul class="material-list">{% for item in output_links %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}</ul>{% endif %}
     {% if writable %}<div class="button-row">
       {% if can_execute %}<form method="post" action="{% url 'ai:run_execute' run_id=run.pk %}">{% csrf_token %}<button class="secondary-button" type="submit">请求后台执行</button></form>{% endif %}
-      {% if can_apply %}<form method="post" action="{% url 'ai:run_apply' run_id=run.pk %}">{% csrf_token %}<input type="hidden" name="request_key" value="{{ request_key }}"><button class="primary-button" type="submit">应用为待复核草稿</button></form>{% endif %}
+      {% if can_apply or run.status == "applied" %}<a class="primary-button" href="{% url 'ai:review' run_id=run.pk %}">逐项核对并确认</a>{% endif %}
       {% if can_cancel %}<form method="post" action="{% url 'ai:run_cancel' run_id=run.pk %}">{% csrf_token %}<button class="quiet-button" type="submit">取消任务</button></form>{% endif %}
     </div>{% endif %}
   </section>
+{% endblock %}
+{% block scripts %}
+  {% if run.status == "running" or run.status == "queued" and run.execution_requested_at %}<script>window.setTimeout(function () { window.location.reload(); }, 3000);</script>{% endif %}
 {% endblock %}

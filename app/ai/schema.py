@@ -5,7 +5,7 @@ from app.domain import BasisKind, DimensionKind, Judgment
 from app.domain.arithmetic import check_arithmetic
 
 MAX_RESPONSE = 1_048_576
-TASKS = {"question", "knowledge", "assessment", "variant"}
+TASKS = {"question", "knowledge", "assessment", "variant", "material"}
 DIMENSIONS = {item.value for item in DimensionKind}
 
 
@@ -46,7 +46,13 @@ def parse_response(raw, *, task, allowed_sources, max_tool_calls=4,
     proposal = data["proposal"]
     if not isinstance(proposal, dict):
         raise InvalidProposal("response_schema_invalid")
-    if task == "question":
+    if task == "material":
+        from app.workflows.content_schema import validate
+        try:
+            validate(proposal)
+        except (ValueError, TypeError, RecursionError):
+            raise InvalidProposal("material_schema_invalid") from None
+    elif task == "question":
         if set(proposal) != {"printed_text", "missing_fields", "classification_suggestion", "analysis_suggestion"}:
             raise InvalidProposal("response_schema_invalid")
         _string(proposal["printed_text"], 20000, allow_none=True)

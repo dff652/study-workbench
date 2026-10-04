@@ -2,9 +2,15 @@
 
 面向家庭的学习资料与作答证据工作台。把照片整理成可追溯的题目，关联知识、方法、题型、独立作答和复习记录，支持纸上练习及 PDF／Word 导出。
 
-当前阶段：**知识与题库、逐次作答／评价、打印、复习／报告及容器服务的主要人工流程已实现并通过对应工程验收。本轮已补齐公式打印、检索、手机放大、外发确认和三类持久派生处理，并完成工程验收；实体手机及真实家庭流程仍待人工试用，M1a 尚未判全部通过。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
+当前版本：**0.2.0-dev，本机开发版本**。融合版采用 Workbench 后端、shadcn-admin 选定前端组件、SOP 工具与可选有限 AI。已实现资料任务、同页原图与内容核对、空白待补、后台五册生成／输出检查、学习总览与逐次记录，以及真实进度与复测计划；可选模型准备按固定阶段保留重做／取消历史。模型关闭可人工完成；没有模拟登录、随机统计或虚构掌握率。旋转／派生图等高级操作、知识地图和学习事件修订继续使用原有业务入口。
 
-GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。最新 MOB-01 源码 `34a8630` 已审查并手动推送 public 仓库 `main`。36 已备份、恢复演练并升级至 HTTPS／PWA；29 项运维和 12 组运行浏览器检查通过，原记录、资料和历史导出保持，数据库／资料及独立 CA 的备份恢复均已验证。交付状态及人工下一步见[仓库交付记录](docs/repository-handoff.md)。
+本轮完整结构化 skill 输出与配对教学图已接通：v1 兼容，v2 经原生来源校验和一次确认，保留版本与未知。真实小样含 2 道题、4 张图、12 条伴随记录，生成五册共 11 页；PDF 与隔离 LibreOffice 的全部 22 页已逐页检查。未记录孩子作答，不推断掌握。历史 formula_image 没有明确原生对应时拒绝，全量历史未迁移。
+
+主代理后端全套 337 项通过，末次修复后 35 项专项通过；前端 31 项／构建、28 组融合浏览器与 23 文件容器备份恢复通过。独立复核另验后端 41 项（35 正式＋6 探针）、前端 31 项、skill 全套 75 项。准确范围及修复记录见 [本轮交付 review](docs/reviews/skill-delivery-20261004.md)、[融合实施任务](docs/fusion-execution-20261004.md)和 [DEV_STATE](DEV_STATE.md)。全套与专项分别记录，不合并成一次全套。
+
+GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。本轮已获授权顺序完成文档／review、统一源码提交和手动 push，再备份、空实例恢复及升级 36；每一步的实际结果写入 [仓库交付记录](docs/repository-handoff.md)。提交前 36 仍运行此前 MOB-01 源码 `34a8630`；当前本机源码不等同于已部署版本。新工作台入口为 `/app/`，原入口保留并提供工作台导航。
+
+融合依据 [SOP／agent／shadcn-admin 技术方案](docs/integrated-workflow-technical-plan-20261004.md)：Workbench 保留 Django／PostgreSQL 正式数据，skill 提供版本化规则与确定性本机工具，shadcn-admin 提供选定前端组件，有限 AI 按需辅助。上传、对照核对、五册检查与下载是主流程；人工确认用于把整理内容与原图核对后保存，不需要逐层审核。真实模型由用户后续配置测试；Android 真机、MS Word 实开和真实家庭效果仍需人工验收，NAS 发布另定范围。
 
 两条核心主线：
 
@@ -18,6 +24,15 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 | 文档 | 内容 |
 | --- | --- |
 | [当前进度](DEV_STATE.md) | 已完成事项、验证结果和下一步 |
+| [核心补齐契约与范围](docs/fusion-completion-contract.md) | 进度／计划、同页核对、固定准备阶段与剩余交付边界 |
+| [融合技术方案与逐项评估](docs/integrated-workflow-technical-plan-20261004.md) | 18 项功能、前端边界、可选 agent、流程重设计、API／工具契约、统计与 FUS 阶段 |
+| [AI 连续核对与整页状态](docs/ai-continuity-20261004.md) | 明确确认、知识来源关联、整页分区历史及合成验收边界 |
+| [AI 与整页本轮 review](docs/reviews/ai-continuity-20261004.md) | 原子确认、精确来源、未知及历史约束、独立复核与交付边界 |
+| [真实几何与教学图](docs/geometry-workflow-20261004.md) | 33 张来源核定、教学图 Web 版本与两题五册小样、映射待补边界 |
+| [几何本轮 review](docs/reviews/geometry-20261004.md) | 教学图、两题真实五册、完整增量与独立验收结论 |
+| [SOP 人工流程 review](docs/reviews/sop-20261004.md) | 完整差异与独立复核、已验输入和后续统一交付边界 |
+| [SOP 人工流程与五册实施](docs/sop-flow-implementation-20261004.md) | 几何适配、一键确认、五册核对与 ZIP、轻量成员及未验边界 |
+| [图片到文档 SOP 对照](docs/sop-implementation-assessment-20261004.md) | NAS 四册 SOP、S01～S10 实现差距、几何适配与五册／NAS 后续任务 |
 | [移动客户端技术方案](docs/mobile-client-technical-plan.md) | 家庭优先的 PWA／Flutter 路线、API／登录、照片／同步、部署分发与阶段边界 |
 | [HTTPS 与最小 PWA](docs/mobile-deployment.md) | MOB-01 配置、缓存／信任边界、隔离验收、手机证书及后续升级步骤 |
 | [缺口补齐与人工待办](docs/gap-closure-20261003.md) | T-01～T-07 的共享契约、最终工程证据和人工试用条件 |
@@ -59,13 +74,17 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 
 采用成熟组件、现有分类／渲染成果和定制核心业务。候选应用保留为流程参考；没有复制、安装或运行候选。运行基础为 Django 5.2 LTS／PostgreSQL 16。
 
+本机融合版已采用 shadcn-admin 的选定前端布局与组件，接入现有 Django 业务服务；该仓库的演示登录、用户和随机统计不作为业务实现。同源 API、SOP 接入及统计口径已冻结，学习总览、记录列表与资料任务已经实现。使用 skill 不要求引入自治 agent 框架，确定性工具和人工入口继续保留。
+
 知识体系功能已实现基础人工条目、分类树及关联列表，包含知识点、方法和题型的独立身份及题目双向索引。AI 草稿必须有来源并人工审核；复杂图谱推理和自动完整课程体系不属于当前交付。
 
 容器交付用 Docker Compose 分开运行 Web、模型任务 worker 和 PostgreSQL；原图、派生文件、导出及数据库使用独立持久化卷。已在独立的 36 局域网实例测试；连接信息在被忽略的 `data/runtime-36/deployment.local.json`，账号在受保护的 `credentials.local.json`。服务状态及验收见 DEV_STATE，启动与恢复见容器说明。
 
 移动交付按家庭自用优先推进：已实现 [HTTPS 与最小 PWA](docs/mobile-deployment.md)，通过隔离验收并在另获用户同意后完成 36 备份升级。入口采用局域网 IP＋私有 CA，Android 优先，真机证书／主屏幕安装仍待实际操作。独立 Flutter App、完整原生 API 和离线同步仍为[后续方案](docs/mobile-client-technical-plan.md)，尚未实施；模型继续关闭。
 
-首版流程：上传照片 → 框选题目 → 人工录入或 AI 草稿 → 关联知识点、方法和题型 → 审核及打印 → 评价手写过程并记录个人档案。已加入有来源的变式草稿、手工复习计划及学习证据报告；不生成掌握分数。
+本机教学图页及两道真实原题的五册检查版已通过隔离工程验证，具体版式与 review 状态见 [几何实施记录](docs/geometry-workflow-20261004.md)；全量几何迁移及 9 个通用辅助标签仍待核定。
+
+本机人工流程已增加：上传照片 → 框选题目并保存确认 → 确认家长答案／知识关联 → 从资料集生成五册检查版与 ZIP。学习档案仍分别记录逐次作答与评价，不生成掌握分数。AI 返回后直接核对，明确确认时一次保存并接受；原提案、来源和历史可回看，整页状态支持人工分区及待补记录。本轮新源码尚未提交或部署到 36，详见 [SOP 实施记录](docs/sop-flow-implementation-20261004.md)。
 
 照片、个人学习记录和导出文件放运行数据目录，不进入源码版本控制。当前真实照片副本和导入包保存在被忽略的 `data/`，原照片、历史输出与脚本未改动；依赖只装入 `.venv`，没有调用付费推理 API。
 

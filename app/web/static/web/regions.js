@@ -23,6 +23,7 @@
     const feedback = root.querySelector(".selection-feedback");
     const countLabel = document.querySelector("#source-count");
     const storageKey = root.dataset.storageKey;
+    const partitionMode = root.hasAttribute("data-partition-editor");
     const pageLabels = new Map([...root.querySelectorAll(".region-card")]
       .map(card => [card.dataset.pageId, card.dataset.pageLabel || "资料页"]));
     let sources = parseSources(sourcesField ? sourcesField.value : "[]");
@@ -183,6 +184,7 @@
           rotation: Number(source.rotation),
           preview_sha256: source.preview_sha256,
           display_bbox: source.display_bbox,
+          ...(partitionMode ? {kind: source.kind} : {}),
         })));
       }
       if (root.hasAttribute("data-page-editor")) storeSources();
@@ -199,6 +201,14 @@
           remove.setAttribute("aria-label", `移除第 ${index + 1} 个来源区域`);
           remove.addEventListener("click", () => { sources.splice(index, 1); render(); });
           row.append(label, remove);
+          if (partitionMode) {
+            const selector = root.querySelector(".partition-kind").cloneNode(true);
+            selector.className = "saved-partition-kind";
+            selector.setAttribute("aria-label", `第 ${index + 1} 个分区类型`);
+            selector.value = source.kind;
+            selector.addEventListener("change", () => { source.kind = selector.value; render(); });
+            row.append(selector);
+          }
           sourceList.append(row);
         });
       }
@@ -222,6 +232,7 @@
         rotation: Number(card.dataset.rotation),
         preview_sha256: card.dataset.previewSha,
         display_bbox: [x0, y0, x1, y1],
+        ...(partitionMode ? {kind: root.querySelector(".partition-kind").value} : {}),
       });
       if (feedback) feedback.textContent = "";
       card.currentRect = null;

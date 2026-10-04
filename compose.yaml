@@ -7,6 +7,7 @@ services:
       args:
         SWB_RESOURCE_OWNER: ${SWB_RESOURCE_OWNER:-manual}
         SWB_SOURCE_REVISION: ${SWB_SOURCE_REVISION:-working-tree}
+        SWB_BUILD_DATE: ${SWB_BUILD_DATE:-}
     init: true
     restart: unless-stopped
     stop_grace_period: 30s

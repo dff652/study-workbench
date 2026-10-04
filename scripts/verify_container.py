@@ -128,6 +128,8 @@ class PageParser(HTMLParser):
         attrs = dict(attrs)
         if tag == "input" and attrs.get("type") == "hidden" and attrs.get("name"):
             self.hidden[attrs["name"]] = attrs.get("value", "")
+            if attrs["name"] == "household_id":
+                self.household_id = attrs.get("value")
         if tag == "select" and attrs.get("name") == "household_id":
             self.in_household_select = True
         elif tag == "option" and self.in_household_select and self.household_id is None:
@@ -291,14 +293,21 @@ def login(base_url, username, password):
     status, _headers, _body, final_url = browser.request(
         "/accounts/login/", data=urlencode(login_values).encode(),
         headers={"Content-Type": "application/x-www-form-urlencoded"})
-    if status != 200 or urlsplit(final_url).path != "/":
+    if status != 200 or urlsplit(final_url).path not in {"/", "/app/"}:
         raise RuntimeError("Synthetic user could not log in through the rendered form")
     return browser
 
 
 def upload_from_browser(browser):
     base_url = browser.base_url
-    index, _body, _url = browser.html("/")
+    _status, _headers, shell, landing = browser.request("/")
+    if urlsplit(landing).path != "/app/" or b'id="root"' not in shell:
+        raise RuntimeError("Container root did not serve the built workbench after login")
+    _status, headers, data, _url = browser.request("/api/v1/about/")
+    metadata = json.loads(data)
+    if metadata.get("version") != "0.2.0-dev" or metadata.get("release_state") != "development" or "no-store" not in headers.get("Cache-Control", ""):
+        raise RuntimeError("Container build identity or private API cache policy differs")
+    index, _body, _url = browser.html("/materials/")
     if not index.household_id:
         raise RuntimeError("Synthetic user has no visible household membership")
     material_values = dict(index.hidden)

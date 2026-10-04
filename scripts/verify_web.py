@@ -227,7 +227,7 @@ def main():
                 x0, y0, x1, y1 = second_expected
                 assert second_original == (600 - y1, x0, 600 - y0, x1)
                 fits("region-editor")
-                page.locator("#question-form > .form-actions button").click()
+                page.locator("#question-form > .form-actions button[value='draft']").click()
                 expect(page.locator(".printed-text")).to_have_text("1/3 + 1/6 = ?")
                 question_url = page.url
                 question_id = question_url.rstrip("/").split("/")[-1]
@@ -249,7 +249,7 @@ def main():
                 assert len(json.loads(page.locator("#id_sources").input_value())) == 3
                 page.locator("#id_printed_text").fill("1/3 + 1/6 = ? 请写出过程。")
                 page.locator("#id_reason").fill("补充印刷指令；保留首次版本")
-                page.locator("#question-form > .form-actions button").click()
+                page.locator("#question-form > .form-actions button[value='draft']").click()
                 db(entity.refresh_from_db)
                 assert entity.head_revision_id != old_id and entity.published_revision_id == old_id
                 assert db(lambda: RevisionRecord.objects.get(pk=old_id).payload["printed_text"]) == "1/3 + 1/6 = ?"
@@ -258,9 +258,16 @@ def main():
                 expect(page.locator(".history-list .history-source")).to_have_count(6)
                 stale.locator("#id_reason").fill("过期标签页不应覆盖")
                 with stale.expect_response(lambda response: response.request.method == "POST") as result:
-                    stale.locator("#question-form > .form-actions button").click()
+                    stale.locator("#question-form > .form-actions button[value='draft']").click()
                 assert result.value.status == 409
                 checks.append("revision-history:old-text-region-review-retained-and-stale-edit-rejected")
+                page.goto(question_url + "edit/")
+                page.locator("#id_reason").fill("核对并确认更新后的合成题干")
+                page.locator("#question-form > .form-actions button[value='confirm']").click()
+                db(entity.refresh_from_db)
+                assert entity.head_revision_id == entity.published_revision_id
+                assert db(lambda: ReviewDecision.objects.filter(revision_id=entity.head_revision_id,action="accept").count()) == 1
+                checks.append("save-and-confirm:single-action-appends-and-publishes-current-version")
 
                 page.goto(origin + source_url)
                 expect(page.locator(".linked-questions")).to_contain_text("合成题 1")
@@ -286,7 +293,7 @@ def main():
                 assert not errors, errors
                 browser.close()
         report = {"synthetic_only": True, "viewport": [390, 844], "checks": checks,
-            "question_revisions": 2, "source_regions_per_revision": 3, "javascript_errors": errors,
+            "question_revisions": db(lambda: entity.revisions.count()), "source_regions_per_revision": 3, "javascript_errors": errors,
             "browser": "Playwright Chromium", "deployment": False}
         report_path = output / "verification.local.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

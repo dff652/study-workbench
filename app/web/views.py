@@ -160,6 +160,9 @@ def _question_form_response(request, material, page_cards, form, *, editing, que
 @login_required(login_url=LOGIN_URL)
 @require_GET
 def index(request):
+    from django.conf import settings
+    if request.path == "/" and settings.SWB_FRONTEND_DEFAULT:
+        return redirect("frontend")
     materials = services.list_materials(request.user)
     households = services.list_households(request.user)
     return render(request, "web/index.html", {
@@ -367,7 +370,7 @@ def question_new(request, material_id):
     except PersistenceError as exc:
         return _failure(request, exc)
     if request.method == "GET":
-        form = QuestionForm(initial={"request_key": uuid4(), "sources": "[]"})
+        form = QuestionForm(initial={"request_key": uuid4(), "sources": "[]", "reason": "对照原图录入题目"})
     else:
         form = QuestionForm(request.POST)
         if form.is_valid():
@@ -381,6 +384,7 @@ def question_new(request, material_id):
                     sources=form.cleaned_data["sources"],
                     request_key=str(form.cleaned_data["request_key"]),
                     reason=form.cleaned_data["reason"],
+                    confirm=request.POST.get('submit_action')=='confirm',
                 )
             except PersistenceError as exc:
                 if exc.code in {"missing_region", "invalid_region"}:
@@ -462,7 +466,7 @@ def question_edit(request, question_id):
             "printed_text": current.get("printed_text", ""),
             "display_markup": current.get("display_markup", ""),
             "sources": json.dumps(sources),
-            "reason": "",
+            "reason": "对照原图修订题目",
             "context_token": _issue_context(question_id, revision_id, data["edit_context"], "edit"),
         })
     else:
@@ -484,6 +488,7 @@ def question_edit(request, question_id):
                     reason=form.cleaned_data["reason"],
                     question_id=question_id,
                     expected_context=signed["context"],
+                    confirm=request.POST.get('submit_action')=='confirm',
                 )
             except PersistenceError as exc:
                 if exc.code in {"missing_region", "invalid_region"}:

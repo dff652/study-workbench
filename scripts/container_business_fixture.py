@@ -107,6 +107,10 @@ operations.retire_export_snapshot(actor, household_id, exports[0].pk,
 ledger = operations.export_retirement_ledger(actor, household_id)
 assert operations.verify_retirement_ledger(actor, household_id,
     ledger_id=ledger['ledger_id'])['matches']
+from app.workflows import services as workflows
+job = workflows.create(actor, page.material_id, request_key=key(), learner_id=learner.stable_id)
+assert job.state == 'ready' and job.events.count() == 1
 print(json.dumps({'attempts':len(attempts), 'assessment':assessment['assessment_id'],
     'exports':[row.export_id for row in exports], 'schedule':plan['schedule_id'], 'model_disabled':True,
-    'local_policy_and_timing':True, 'retired_export_archive_and_ledger':True}))
+    'local_policy_and_timing':True, 'retired_export_archive_and_ledger':True,
+    'persistent_workflow_and_audit':True}))

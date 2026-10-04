@@ -5,6 +5,11 @@
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><a href="{% url 'web:material_detail' page.material_id %}">{{ page.material.title }}</a><span aria-hidden="true">/</span><span>第 {{ page.position }} 页</span></nav>
   <div class="page-heading"><div><p class="eyebrow">原图</p><h1>第 {{ page.position }} 页</h1><p class="muted">{{ page.original_name }}</p></div></div>
   <section class="panel">
+    <h2>整页整理状态</h2>
+    <p>{% with latest=page.reading_revisions.first %}{% if latest %}{{ latest.get_reading_display }} · {{ latest.get_coverage_display }} · 第 {{ latest.revision_no }} 版{% else %}未阅读 · 待补分区{% endif %}{% endwith %}</p>
+    <a class="secondary-button" href="{% url 'web:page_reading' page.id %}">阅读、内容分区与待补历史</a>
+  </section>
+  <section class="panel">
     <div class="section-heading"><div><h2>框选印刷题目区域</h2><p class="muted">拖动图片框选。坐标记录在所选旋转版本上，并可反查回原图。</p></div></div>
     <div class="region-editor single-region-editor" data-material-id="{{ page.material_id }}" data-storage-key="swb-question-sources-{{ page.material_id }}" data-page-editor data-page-label="第 {{ page.position }} 页">
       {% if preview_links %}

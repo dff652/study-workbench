@@ -1,0 +1,81 @@
+{% extends "web/base.html" %}
+{% block title %}人工核对 · {{ task_label }}{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">模型任务</a><span aria-hidden="true">/</span><a href="{% url 'ai:run_detail' run_id=run.pk %}">{{ task_label }}</a><span aria-hidden="true">/</span><span>人工核对</span></nav>
+  <section class="panel">
+    <p class="eyebrow">逐项人工核对</p>
+    <h1>{{ task_label }}</h1>
+    <p><strong>状态：</strong>{{ run_status }}</p>
+    {% if confirmed %}<p class="muted">此任务已完成核对并保存。下方保留原提案、固定来源和已保存内容，供回查。</p>
+    {% else %}<p class="muted">任务结果与来源固定于此版本。模型提案仍待确认；请逐项检查内容、缺口和未知项。</p>{% endif %}
+    {% if action_error %}<p class="notice error">{{ action_error }}</p>{% endif %}
+    {% if block_message %}<p class="notice">{{ block_message }}</p>{% endif %}
+
+    <details class="panel"><summary>本任务固定的模型配置与外发确认</summary><dl>
+      <dt>配置 ID · 修订</dt><dd>{{ config.config_id }} · r{{ config.revision_no }}</dd>
+      <dt>供应商 · 模型</dt><dd>{{ config.provider_label }} · {{ config.model }}</dd>
+      <dt>外发范围</dt><dd>{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}</dd>
+      <dt>外发确认人账号 · 时间</dt><dd>{{ config.outbound_confirmation_by|default:"无新确认" }} · {{ config.outbound_confirmation_at|default:"未知" }}</dd>
+      {% if run.usage %}<dt>本次用量</dt><dd>输入 {{ run.usage.prompt_tokens|default:"未知" }} token · 输出 {{ run.usage.completion_tokens|default:"未知" }} token · 费用估算 {{ run.estimated_cost|default:"待确认" }} USD</dd>{% else %}<dt>本次用量</dt><dd>尚无用量记录</dd>{% endif %}
+    </dl></details>
+
+    {% if source_questions %}<section><h2>来源题目</h2><ul>{% for item in source_questions %}<li><a href="{{ item.url }}">题目修订第 {{ item.revision_no }} 版</a>：{{ item.text }}</li>{% endfor %}</ul></section>{% endif %}
+    {% if attempt_link %}<section><h2>精确作答</h2><p><a href="{{ attempt_link.url }}">{{ attempt_link.label }}</a>{% if attempt_link.answer_text %} · 本次录入答案：{{ attempt_link.answer_text }}{% endif %}</p></section>{% endif %}
+    {% if source_pages %}<section><h2>来源页面入口</h2><ul>{% for item in source_pages %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}</ul></section>{% endif %}
+
+    {% if proposal %}
+      <section class="panel">
+        <h2>{% if confirmed %}已核对的原模型提案{% else %}模型提案（待确认）{% endif %}</h2>
+        {% if run.task_kind == "question" %}
+          {% for source in source_questions %}<p><strong>原题印刷内容（修订 {{ source.revision_no }}）：</strong>{{ source.printed_text_display }}</p>{% endfor %}
+          <p><strong>题干识别建议：</strong>{{ proposal.printed_text|default:"未提供" }}</p>
+          <h3>待补内容</h3><ul>{% for item in proposal.missing_fields %}<li>{{ item }}</li>{% empty %}<li>模型未列出待补项；空白和看不清内容仍须保留未知。</li>{% endfor %}</ul>
+          <p><strong>分类建议：</strong>{{ proposal.classification_suggestion|default:"未提供" }}</p>
+          <p><strong>解析建议：</strong>{{ proposal.analysis_suggestion|default:"未提供" }}</p>
+          {% if question_proposal_is_printed_difference %}<p class="notice">建议与非空原印刷题干不同。确认只保存并接受印刷文字订正建议；应用到题目须另行处理。原印刷文字、旧题版本和孩子作答均保留。</p>
+          {% elif question_source_has_printed_text %}<p class="notice">建议没有改变非空原印刷题干，不会生成订正记录；确认会保存并接受题目修订和待补内容，孩子作答记录保持原样。</p>
+          {% else %}<p class="notice">原印刷题干为空。确认会保存并接受一条完整题目修订（题干与待补内容）；分类和解析仍是建议，孩子作答记录保持原样。</p>{% endif %}
+        {% elif run.task_kind == "knowledge" %}
+          <p><strong>定义：</strong>{{ proposal.definition|default:"未提供" }}</p>
+          <h3>条件</h3><ul>{% for item in proposal.conditions %}<li>{{ item }}</li>{% empty %}<li>未提供条件。</li>{% endfor %}</ul>
+          <h3>常见错误</h3><ul>{% for item in proposal.common_errors %}<li>{{ item }}</li>{% empty %}<li>未提供常见错误。</li>{% endfor %}</ul>
+          <p class="notice">确认知识节点时会关联到以下已选来源题目的精确修订；请打开题目版本检查关联。未选择题目时不会推断适用关系。</p>
+          {% if source_questions %}<ul>{% for item in source_questions %}<li><a href="{{ item.url }}">题目修订 r{{ item.revision_no }}</a>：{{ item.text }}</li>{% endfor %}</ul>{% else %}<p>没有已选来源题目。</p>{% endif %}
+          <p class="muted">此提案未单列缺口或 unknown 字段；未说明内容不能视为已知。</p>
+        {% elif run.task_kind == "assessment" %}
+          <h3>五维作答评价建议</h3>
+          <ul class="history-list">{% for item in assessment_dimensions %}<li>
+            <strong>{{ item.dimension_label }}</strong> · {{ item.judgment_label }} · {{ item.basis_label }}
+            <p>{{ item.rationale }}</p>
+            {% if item.unknown_reason %}<p class="notice">未知原因：{{ item.unknown_reason }}</p>{% endif %}
+            {% if item.source_region_revision_ids %}<p class="muted">引用原图区域修订：{{ item.source_region_revision_ids|join:", " }}</p>{% else %}<p class="muted">本维度没有直接来源区域。</p>{% endif %}
+          </li>{% endfor %}</ul>
+          <p class="notice">逐维检查判断和依据；unknown 保持 unknown，不把模型建议当作孩子的实际表现结论。</p>
+        {% elif run.task_kind == "variant" %}
+          <p><strong>变式题干：</strong>{{ proposal.text }}</p>
+          <p><strong>答案表达式：</strong><code>{{ proposal.answer_expression }}</code></p>
+          <p><strong>检验表达式：</strong><code>{{ proposal.check_expression }}</code></p>
+          {% if target_method %}<p><strong>目标方法：</strong><a href="{{ target_method.url }}">方法修订第 {{ target_method.revision_no }} 版</a></p>{% endif %}
+          <p class="muted">变式提案未单列缺口或 unknown 字段；未说明内容仍须人工补充或保留未知。</p>
+        {% endif %}
+      </section>
+    {% elif run.error_code %}
+      <p class="notice">任务未生成可结构化展示的提案（状态码：{{ run.error_code }}）。原有题目、作答和原图可从上方来源链接回看。</p>
+    {% endif %}
+
+    {% if form %}<section class="panel"><h2>确认并保存</h2>
+      <form method="post" action="{% url 'ai:confirm' run_id=run.pk %}" class="stack-form">
+        {% csrf_token %}{{ form.context }}{{ form.request_key }}
+        {% if form.non_field_errors %}<div class="notice error">{{ form.non_field_errors }}</div>{% endif %}
+        <div class="field">{{ form.checked }} <label for="{{ form.checked.id_for_label }}">{{ form.checked.label }}</label>{{ form.checked.errors }}</div>
+        <div class="field"><label for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>{{ form.reason }}{{ form.reason.errors }}</div>
+        <button class="primary-button" type="submit">确认并保存</button>
+      </form>
+    </section>{% elif confirmed %}<p class="notice success">已完成逐项核对并保存确认；原题和孩子作答记录保持原样。</p>
+    {% endif %}
+
+    {% if output_links %}<section class="panel"><h2>{% if confirmed %}已确认并保存的内容{% else %}已生成的待确认内容{% endif %}</h2><ul class="material-list">{% for item in output_links %}<li><a href="{{ item.url }}">{{ item.label }}</a></li>{% endfor %}</ul></section>{% endif %}
+    {% if manual_revision_link %}<p><a class="secondary-button" href="{{ manual_revision_link.url }}">{{ manual_revision_link.label }}</a></p>{% endif %}
+    {% if confirmed %}{% if next_run_id %}<p><a class="primary-button" href="{% url 'ai:review' run_id=next_run_id %}">下一条待核对</a></p>{% else %}<p class="muted">当前没有其他可确认的待核对任务。</p>{% endif %}{% endif %}
+  </section>
+{% endblock %}

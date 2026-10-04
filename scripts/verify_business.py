@@ -55,7 +55,7 @@ def main():
     from app.web.models import MaterialPage, MaterialSet, QuestionSource, ImageDerivative
     from app.ai.models import ModelConfig, ModelRun
     from app.catalogue.models import QuestionLineage
-    from app.printing.models import AnswerDecision, ExportSnapshot, TeacherAnswerRevision
+    from app.printing.models import AnswerDecision, ExportSnapshot, TeacherAnswerRevision, TeachingDiagramRevision
     from app.study.models import ScheduleRevision
     from app.operations.models import RetentionPolicyRevision, WorkTiming
 
@@ -143,7 +143,8 @@ def main():
 
                 def fit(label):
                     scroll_width = page.evaluate("document.documentElement.scrollWidth")
-                    if scroll_width > 391:
+                    viewport_width = page.viewport_size["width"]
+                    if scroll_width > viewport_width + 1:
                         overflow = page.evaluate("""() => ({viewport: innerWidth, body: {
                             clientWidth: document.body.clientWidth, scrollWidth: document.body.scrollWidth},
                             elements: [...document.body.querySelectorAll('*')].map(element => {
@@ -154,7 +155,7 @@ def main():
                             }).filter(item => item.left < -1 || item.right > innerWidth + 1).slice(0, 12)})""")
                         raise AssertionError({"page": label, "document_scroll_width": scroll_width,
                             "overflow": overflow})
-                    checks.append(f"phone-width:{label}")
+                    checks.append(f"{'phone' if viewport_width == 390 else 'desktop'}-width:{label}")
 
                 def screenshot(name):
                     page.evaluate("scrollTo(0, 0)")
@@ -232,7 +233,7 @@ def main():
                         if '[[image:' in markup:page.locator('#id_image_print_confirmed').check()
                     page.locator("#id_reason").fill("录入合成印刷题目")
                     sources = add_region()
-                    page.locator("#question-form > .form-actions button").click()
+                    page.locator("#question-form > .form-actions button[value='draft']").click()
                     expect(page.locator(".printed-text")).to_have_text(printed_text,use_inner_text=True)
                     question_url = page.url
                     stable_id = question_url.rstrip("/").split("/")[-1]
@@ -417,7 +418,7 @@ def main():
                 page.locator("#id_reason").fill("记录未知来源")
                 page.locator("#learning-observation-form button[type='submit']").click()
                 expect(page.locator(".learning-facts")).to_contain_text("未知")
-                expect(page.locator(".notice")).to_contain_text("没有来源区域")
+                expect(page.locator("main .notice")).to_contain_text("没有来源区域")
                 checks.append("learning-unknown-observation-retained")
 
                 goto(f"/learning/observation/new/?household={household_id}", "confirmed-observation-form")
@@ -469,7 +470,7 @@ def main():
                 independent_attempt, independent_attempt_revision = create_attempt("retest", "independent_answer",
                     "confirmed_independent", "none_confirmed", attempt_three, "known", "1/2")
                 goto(f"/learning/attempt/{independent_attempt}/", "independent-attempt")
-                expect(page.locator(".notice")).to_contain_text("证据不足")
+                expect(page.locator("main .notice")).to_contain_text("证据不足")
                 screenshot("phone-attempt.png")
 
                 page.locator("a[href$='/assessment/new/']").first.click()
@@ -526,7 +527,7 @@ def main():
                 page.locator("#id_body").fill(teacher_answer)
                 page.locator("#id_formulas").fill("1/3 + 1/6")
                 page.locator("#id_basis").fill("按公分母 6 复算")
-                page.get_by_role("button", name="保存新答案草稿", exact=True).click()
+                page.get_by_role("button", name="保存答案草稿", exact=True).click()
                 answer = db(lambda: TeacherAnswerRevision.objects.get(question_revision_id=question_one["revision_id"]))
                 page.locator("input[name='reason']").fill("按合成原图复算答案")
                 page.locator("button[name='action'][value='accepted']").click()
@@ -576,6 +577,66 @@ def main():
                 assert any('backcolor' in str(b['content']) for p in summary_content['pages'] for b in p)
                 checks.append('manual-formula-emphasis-native-docx-and-source-image-print')
                 checks.append("teacher-answer-export-and-independent-practice-exclusion")
+
+                goto(f"/prints/answers/{question_two['revision_id']}/", "teacher-answer-confirm")
+                page.locator('#id_body').fill('1/2')
+                page.locator('#id_formulas').fill('2/5 + 1/10')
+                page.locator('#id_basis').fill('按公分母 10 复算')
+                page.get_by_role('button',name='保存并确认答案',exact=True).click()
+                second_answer=db(lambda:TeacherAnswerRevision.objects.get(question_revision_id=question_two['revision_id']))
+                assert db(lambda:second_answer.decisions.filter(action='accepted').count())==1
+                diagram_source = db(lambda: RevisionRecord.objects.get(pk=question_two['revision_id']).payload['evidence_refs'][0]['region_revision_id'])
+                diagram_url = f"/prints/diagrams/{question_two['revision_id']}/"
+                for placement, alt in [('question','合成无提示图'),('question','合成无提示图第二版'),('answer','合成解析图含答案')]:
+                    goto(diagram_url, 'teaching-diagram-upload')
+                    page.locator('#id_placement').select_option(placement)
+                    page.locator('#id_source_region_id').select_option(diagram_source)
+                    figure = Image.new('RGB',(300,200),'white')
+                    ImageDraw.Draw(figure).polygon([(40,160),(240,160),(240,30)],outline='black',width=3)
+                    if placement == 'answer':
+                        ImageDraw.Draw(figure).text((50,30),'SYNTHETIC ANSWER',fill='black')
+                    drawing = BytesIO(); figure.save(drawing,format='PNG')
+                    page.locator('#id_png_upload').set_input_files({'name':'synthetic.png','mimeType':'image/png','buffer':drawing.getvalue()})
+                    page.locator('#id_vector_upload').set_input_files({'name':'synthetic.svg','mimeType':'image/svg+xml',
+                        'buffer':b'<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"><path d="M40 160 L240 160 L240 30 Z" fill="none" stroke="black"/></svg>'})
+                    page.locator('#id_alt').fill(alt)
+                    page.locator('#id_conditions').fill('合成直角三角形\n无真实题干或孩子信息')
+                    page.locator('#id_width_points').fill('250')
+                    page.locator('#id_min_label_points').fill('12')
+                    if placement == 'question': page.locator('#id_independent_safe').check()
+                    page.locator('#id_content_checked').check()
+                    page.locator('#id_basis').fill('合成图核对；不证明真实几何内容')
+                    page.get_by_role('button',name='保存并确认图示',exact=True).click()
+                    expect(page.locator('main .notice').filter(has_text='教学图已保存并确认')).to_have_count(1)
+                expect(page.locator('article')).to_have_count(3)
+                assert db(lambda: TeachingDiagramRevision.objects.filter(question_revision_id=question_two['revision_id']).count()) == 3
+                vector_url=page.get_by_role('link',name='下载配套矢量来源').first.get_attribute('href')
+                vector_response=context.request.get(origin+vector_url)
+                assert vector_response.status==200 and 'attachment' in vector_response.headers['content-disposition']
+                assert vector_response.headers['content-type']=='application/octet-stream'
+                checks.append('diagrams:private-upload-confirm-append-history-vector-attachment')
+                screenshot('phone-diagrams.png')
+                goto(f'/prints/materials/{material.pk}/five-books/', 'five-books-readiness')
+                page.get_by_role('button',name='生成五册 PDF 与 Word',exact=True).click()
+                page.wait_for_url('**/five-books/*/')
+                packet_id=page.url.rstrip('/').split('/')[-1]
+                zip_response=context.request.get(origin+f'/prints/materials/{material.pk}/five-books/{packet_id}/download/')
+                assert zip_response.status==200
+                with zipfile.ZipFile(BytesIO(zip_response.body())) as archive:
+                    assert len(archive.namelist())==21
+                    manifest=json.loads(archive.read('manifest.json'))
+                    assert manifest['question_revisions']==[question_one['revision_id'],question_two['revision_id']]
+                    assert manifest['evidence_scope']=='not_recorded'
+                    assert len(manifest['books'])==5
+                    assert len(manifest['diagram_revisions'])==2
+                    practice_book=next(b for b in manifest['books'] if b['purpose']=='independent_practice')
+                    practice_content=json.loads(archive.read(practice_book['label']+'/content.json'))
+                    practice_diagrams=[b for p in practice_content['pages'] for b in p if b['kind']=='diagram']
+                    assert len(practice_diagrams)==1 and practice_diagrams[0]['role']=='question'
+                    assert '合成解析图含答案' not in json.dumps(practice_content,ensure_ascii=False)
+                checks.append('five-books:single-batch-pdf-word-zip-fixed-revisions-unknown-learning')
+                checks.append('diagrams:five-books-current-revisions-practice-no-answer-diagram')
+                screenshot('phone-five-books.png')
 
                 # Split preserves its source; merge starts from two selected exact current versions.
                 original_question = db(lambda: EntityRecord.objects.get(pk=question_one["pk"]))
@@ -688,6 +749,10 @@ def main():
                 screenshot("phone-operations.png")
                 checks.append("manual-work-timing-exact-question-and-attempt")
 
+                from verify_ai_continuity import exercise
+                exercise(page=page, db=db, goto=goto, screenshot=screenshot, checks=checks,
+                    actor=user, household_id=household_id, source_page=pages[0])
+
                 goto(profile_path, "logout-private-page")
                 page.locator("form[action='/accounts/logout/'] button").click()
                 page.goto(profile_url)
@@ -702,7 +767,11 @@ def main():
         report = {"synthetic_only": True, "viewport": [390, 844], "checks": checks,
             "screenshots": ["phone-question.png", "phone-knowledge.png", "phone-attempt.png",
                 "phone-learning-history.png", "phone-study-plan.png", "phone-study-report.png",
-                "phone-ai-home.png", "phone-operations.png"],
+                "phone-ai-home.png", "phone-operations.png", "phone-five-books.png", "phone-diagrams.png",
+                "phone-page-reading.png", "phone-ai-confirmation.png",
+                "desktop-page-reading.png", "desktop-ai-confirmation.png"],
+            "additional_viewports": [[1280, 900]],
+            "synthetic_ai_responses": 2, "real_model_calls": 0, "page_reading_versions": 2,
             "source_questions_uploaded": 2, "attempt_count": 4, "assessment_revisions": 2,
             "unknown_observation": True, "teacher_answer_separate": True,
             "catalogue_lineage": ["split", "merge"], "study_schedule_revisions": 2,

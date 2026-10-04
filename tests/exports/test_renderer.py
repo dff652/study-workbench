@@ -209,6 +209,36 @@ class RendererTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, "fallback_hash_mismatch")
             self.assertEqual(list(bad_output.iterdir()), [])
 
+    def test_teaching_diagram_preserves_conditions_and_vector_hash(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary)
+            assets=root/'assets'; assets.mkdir()
+            png=assets/'triangle.png'
+            image=PillowImage.new('RGB',(300,160),'white')
+            ImageDraw.Draw(image).polygon([(20,140),(150,20),(280,140)],outline='black',width=3)
+            image.save(png)
+            vector=assets/'triangle.svg'
+            vector.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 160"><path d="M20 140 L150 20 L280 140 Z" fill="none" stroke="black"/></svg>')
+            content={'storage_key':'triangle.png','sha256':hashlib.sha256(png.read_bytes()).hexdigest(),
+                'vector_storage_key':'triangle.svg','vector_sha256':hashlib.sha256(vector.read_bytes()).hexdigest(),
+                'source_ref':'synthetic-source-18','alt':'Triangle ABC','width_points':250,
+                'conditions':['AB = AC','B, C on same line'],'min_label_points':12,'independent_safe':False}
+            result=self.render(document([[Block('diagram',content,'body')]]),root/'out',asset_root=assets)
+            text=pdf_text(result['pdf'])
+            self.assertIn('教学图：Triangle ABC',text)
+            self.assertIn('条件：AB = AC',text)
+            xml,_=word_xml(result['docx'])
+            self.assertIn('AB = AC',''.join(xml.itertext()))
+            with self.assertRaises(ExportError) as caught:
+                self.render(document([[Block('diagram',dict(content,vector_sha256='b'*64),'body')]]),root/'bad',asset_root=assets)
+            self.assertEqual(caught.exception.code,'diagram_hash_mismatch')
+            from dataclasses import replace
+            practice=replace(document([[Block('diagram',content,'question')]]),purpose='independent_practice')
+            with self.assertRaises(ExportError) as caught:self.render(practice,root/'unsafe',asset_root=assets)
+            self.assertEqual(caught.exception.code,'independent_hint')
+            from app.exports.contracts import validate_document
+            validate_document(replace(practice,pages=((Block('diagram',dict(content,independent_safe=True),'question'),),)))
+
     def test_power_base_grouping_is_visible_in_pdf_and_word_math(self):
         expressions = ("(-2)^2", "(-x)^2", "(x^2)^3", "-x^2")
         with tempfile.TemporaryDirectory() as temp_dir:

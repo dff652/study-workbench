@@ -40,16 +40,19 @@ MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'django.contrib.s
 TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'APP_DIRS': True,
               'OPTIONS': {'context_processors': ['django.template.context_processors.request',
                   'django.contrib.auth.context_processors.auth', 'django.contrib.messages.context_processors.messages']}}]
+TEMPLATES[0]['OPTIONS']['context_processors'].append('app.web.context_processors.release')
 STATIC_URL = '/static/'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 SWB_DATA_ROOT = os.environ.get('SWB_DATA_ROOT')
+SWB_FRONTEND_DEFAULT = False
 INSTALLED_APPS += ['app.printing.apps.PrintingConfig']
 INSTALLED_APPS += ['app.catalogue.apps.CatalogueConfig']
 INSTALLED_APPS += ['app.study.apps.StudyConfig']
 INSTALLED_APPS += ['app.ai.apps.AIConfig']
 INSTALLED_APPS += ['app.operations.apps.OperationsConfig']
+INSTALLED_APPS += ['app.workflows.apps.WorkflowsConfig']
 FILE_UPLOAD_MAX_MEMORY_SIZE = 512 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
 DATA_UPLOAD_MAX_NUMBER_FILES = 30

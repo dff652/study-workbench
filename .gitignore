@@ -26,6 +26,7 @@ __pycache__/
 htmlcov/
 node_modules/
 /dist/
+/frontend/dist/
 
 # Editor and OS metadata
 .DS_Store

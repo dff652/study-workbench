@@ -574,6 +574,7 @@ def evidence_report(actor, learner_entity_pk):
         attempt = info["attempt"]
         revision = info["revision"]
         attempt_row = {"attempt_id": attempt.attempt_id,
+            "previous_attempt_id": attempt.previous_attempt_id,
             "attempt_revision_id": revision.header.revision_id,
             "state": revision.state.value,
             "state_label": learning_label(ATTEMPT_STATE_LABELS, revision.state),

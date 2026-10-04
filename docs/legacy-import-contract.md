@@ -2,6 +2,8 @@
 
 日期：2026-10-02（Asia/Shanghai）。用户同意实施旧 81 条索引的可追溯导入；最终运行结果见 [DEV_STATE](../DEV_STATE.md)。这是本机私有文件及隔离 PostgreSQL 的验收，不代表 Web、完整题库、恢复或容器化应用交付。
 
+2026-10-04 扩展：计算默认格式保留；geometry.v1 的书册、左右小问、加号来源、精确名称映射及包内 profile 见 [SOP 实施契约](sop-flow-implementation-20261004.md)。实际几何照片导入仍待核定，不混用本文的 81／91／23 数量。
+
 ## 输入与输出
 
 输入使用既有 `docs/source-inventory.local.json` 指定的来源，校验大小及 SHA-256 后读取 23 张 JPEG、v3 `question_catalog.json` 和脚本中的 `GROUPS` 字面量。只用 AST 读取分组定义，不执行旧脚本。其他 PDF／Word、NAS 资料及渲染脚本不迁移，不重复全量盘点。

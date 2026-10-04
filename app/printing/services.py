@@ -48,9 +48,12 @@ def answer_context(question):
 
 
 @transaction.atomic
-def save_answer(actor, household_id, question_revision_id, *, body, formulas, basis, expected, request_key):
+def save_answer(actor, household_id, question_revision_id, *, body, formulas, basis, expected, request_key, confirm=False):
     owner = records.household(actor, household_id, write=True)
     inputs = {'question':question_revision_id, 'body':body, 'formulas':formulas, 'basis':basis, 'expected':expected}
+    if type(confirm) is not bool:
+        raise core.PersistenceError('invalid_input','确认动作无效。')
+    if confirm: inputs['confirm']=True
     fingerprint = core._digest(inputs)
     replay = core._replay(owner, actor, request_key, 'web_record', fingerprint)
     if replay: return replay
@@ -72,6 +75,9 @@ def save_answer(actor, household_id, question_revision_id, *, body, formulas, ba
         revision_no=previous.revision_no+1 if previous else 1, previous=previous,
         body=_text(body), formulas=formulas, basis=_text(basis,4000),
         source_refs=question.payload['evidence_refs'], created_by=actor)
+    if confirm:
+        review_answer(actor,answer.pk,action='accepted',reason='家长保存并确认；依据：'+answer.basis[:900],
+            expected=answer_context(question),request_key='confirm-'+core._digest({'request_key':request_key,'answer_id':answer.pk}))
     return core._receipt(owner, actor, request_key, 'web_record', fingerprint, {'answer_id':answer.pk})
 
 
@@ -198,12 +204,13 @@ def _font_inputs():
 
 
 @transaction.atomic
-def export_questions(actor, household_id, revision_ids, *, title, purpose):
+def export_questions(actor, household_id, revision_ids, *, title, purpose, _packet=False):
     owner=records.household(actor, household_id, write=True)
     if purpose not in {'independent_practice','parent_answers','knowledge_summary','classification_index'}:
         raise core.PersistenceError('invalid_input','打印用途无效。')
-    if not isinstance(revision_ids,list) or not 1<=len(revision_ids)<=30 or len(set(revision_ids))!=len(revision_ids):
-        raise core.PersistenceError('invalid_input','请选择 1～30 道不同题目。')
+    limit=150 if _packet else 30
+    if not isinstance(revision_ids,list) or not 1<=len(revision_ids)<=limit or len(set(revision_ids))!=len(revision_ids):
+        raise core.PersistenceError('invalid_input',f'请选择 1～{limit} 道不同题目。')
     questions=[published_question(household_id,rid) for rid in revision_ids]
     blocks=[Block('title',escape(_text(title,160)),'title')]
     provenance={'questions':[], 'answers':[], 'nodes':[], 'links':[]}
@@ -221,6 +228,7 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
             blocks.append(Block('p',escape(f'{position}. '+question.payload['working_text']).replace('\n','<br/>'),'question'))
         if question.payload['header']['origin']=='ai':
             blocks.append(Block('small','AI 生成题目 · 已人工审核；来源区域仅表示生成依据。','instruction'))
+        blocks.extend(_diagram_blocks(question, purpose, 'question', provenance))
         if purpose=='independent_practice':
             blocks.append(Block('space',100,'answer_space'))
         elif purpose=='parent_answers':
@@ -232,7 +240,9 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
             blocks.extend([Block('p',escape(answer.body).replace('\n','<br/>'),'answer'),
                 *[Block('formula_image' if isinstance(formula,dict) else 'math',formula,'answer') for formula in answer.formulas],
                 Block('small',escape('依据：'+answer.basis),'answer')])
+            blocks.extend(_diagram_blocks(question, purpose, 'answer', provenance))
         else:
+            linked_nodes=0
             links=EntityRecord.objects.filter(household=owner,kind__in=('knowledge_question','method_question','question_type_link'),
                 published_revision__isnull=False).select_related('published_revision','published_revision__review_projection')
             for link in links:
@@ -242,6 +252,7 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
                 keys={'knowledge_question':'knowledge_revision_id','method_question':'method_revision_id','question_type_link':'question_type_revision_id'}
                 target=RevisionRecord.objects.select_related('entity','review_projection').get(pk=payload[keys[link.kind]],entity__household=owner)
                 if target.entity.published_revision_id!=target.pk or target.review_projection.state!='accepted': continue
+                linked_nodes+=1
                 provenance['links'].append({'revision_id':link.published_revision_id,'content_hash':link.published_revision.content_hash,
                     'review_decision_id':str(link.published_revision.review_projection.decision_id)})
                 provenance['nodes'].append({'revision_id':target.pk,'content_hash':target.content_hash,
@@ -251,8 +262,27 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose):
                     for field,label in [('conditions','适用条件'),('steps','步骤'),('common_errors','易错点')]:
                         for value in target.payload.get(field,()):
                             blocks.append(Block('p',escape(label+'：'+value),'body'))
+            if linked_nodes==0:
+                blocks.append(Block('warn','本题尚无已确认的知识、方法或题型关联；分类与知识整理待补。','body'))
     source_hash=digest(canonical(provenance))
     return _export_blocks(actor,owner,title,purpose,blocks,provenance,source_hash,questions[0].pk)
+
+
+def _diagram_blocks(question, purpose, placement, provenance):
+    from .diagram_services import current_diagrams
+    from app.exports.contracts import resolve_diagram
+    blocks = []
+    for row in current_diagrams(question):
+        if row.placement != placement:
+            continue
+        if purpose == 'independent_practice' and not row.content['independent_safe']:
+            raise core.PersistenceError('diagram_review_required', '独立复测的题面图须明确核对没有答案或方法提示。')
+        resolve_diagram(row.content, settings.SWB_DATA_ROOT)
+        provenance.setdefault('diagrams', []).append({'diagram_id': row.pk, 'question_revision_id': question.pk,
+            'placement': placement, 'revision_no': row.revision_no, 'content': row.content, 'basis': row.basis,
+            'confirmed_by': row.created_by_id, 'confirmed_at': row.created_at.isoformat()})
+        blocks.append(Block('diagram', row.content, placement))
+    return blocks
 
 
 def _revision_blocks(revision,household_id,role):

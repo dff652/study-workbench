@@ -1,4 +1,6 @@
 {% extends 'web/base.html' %}{% block content %}<h1>家长答案</h1><p>{{ question.payload.working_text }}</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button>保存新答案草稿</button></form>
+<p>对照题目核对答案、计算过程和依据后，可以一次保存并确认。尚未核对的答案可先存草稿。</p>
+<p><a href="{% url 'printing:diagrams' question.pk %}">核对题面图或解析图</a></p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<button name="action" value="save_confirm">保存并确认答案</button><button name="action" value="save_draft">保存答案草稿</button></form>
 {% if current %}<form method="post">{% csrf_token %}<input type="hidden" name="answer_id" value="{{ current.pk }}"><input type="hidden" name="context" value="{{ review_context }}"><input type="hidden" name="request_key" value="{{ request_key }}"><label>审核依据<input name="reason" required maxlength="1000"></label><button name="action" value="accepted">接受当前答案</button><button name="action" value="rejected">拒绝</button><button name="action" value="withdrawn">撤回接受</button></form>{% endif %}
 <h2>答案与审核历史</h2>{% for a in history %}<section><h3>版本 {{ a.revision_no }}</h3><pre>{{ a.body }}</pre><p>{{ a.basis }}</p>{% for d in a.decisions.all %}<p>{{ d.action }} · {{ d.reason }} · {{ d.recorded_at }}</p>{% empty %}<p>待审核</p>{% endfor %}</section>{% endfor %}{% endblock %}

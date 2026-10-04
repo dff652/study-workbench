@@ -151,6 +151,8 @@ def run_detail(request, run_id):
         data = services.run_detail(request.user, run_id)
     except core.PersistenceError as exc:
         return _failure(request, exc)
+    if data["run"].status in (ModelRun.Status.AWAITING_REVIEW, ModelRun.Status.APPLIED):
+        return redirect("ai:review", run_id=run_id)
     data["request_key"] = uuid4().hex
     data["run_status"] = STATUS_LABELS.get(data["run"].status, "未知状态")
     data["task_label"] = TASK_LABELS.get(data["run"].task_kind, "模型任务")

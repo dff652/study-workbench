@@ -22,12 +22,13 @@
   </header>
   <p id="pwa-network-status" class="page-shell notice" role="status" hidden>网络连接已断开，未确认保存的操作请联网后先核对历史记录。</p>
   {% if request.user.is_authenticated %}<nav class="page-shell" aria-label="工作台导航">
-    <a href="/">资料</a> · <a href="/knowledge/">知识与题库</a> · <a href="/catalogue/">拆分与合题</a> · <a href="/learning/">学习档案</a> · <a href="/prints/">打印</a> · <a href="/ai/">模型配置与任务</a> · <a href="/study/">复习与报告</a> · <a href="/operations/">保留规则与用时</a>
+    <a href="/app/">工作台</a> · <a href="/materials/">资料核对</a> · <a href="/knowledge/">知识与题库</a> · <a href="/learning/">学习档案</a> · <a href="/prints/">文档导出</a> · <a href="/study/">复习与报告</a>
+    <details><summary>设置与更多工具</summary><a href="/members/">家庭成员</a> · <a href="/ai/">模型配置与任务</a> · <a href="/catalogue/">拆分与合题</a> · <a href="/operations/">保留规则与用时</a></details>
   </nav>{% endif %}
   <main class="page-shell">
     {% block content %}{% endblock %}
   </main>
-  <footer class="site-footer">仅限已授权的家庭成员访问。 <a href="{% url 'pwa-help' %}">手机使用说明</a></footer>
+  <footer class="site-footer">Study Workbench {{ release.version }} · 开发版本 · <a href="/app/">工作台与更新记录</a><br>仅限已授权的家庭成员访问。 <a href="{% url 'pwa-help' %}">使用说明</a></footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -48,3 +48,9 @@ A1b 的 Django、psycopg 及既有依赖继续按原固定版本使用，本轮�
 [Caddy 2.11.4](https://github.com/caddyserver/caddy/blob/v2.11.4/LICENSE) 的源码许可为 Apache-2.0。本机缓存的官方镜像 `caddy@sha256:df7f1c2fb114453b951de51a98efc010db1655a92c2e86be6706714e2417a78d` 已实际读取版本，用于[最小派生镜像](../deploy/caddy/Dockerfile)：仅删除可执行文件的低端口 capability 标记，不修改其内容、不新增软件包。当前只做本机隔离验收，没有发布代理镜像；将来发布前需按实际基础镜像／依赖清单保留完整许可及声明。
 
 PWA 的 180／192／512 像素图标是项目自绘的书本界面资产，没有使用第三方图标或任何来源照片；它们是明确纳入源码的 UI 资源，不属于私人照片派生／学习导出。浏览器、NSS 和 namespace 工具继续只用于本机验证，不加入服务镜像或源码分发。
+
+## 融合前端（2026-10-04）
+
+本机融合版选取 shadcn-admin 固定提交 `e16c87f213a5ba5e45964e9b67c792105ec74d26` 的七个 MIT 源文件；逐文件上游位置／哈希及边界见 [前端复用声明](../frontend/THIRD_PARTY.md)，完整许可见 [frontend/LICENSE](../frontend/LICENSE)。Web 镜像保留 `/app/licenses/shadcn-admin-MIT.txt`。没有复制该项目的模拟认证、Faker 数据或随机统计。
+
+新增 Node 构建阶段固定 `24.19.0-bookworm-slim` 与 digest；React、Radix、Lucide、Tailwind、Vite 等依赖版本及实际解析由 [package.json](../frontend/package.json) 和 [package-lock.json](../frontend/package-lock.json)记录。十份浏览器运行依赖／样式许可原文见 [DEPENDENCY_LICENSES.txt](../frontend/DEPENDENCY_LICENSES.txt)，镜像保留 `/app/licenses/frontend-dependency-notices.txt`，不依赖压缩器保留注释。Node 仅用于构建，不运行在最终 Python 服务镜像中；新镜像仍未公开发布。

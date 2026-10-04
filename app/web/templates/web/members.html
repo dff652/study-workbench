@@ -1,0 +1,84 @@
+{% extends "web/base.html" %}
+{% block title %}家庭成员 · 学习资料工作台{% endblock %}
+{% block content %}
+  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>家庭成员</span></nav>
+  <div class="page-heading">
+    <div><p class="eyebrow">家庭访问</p><h1>成员管理</h1>{% if household %}<p class="muted">家庭 {{ household.pk }}</p>{% endif %}</div>
+  </div>
+
+  {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
+
+  {% if household_choices|length > 1 %}
+    <section class="panel">
+      <h2>选择家庭</h2>
+      <form method="get" action="{% url 'web:members' %}" class="stack-form">
+        <div class="field"><label for="id_household_id">家庭</label><select id="id_household_id" name="household_id" required>
+          <option value=""{% if not selected_household_id %} selected{% endif %}>请选择家庭</option>
+          {% for choice in household_choices %}<option value="{{ choice.pk }}"{% if selected_household_id == choice.pk %} selected{% endif %}>{{ choice.pk }}</option>{% endfor %}
+        </select></div>
+        <button class="secondary-button" type="submit">打开成员管理</button>
+      </form>
+    </section>
+  {% endif %}
+
+  {% if household %}
+    <section class="panel">
+      <h2>现有成员</h2>
+      <p class="muted">移除只撤销当前家庭访问；不会删除登录账号或家庭学习历史。</p>
+      {% if member_rows %}
+        <ul class="material-list member-list">
+          {% for item in member_rows %}
+            <li>
+              <div class="member-summary">
+                <strong>{{ item.membership.user.get_username }}</strong>
+                <span class="muted">
+                  {% if item.membership.role == "owner" %}家庭所有者
+                  {% elif item.membership.role == "reviewer" %}审核成员
+                  {% else %}只读成员{% endif %}
+                  · {% if item.membership.user.is_active %}账号可登录{% else %}账号已停用{% endif %}
+                </span>
+              </div>
+              {% if item.protected %}
+                <span class="muted">此成员的账号或家庭权限受保护</span>
+              {% else %}
+                <div class="member-actions">
+                  <form method="post" action="{% url 'web:members' %}" class="inline-review-form">
+                    {% csrf_token %}{{ item.role_form.action }}{{ item.role_form.household_id }}{{ item.role_form.member_id }}
+                    <label>家庭角色 {{ item.role_form.role }}</label>
+                    {{ item.role_form.role.errors }}
+                    <button class="secondary-button" type="submit">保存角色</button>
+                  </form>
+                  <form method="post" action="{% url 'web:members' %}" class="inline-review-form">
+                    {% csrf_token %}{{ item.remove_form.action }}{{ item.remove_form.household_id }}{{ item.remove_form.member_id }}
+                    <button class="quiet-button" type="submit">移除家庭访问</button>
+                    {{ item.remove_form.member_id.errors }}
+                  </form>
+                </div>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">当前家庭还没有成员。</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <h2>创建家庭成员登录账号</h2>
+      <p class="muted">这里只能创建审核成员或只读成员。密码按 Django 密码策略验证并安全保存；页面不会回显密码。</p>
+      <form method="post" action="{% url 'web:members' %}" class="stack-form">
+        {% csrf_token %}{{ create_form.action }}{{ create_form.household_id }}
+        {% if create_form.non_field_errors %}<div class="notice error" role="alert">{{ create_form.non_field_errors }}</div>{% endif %}
+        <div class="field"><label for="id_create_username">登录名</label>{{ create_form.username }}{{ create_form.username.errors }}</div>
+        <div class="field"><label for="id_create_password1">密码</label>{{ create_form.password1 }}{{ create_form.password1.errors }}</div>
+        <div class="field"><label for="id_create_password2">再次输入密码</label>{{ create_form.password2 }}{{ create_form.password2.errors }}</div>
+        <div class="field"><label for="id_create_role">家庭角色</label>{{ create_form.role }}{{ create_form.role.errors }}</div>
+        <button class="primary-button" type="submit">创建账号并加入家庭</button>
+      </form>
+    </section>
+  {% elif not household_choices %}
+    <p class="notice warning-notice" role="status">此账号没有可管理的家庭。</p>
+  {% else %}
+    <p class="muted">请选择要管理成员的家庭。</p>
+  {% endif %}
+{% endblock %}

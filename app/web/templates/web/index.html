@@ -9,7 +9,7 @@
     {% if households %}
       <form method="post" action="{% url 'web:material_new' %}" class="stack-form">
         {% csrf_token %}{{ new_form.request_key }}
-        <div class="field"><label for="id_household_id">家庭</label>{{ new_form.household_id }}{{ new_form.household_id.errors }}</div>
+        {% if new_form.household_id.is_hidden %}{{ new_form.household_id }}{% else %}<div class="field"><label for="id_household_id">家庭</label>{{ new_form.household_id }}{{ new_form.household_id.errors }}</div>{% endif %}
         <div class="field"><label for="id_title">资料集名称</label>{{ new_form.title }}{{ new_form.title.errors }}</div>
         <button class="primary-button" type="submit">创建资料集</button>
       </form>

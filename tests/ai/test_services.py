@@ -416,7 +416,7 @@ class AIWorkflowTests(TransactionTestCase):
 
         client = Client()
         client.force_login(self.owner)
-        detail = client.get(reverse("ai:run_detail", kwargs={"run_id": run.pk}))
+        detail = client.get(reverse("ai:run_detail", kwargs={"run_id": run.pk}), follow=True)
         self.assertEqual(detail.status_code, 200)
         self.assertContains(detail, "模型建议的订正文句")
         self.assertContains(detail, "查看印刷文字订正与复核")

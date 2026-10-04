@@ -7,6 +7,7 @@ from django.core.exceptions import ImproperlyConfigured
 from .settings import *  # noqa: F403
 
 SWB_PRODUCTION = True
+SWB_FRONTEND_DEFAULT = True
 
 
 def _required(name):

@@ -39,6 +39,42 @@ class PagePreview(models.Model):
                        models.CheckConstraint(condition=models.Q(sha256__regex=r'^[0-9a-f]{64}$'), name='swb_web_preview_hash')]
 
 
+class PageReadingRevision(models.Model):
+    """Manual page-level inventory; never a learner observation or assessment."""
+    page = models.ForeignKey(MaterialPage, on_delete=models.PROTECT, related_name='reading_revisions')
+    household = models.ForeignKey(Household, on_delete=models.PROTECT)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    revision_no = models.PositiveIntegerField()
+    previous = models.ForeignKey('self', null=True, on_delete=models.PROTECT)
+    original_sha256 = models.CharField(max_length=64)
+    reading = models.CharField(max_length=16, choices=(('unread', '未阅读'), ('read', '已阅读'), ('needs_retake', '待重拍')))
+    coverage = models.CharField(max_length=16, choices=(('partial', '待补分区'), ('complete', '已逐项核对分区')))
+    partitions = models.JSONField(default=list)
+    pending_items = models.TextField(blank=True)
+    basis = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-revision_no',)
+        constraints = [
+            models.UniqueConstraint(fields=('page', 'revision_no'), name='swb_page_reading_version'),
+            models.CheckConstraint(condition=models.Q(revision_no__gt=0), name='swb_page_reading_positive'),
+            models.CheckConstraint(condition=models.Q(reading__in=('unread', 'read', 'needs_retake')), name='swb_page_reading_state'),
+            models.CheckConstraint(condition=models.Q(coverage__in=('partial', 'complete')), name='swb_page_reading_coverage'),
+            models.CheckConstraint(condition=models.Q(coverage='partial') | models.Q(reading='read'), name='swb_page_reading_complete_read'),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError('整页阅读和分区记录只能追加。')
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from django.core.exceptions import ValidationError
+        raise ValidationError('整页历史记录保留。')
+
+
 class QuestionSource(models.Model):
     revision = models.OneToOneField(RevisionRecord, on_delete=models.PROTECT, primary_key=True)
     material = models.ForeignKey(MaterialSet, on_delete=models.PROTECT)

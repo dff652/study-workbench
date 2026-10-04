@@ -1,0 +1,7 @@
+{% extends 'web/base.html' %}{% block content %}
+<h1>{{ material.title }} · 五册输出</h1><p>已固定题目版本与文件校验值。下载后请检查公式、教学图、分页和独立复测册是否含提示；本次生成尚未代替人工版式验收。</p>
+{% if manifest.content_gaps %}<p class="notice">本套为知识与分类尚待补齐的检查版，具体缺口保存在清单中。</p>{% endif %}
+<section class="panel"><ol>{% for book in manifest.books %}<li>{{ book.label }} · <a href="{% url 'printing:download' book.snapshot_id 'document.pdf' %}">PDF</a> · <a href="{% url 'printing:download' book.snapshot_id 'document.docx' %}">Word</a></li>{% endfor %}</ol>
+<a class="primary-button link-button" href="{% url 'printing:packet_download' material.pk packet_id %}">下载五册与校验清单 ZIP</a></section>
+<a href="{% url 'printing:packet_prepare' material.pk %}">继续核对或生成新版本</a>
+{% endblock %}

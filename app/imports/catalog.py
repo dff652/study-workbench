@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import re
+from typing import Callable
 
 from app.domain import (
     ActualDateState,
@@ -32,9 +33,7 @@ from app.domain import (
 
 _ROW_FIELDS = frozenset({"book", "num", "group", "photo", "feature", "method", "tag", "tip", "aux"})
 _BOOKS = ("J1", "J2", "W1", "W2", "W3", "W4")
-_BOOK_ORDER = {book: index for index, book in enumerate(_BOOKS)}
 _NUM_RE = re.compile(r"([1-9][0-9]*)(?:\(([1-9][0-9]*)\)(?:-([1-9][0-9]*))?)?\Z")
-_PHOTO_RE = re.compile(r"[0-9]{6}(?:/[0-9]{6})*\Z")
 _AUX_SEGMENT_RE = re.compile(r"([1-9][0-9]*)(?:\s+(.+))?\Z")
 
 
@@ -43,6 +42,16 @@ class CatalogConversion:
     bundle: Bundle
     index_rows: tuple[dict, ...]
     counts: dict[str, int]
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogProfile:
+    """Explicit historical syntax; never infer a topic from free text."""
+    format_id: str
+    books: tuple[str, ...]
+    photo_separator: str
+    parse_number: Callable[[str, str], tuple[int, int | float | None, int | None]]
+    parse_auxiliary: Callable[[str, dict[int, str], str], list[int]]
 
 
 def _fail(code: str, path: str, message: str) -> None:
@@ -67,8 +76,8 @@ def _parse_num(value: str, path: str) -> tuple[int, int | None, int | None]:
     return int(root), int(child) if child is not None else None, int(subquestion) if subquestion is not None else None
 
 
-def _parent_num(num: str) -> str | None:
-    root, child, subquestion = _parse_num(num, "num")
+def _parent_num(num: str, parse_number=_parse_num) -> str | None:
+    root, child, subquestion = parse_number(num, "num")
     if child is None:
         return None
     if subquestion is None:
@@ -76,8 +85,8 @@ def _parent_num(num: str) -> str | None:
     return f"{root}({child})"
 
 
-def _sort_num(value: str) -> tuple[int, int, int, int]:
-    root, child, subquestion = _parse_num(value, "num")
+def _sort_num(value: str, parse_number=_parse_num) -> tuple[int, int | float, int, int]:
+    root, child, subquestion = parse_number(value, "num")
     return root, child or 0, subquestion or 0, 1 if subquestion is not None else 0
 
 
@@ -117,6 +126,9 @@ def _header(owner_id: str, revision_id: str, recorded_at: str, reason: str) -> R
     )
 
 
+LEGACY_PROFILE = CatalogProfile("calculation.v1", _BOOKS, "/", _parse_num, _parse_aux_groups)
+
+
 def _question_evidence(
     household_id: str,
     tokens: list[str],
@@ -147,6 +159,7 @@ def build_legacy_bundle(
     household_id: str,
     dataset_key: str,
     recorded_at: str,
+    profile: CatalogProfile = LEGACY_PROFILE,
 ) -> CatalogConversion:
     """Convert legacy index rows without inferring question text or learner work."""
     if not isinstance(entries, list):
@@ -163,6 +176,13 @@ def build_legacy_bundle(
         _fail("invalid_scope", "household_id", "expected a non-empty household ID")
     if type(dataset_key) is not str or not dataset_key.strip():
         _fail("invalid_scope", "dataset_key", "expected a non-empty dataset key")
+    if (not isinstance(profile, CatalogProfile) or not profile.books or
+        len(set(profile.books)) != len(profile.books) or
+        profile.photo_separator not in ("/", "+") or
+        not callable(profile.parse_number) or not callable(profile.parse_auxiliary)):
+        _fail("invalid_catalog_profile", "profile", "expected an explicit supported catalog profile")
+    book_order = {book: index for index, book in enumerate(profile.books)}
+    photo_pattern = re.compile(r"[0-9]{6}(?:" + re.escape(profile.photo_separator) + r"[0-9]{6})*\Z")
 
     images_by_token: dict[str, SourceImage] = {}
     unique_images: dict[str, SourceImage] = {}
@@ -202,12 +222,12 @@ def build_legacy_bundle(
             _fail("invalid_group", f"{path}.group", "expected an integer group ID")
         if group_id not in groups:
             _fail("unknown_group", f"{path}.group", "row references an unknown group")
-        if row["book"] not in _BOOK_ORDER:
-            _fail("unknown_book", f"{path}.book", "book must be one of J1, J2, W1, W2, W3, or W4")
-        _parse_num(row["num"], f"{path}.num")
-        if _PHOTO_RE.fullmatch(row["photo"]) is None:
-            _fail("invalid_photo_list", f"{path}.photo", "expected six-digit photo tokens separated by '/'")
-        photo_tokens = row["photo"].split("/")
+        if row["book"] not in book_order:
+            _fail("unknown_book", f"{path}.book", "book is not in the selected topic profile")
+        profile.parse_number(row["num"], f"{path}.num")
+        if photo_pattern.fullmatch(row["photo"]) is None:
+            _fail("invalid_photo_list", f"{path}.photo", "expected photo tokens in the selected topic syntax")
+        photo_tokens = row["photo"].split(profile.photo_separator)
         for token in photo_tokens:
             if token not in images_by_token:
                 _fail("unknown_photo", f"{path}.photo", f"photo token {token} has no source image metadata")
@@ -215,7 +235,7 @@ def build_legacy_bundle(
         if identity in indexed:
             _fail("duplicate_index_row", f"{path}.num", "book and question number already have an index row")
         indexed.add(identity)
-        aux_groups = _parse_aux_groups(row["aux"], groups, f"{path}.aux")
+        aux_groups = profile.parse_auxiliary(row["aux"], groups, f"{path}.aux")
         parsed_rows.append({
             "ordinal": ordinal,
             "raw": row,
@@ -231,7 +251,7 @@ def build_legacy_bundle(
     for row in parsed_rows:
         book, num = row["book"], row["num"]
         while True:
-            parent = _parent_num(num)
+            parent = _parent_num(num, profile.parse_number)
             if parent is None:
                 break
             question_numbers.add((book, parent))
@@ -251,13 +271,13 @@ def build_legacy_bundle(
             for token in row["photo_tokens"]:
                 if token not in photo_list:
                     photo_list.append(token)
-            current = _parent_num(current)
+            current = _parent_num(current, profile.parse_number)
 
     questions: list[Question] = []
-    for book, num in sorted(question_numbers, key=lambda identity: (_BOOK_ORDER[identity[0]], *_sort_num(identity[1]))):
+    for book, num in sorted(question_numbers, key=lambda identity: (book_order[identity[0]], *_sort_num(identity[1], profile.parse_number))):
         identity = (book, num)
         question_id = question_ids[identity]
-        parent_num = _parent_num(num)
+        parent_num = _parent_num(num, profile.parse_number)
         parent_question_id = question_ids[(book, parent_num)] if parent_num is not None else None
         revision_id = question_revision_ids[identity]
         revision = seal_revision(QuestionRevision(

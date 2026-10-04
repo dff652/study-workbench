@@ -18,6 +18,9 @@ class MaterialForm(RequestForm):
         self.fields["household_id"].choices = [
             (str(member.household_id), str(member.household.id)) for member in households
         ]
+        if len(self.fields['household_id'].choices)==1:
+            self.fields['household_id'].widget=forms.HiddenInput()
+            self.initial['household_id']=self.fields['household_id'].choices[0][0]
 
 
 class UploadPageForm(RequestForm):

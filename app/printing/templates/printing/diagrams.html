@@ -1,0 +1,45 @@
+{% extends 'web/base.html' %}
+{% block content %}
+<h1>核对教学图</h1>
+<p>题目修订第 {{ question.revision_no }} 版 · <a href="{% url 'web:question_detail' question_id=question.entity.stable_id %}">返回题目</a></p>
+<section class="panel">
+  <p>{{ question.payload.working_text }}</p>
+  <p>此页固定到当前题目修订版本。每个版本的题面图和解析图分别保留历史；替换会新增版本，不覆盖旧文件。题面图用于题目，确认无提示后才可用于独立练习；解析图用于答案册。标签和显示出的构造条件都须逐项核对。</p>
+</section>
+{% if saved %}<p class="notice">教学图已保存并确认；新版本已加入历史。</p>{% endif %}
+
+{% if can_write %}
+<section class="panel">
+  <h2>上传并确认图示</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}{{ form.as_p }}
+    <button type="submit">保存并确认图示</button>
+  </form>
+</section>
+{% else %}
+<p class="notice">此题目版本仅供查看，不能新增图示。</p>
+{% endif %}
+
+<section class="panel">
+  <h2>已保存版本</h2>
+  {% for diagram in history %}
+  <article>
+    <h3>{% if diagram.placement == 'question' %}题面图{% else %}解析图{% endif %} · 第 {{ diagram.revision_no }} 版</h3>
+    <p>{{ diagram.created_at }} · 题目修订第 {{ diagram.question_revision.revision_no }} 版</p>
+    <p>{{ diagram.content.alt }}</p>
+    <img src="{% url 'printing:diagram_file' pk=diagram.pk name='png' %}" alt="{{ diagram.content.alt }}" style="max-width:100%;height:auto">
+    <p><a href="{% url 'printing:diagram_file' pk=diagram.pk name='vector' %}">下载配套矢量来源</a></p>
+    {% if diagram.source_page_id %}
+    <p>来源照片：<a href="{% url 'web:page_detail' page_id=diagram.source_page_id %}">查看本题来源</a></p>
+    {% else %}<p>原图区域已记录在来源追溯中。</p>{% endif %}
+    <p>打印宽度 {{ diagram.content.width_points }} 点；最小标注 {{ diagram.content.min_label_points }} 点。</p>
+    <p>构造条件：</p>
+    <ul>{% for condition in diagram.content.conditions %}<li>{{ condition }}</li>{% endfor %}</ul>
+    {% if diagram.placement == 'question' %}<p>{% if diagram.content.independent_safe %}已确认题面图无答案提示，可用于独立练习。{% else %}未确认无提示，不用于独立练习。{% endif %}</p>{% endif %}
+    <p>核对依据：{{ diagram.basis }}</p>
+  </article>
+  {% empty %}
+  <p>尚无教学图版本。</p>
+  {% endfor %}
+</section>
+{% endblock %}

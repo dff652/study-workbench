@@ -100,3 +100,29 @@ class PrivatePackageTests(unittest.TestCase):
         with self.assertRaises(ContractError) as caught:
             self.prepare()
         self.assertEqual(caught.exception.issues[0].code, "unsafe_data_root")
+
+    def test_geometry_profile_is_bound_to_private_package_and_repeatable(self):
+        catalog = self.description['files'][0]
+        entries = read_json((self.source / catalog['path']).read_bytes())
+        entries[0].update(book='J3', num='1(左)', photo='000001+000002', aux='Synthetic auxiliary')
+        entries[1].update(book='W5')
+        raw = canonical(entries)
+        (self.source / catalog['path']).write_bytes(raw)
+        catalog.update(size_bytes=len(raw), sha256=digest(raw))
+        self.description['counts']['by_book'] = {'J3':1,'W5':1}
+        self.inventory.write_bytes(canonical(self.description))
+        profile = {'format_id':'geometry.v1','auxiliary_mapping':{'Synthetic auxiliary':5}}
+        directory, prepared = prepare_legacy_import(self.inventory, self.data,
+            household_id='synthetic-household', dataset_key='geometry-v1', profile=profile)
+        self.assertEqual(load_prepared_import(directory,self.data),prepared)
+        self.assertEqual(prepared.manifest['sources']['profile'],profile)
+        self.assertEqual(prepared.conversion.index_rows[0]['num'],'1(左)')
+        self.assertEqual(prepared.conversion.index_rows[0]['photo_tokens'],['000001','000002'])
+        again, repeated = prepare_legacy_import(self.inventory,self.data,
+            household_id='synthetic-household',dataset_key='geometry-v1',profile=profile)
+        self.assertEqual((again,repeated),(directory,prepared))
+        with self.assertRaises(ContractError) as caught:
+            prepare_legacy_import(self.inventory,self.data,household_id='synthetic-household',
+                dataset_key='geometry-v1',profile={**profile,'auxiliary_mapping':{'Synthetic auxiliary':2}})
+        self.assertEqual(caught.exception.issues[0].code,'import_source_conflict')
+        self.assertEqual(load_prepared_import(directory,self.data),prepared)

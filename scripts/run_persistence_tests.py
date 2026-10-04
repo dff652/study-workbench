@@ -31,13 +31,24 @@ def main():
     parser.add_argument("--legacy-package", type=Path)
     parser.add_argument("--browser", action="store_true", help="Run synthetic phone browser acceptance on loopback")
     parser.add_argument("--business-browser", action="store_true", help="Run the knowledge, learning and print browser acceptance")
+    parser.add_argument("--fusion-browser", action="store_true", help="Run the built React SOP and evidence browser acceptance")
     parser.add_argument("--skip-tests", action="store_true", help="Browser debugging only; does not constitute full acceptance")
+    parser.add_argument("--test-label", action="append", help="Run selected Django test labels; default is tests")
     parser.add_argument("--data-root", type=Path)
+    parser.add_argument("--geometry-trial", type=Path, help="Private, locally reviewed small sample input")
+    parser.add_argument("--geometry-output", type=Path, help="New private directory for small sample evidence")
+    parser.add_argument("--skill-trial", type=Path, help="Reviewed private sample through the offline skill")
+    parser.add_argument("--skill-root", type=Path)
+    parser.add_argument("--skill-output", type=Path)
     args = parser.parse_args()
-    if args.skip_tests and not (args.browser or args.business_browser):
+    if args.skip_tests and not (args.browser or args.business_browser or args.fusion_browser):
         parser.error("--skip-tests is restricted to a browser debugging run")
     if bool(args.legacy_package) != bool(args.data_root):
         parser.error("--legacy-package and --data-root must be supplied together")
+    if bool(args.geometry_trial) != bool(args.geometry_output):
+        parser.error("--geometry-trial and --geometry-output must be supplied together")
+    if any((args.skill_trial, args.skill_root, args.skill_output)) and not all((args.skill_trial, args.skill_root, args.skill_output)):
+        parser.error("--skill-trial, --skill-root and --skill-output must be supplied together")
     run(["docker", "image", "inspect", IMAGE], stdout=subprocess.DEVNULL)
     base = Path(tempfile.mkdtemp(prefix="swb-synthetic-pg-"))
     socket_dir = base / "socket"
@@ -78,7 +89,7 @@ def main():
             ["migrate", "--noinput"],
             ["migrate", "persistence", "0001", "--noinput"],
             ["migrate", "--noinput"],
-            ["test", "tests", "--noinput", "-v", "1"],
+            ["test", *(args.test_label or ["tests"]), "--noinput", "-v", "1"],
         ):
             if command[0]=='test' and args.skip_tests:
                 continue
@@ -86,10 +97,18 @@ def main():
         if args.legacy_package:
             run([sys.executable, "scripts/verify_legacy_import.py", "--package", str(args.legacy_package.resolve()),
                  "--data-root", str(args.data_root.resolve())], env=env)
+        if args.geometry_trial:
+            run([sys.executable, "scripts/verify_geometry_trial.py", "--trial", str(args.geometry_trial.resolve()),
+                 "--output", str(args.geometry_output.resolve())], env=env)
+        if args.skill_trial:
+            run([sys.executable, "scripts/verify_skill_trial.py", "--trial", str(args.skill_trial.resolve()),
+                 "--skill-root", str(args.skill_root.resolve()), "--output", str(args.skill_output.resolve())], env=env)
         if args.browser:
             run([sys.executable, "scripts/verify_web.py", "--owner", owner], env=env)
         if args.business_browser:
             run([sys.executable, "scripts/verify_business.py", "--owner", owner], env=env)
+        if args.fusion_browser:
+            run([sys.executable, "scripts/verify_fusion.py", "--owner", owner], env=env)
     finally:
         # A failed docker run can still create a container. Verify the random
         # ownership label before removing either its ID or its unique name.

@@ -38,6 +38,26 @@ class AnswerDecision(models.Model):
             name='swb_answer_decision_valid')]
 
 
+class TeachingDiagramRevision(models.Model):
+    """One confirmed diagram per exact question version and placement, append-only."""
+    household = models.ForeignKey(Household, on_delete=models.PROTECT)
+    question_revision = models.ForeignKey(RevisionRecord, on_delete=models.PROTECT)
+    placement = models.CharField(max_length=16, choices=[('question', '题面图'), ('answer', '解析图')])
+    revision_no = models.PositiveIntegerField()
+    previous = models.ForeignKey('self', null=True, on_delete=models.PROTECT)
+    content = models.JSONField()
+    basis = models.TextField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('question_revision', 'placement', 'revision_no'), name='swb_diagram_version'),
+            models.CheckConstraint(condition=models.Q(revision_no__gt=0), name='swb_diagram_positive'),
+            models.CheckConstraint(condition=models.Q(placement__in=('question', 'answer')), name='swb_diagram_placement'),
+        ]
+
+
 class ExportSnapshot(models.Model):
     household = models.ForeignKey(Household, on_delete=models.PROTECT)
     export_id = models.CharField(max_length=64)

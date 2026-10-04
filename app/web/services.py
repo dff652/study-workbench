@@ -238,9 +238,13 @@ def _header(actor,owner_id,reason,previous=None):
 
 @transaction.atomic
 def save_question(actor,material_id,*,printed_text,original_number,sources,request_key,reason,
-                  question_id=None,expected_context=None,display_markup=None,image_print_confirmed=None):
+                  question_id=None,expected_context=None,display_markup=None,image_print_confirmed=None,confirm=False):
     material=_material(actor,material_id,True)
     text=_text(printed_text,20000,blank=True);number=_text(original_number,80,blank=True);reason=_text(reason,1000)
+    if type(confirm) is not bool:
+        raise core.PersistenceError('invalid_input','请明确选择保存草稿或确认内容。')
+    if confirm and not text:
+        raise core.PersistenceError('incomplete_question','题干尚未补齐，请先保存待补草稿。')
     if not isinstance(sources,list) or not 1<=len(sources)<=30:
         raise core.PersistenceError('missing_region','至少选择一个题目区域。')
     normalized=[]
@@ -264,6 +268,7 @@ def save_question(actor,material_id,*,printed_text,original_number,sources,reque
     fingerprint=core._digest({'material':str(material.pk),'question':question_id,'text':text,'number':number,
         **({'display_markup':display_markup} if display_markup is not None else {}),
         **({'image_print_confirmed':True} if image_print_confirmed else {}),
+        **({'confirm':True} if confirm else {}),
         'sources':normalized,'reason':reason,'context':expected_context})
     previous_request=core._replay(material.household,actor,request_key,'web_question',fingerprint)
     if previous_request: return previous_request
@@ -313,6 +318,12 @@ def save_question(actor,material_id,*,printed_text,original_number,sources,reque
     bundle=replace(existing,regions=(*existing.regions,*regions),questions=questions)
     core.stage_bundle(actor,bundle,request_key=f'question-stage-{uuid.uuid4().hex}',expected_heads=expected_heads)
     QuestionSource.objects.create(revision_id=revision.header.revision_id,material=material,original_number=number,sources=normalized)
+    if confirm:
+        context=core.review_context(actor,material.household_id,revision.header.revision_id)
+        core.review_revision(actor,material.household_id,revision.header.revision_id,action='accept',
+            reason='家长保存并确认：'+reason,expected_head=context['expected_head'],
+            expected_dependencies=context['expected_dependencies'],expected_decision_id=context['expected_decision_id'],
+            request_key='confirm-'+core._digest({'request_key':request_key,'revision_id':revision.header.revision_id}))
     return core._receipt(material.household,actor,request_key,'web_question',fingerprint,
         {'question_id':question_id,'revision_id':revision.header.revision_id})
 

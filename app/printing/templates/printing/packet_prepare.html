@@ -1,0 +1,14 @@
+{% extends 'web/base.html' %}{% block content %}
+<nav class="breadcrumbs"><a href="{% url 'web:material_detail' material.pk %}">{{ material.title }}</a><span>/</span><span>生成五册</span></nav>
+<h1>核对内容，生成五册</h1>
+<p>上传照片 → 对照原图确认题目和答案 → 生成五册 → 检查版式并下载。</p>
+{% if gaps %}<section class="panel"><h2>需要补齐</h2><ul>{% for gap in gaps %}<li>{{ gap }}</li>{% endfor %}</ul></section>{% endif %}
+{% if content_gaps %}<section class="panel"><h2>知识整理待补</h2><p>可以先生成检查版，知识与分类册会保留以下缺口。</p><ul>{% for gap in content_gaps %}<li>{{ gap }}</li>{% endfor %}</ul><a href="/knowledge/?household_id={{ material.household_id|urlencode }}">完善知识和分类关联</a></section>{% endif %}
+<section class="panel"><h2>逐题核对</h2>
+<ul>{% for question in questions %}<li><a href="{% url 'web:question_detail' question.question_id %}">{{ question.number }} · {{ question.text|truncatechars:70 }}</a> · {% if question.confirmed %}题目已确认 · <a href="{% url 'printing:answer' question.revision_id %}">{% if question.answer_ready %}答案已确认{% else %}补充答案与依据{% endif %}</a> · <a href="{% url 'printing:diagrams' question.revision_id %}">核对教学图</a>{% else %}<a href="{% url 'web:question_edit' question.question_id %}">补充并确认题目</a>{% endif %}</li>{% empty %}<li><a href="{% url 'web:question_new' material.pk %}">从原图录入第一道题</a></li>{% endfor %}</ul>
+</section>
+<form method="post" class="panel">{% csrf_token %}
+<label for="packet-learner">学习证据</label><select id="packet-learner" name="learner_id"><option value="">暂不关联学习者，生成待测清单</option>{% for learner in learners %}<option value="{{ learner.pk }}">{{ learner.head_revision.payload.display_name }}</option>{% endfor %}</select>
+<p class="muted">选择学习者时，第三册汇总该学习者的历次记录；其余四册使用本资料集的相同题目版本。未记录或无法判定的证据保留未知。</p>
+<button class="primary-button" {% if not ready %}disabled{% endif %}>生成五册 PDF 与 Word</button></form>
+{% endblock %}

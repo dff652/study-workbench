@@ -1,0 +1,36 @@
+{% extends "web/base.html" %}{% load static %}
+{% block title %}整页阅读与分区 · 第 {{ page.position }} 页{% endblock %}
+{% block content %}
+<nav class="breadcrumbs"><a href="{% url 'web:material_detail' page.material_id %}">{{ page.material.title }}</a> / <a href="{% url 'web:page_detail' page.id %}">第 {{ page.position }} 页原图与题目</a></nav>
+<section class="panel"><h1>整页阅读与分区</h1>
+  <p>逐页查看理论、题目、图示和手写内容。分区记录用于整理资料；手写作者、提示与独立性仍须在作答中分别记录。</p>
+  <p class="notice">有未知、看不清或待补事项时保留“待补分区”。分区完成不表示题干、答案或孩子掌握已确认。</p>
+  {% if current %}<p id="page-reading-current">当前：{{ current.get_reading_display }} · {{ current.get_coverage_display }} · 第 {{ current.revision_no }} 版</p>{% else %}<p id="page-reading-current">尚未记录：未阅读 · 待补分区</p>{% endif %}
+</section>
+{% if writable %}<section class="panel">
+  <form method="post" id="page-reading-form">{% csrf_token %}{{ form.as_p }}
+    <div class="region-editor single-region-editor" data-partition-editor data-edit="true">
+      <div class="region-card" data-page-id="{{ page.id }}" data-rotation="0" data-preview-sha="{{ preview.sha256 }}" data-width="{{ preview.width }}" data-height="{{ preview.height }}">
+        <label>显示方向 <select class="rotation-select">{% for option in preview_links %}<option value="{{ option.rotation }}" data-url="{{ option.url }}" data-width="{{ option.width }}" data-height="{{ option.height }}" data-sha="{{ option.sha256 }}">{{ option.rotation }}°</option>{% endfor %}</select></label>
+        <label>加入区域的类型 <select class="partition-kind">{% for value,label in kinds %}<option value="{{ value }}" {% if value == 'unknown' %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <div class="image-wrap"><img class="region-image" src="{{ preview_url }}" width="{{ preview.width }}" height="{{ preview.height }}" alt="第 {{ page.position }} 页原图"><canvas class="region-canvas" aria-label="框选整页内容分区"></canvas></div>
+        <button type="button" class="secondary-button add-region">加入内容分区</button>
+        <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend>
+          <label>x0 <input type="number" min="0" class="coord-x0"></label><label>y0 <input type="number" min="0" class="coord-y0"></label><label>x1 <input type="number" min="0" class="coord-x1"></label><label>y1 <input type="number" min="0" class="coord-y1"></label>
+          <button type="button" class="secondary-button add-coordinates">加入坐标区域</button>
+        </fieldset>
+      </div>
+      <ul class="selected-source-list"></ul><p class="selection-empty">尚无分区。</p><p class="selection-feedback" role="status"></p>
+    </div>
+    <button type="submit" class="primary-button">保存整页状态与分区</button>
+  </form>
+</section>{% else %}<section class="panel"><p>当前成员只读，可查看全部历史与原图。</p><img src="{{ preview_url }}" alt="整页原图" style="max-width:100%"></section>{% endif %}
+<section class="panel"><h2>整页历史</h2>
+  {% for row in history %}<article id="reading-version-{{ row.revision_no }}"><h3>第 {{ row.revision_no }} 版 · {{ row.get_reading_display }} · {{ row.get_coverage_display }}</h3>
+    <p>{{ row.created_by.username }} · {{ row.created_at }} · 依据：{{ row.basis|linebreaksbr }}</p>
+    {% if row.pending_items %}<p>待补：{{ row.pending_items|linebreaksbr }}</p>{% endif %}
+    <ul>{% for part in row.display_parts %}<li>{{ part.label }}<details><summary>原图区域与来源</summary><p>原图坐标：{{ part.original_bbox }}；显示方向：{{ part.rotation }}°</p><p>原图 SHA：{{ part.original_sha256 }}</p></details></li>{% empty %}<li>未记录内容分区。</li>{% endfor %}</ul>
+  </article>{% empty %}<p>尚无整页记录。</p>{% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

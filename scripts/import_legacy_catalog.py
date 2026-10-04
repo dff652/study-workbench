@@ -8,7 +8,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from app.imports.package import load_prepared_import, prepare_legacy_import
+from app.imports.package import load_prepared_import, prepare_legacy_import, read_json
 
 
 def main():
@@ -18,6 +18,10 @@ def main():
     prepare.add_argument("--inventory", type=Path, default=ROOT / "docs/source-inventory.local.json")
     prepare.add_argument("--household", required=True)
     prepare.add_argument("--dataset", required=True)
+    prepare.add_argument("--catalog-path", default="documents/v3/question_catalog.json")
+    prepare.add_argument("--groups-path", default="documents/v3/question_catalog.py")
+    prepare.add_argument("--geometry-map", type=Path,
+        help="Private JSON object mapping exact geometry auxiliary names to group IDs 1–6")
     for operation in (prepare, commands.add_parser("validate"), commands.add_parser("import")):
         operation.add_argument("--data-root", type=Path, default=ROOT / "data")
         if operation is not prepare:
@@ -27,7 +31,10 @@ def main():
     args = parser.parse_args()
     if args.operation == "prepare":
         directory, prepared = prepare_legacy_import(args.inventory, args.data_root,
-            household_id=args.household, dataset_key=args.dataset)
+            household_id=args.household, dataset_key=args.dataset,
+            catalog_path=args.catalog_path, groups_path=args.groups_path,
+            profile={"format_id":"geometry.v1", "auxiliary_mapping":read_json(args.geometry_map.read_bytes())}
+                if args.geometry_map else None)
         result = {"package": str(directory), "counts": prepared.conversion.counts,
                   "source_digest": prepared.manifest["source_digest"]}
     else:

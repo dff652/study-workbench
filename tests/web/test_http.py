@@ -132,6 +132,30 @@ class WebHTTPTests(TransactionTestCase):
         })
         self.assertEqual(denied.status_code, 404)
 
+    def test_save_and_confirm_http_preserves_previous_revision_and_rejects_stale_edit(self):
+        page=self.upload('confirm.png')['page_id']
+        preview=web_services.preview_file(self.owner,page,0)
+        sources=[{'page_id':page,'rotation':0,'preview_sha256':preview.sha256,'display_bbox':[8,10,100,65]}]
+        inputs={'request_key':str(uuid4()),'printed_text':'2 + 3 = ?', 'original_number':'1',
+            'sources':json.dumps(sources),'reason':'核对原图','submit_action':'confirm'}
+        response=self.client.post(reverse('web:question_new',kwargs={'material_id':self.material.pk}),inputs)
+        self.assertEqual(response.status_code,302,response.content.decode())
+        question_id=response.headers['Location'].rstrip('/').split('/')[-1]
+        first=web_services.question_detail(self.owner,question_id)
+        first_id=first['question'].head_revision_id
+        self.assertEqual(first['question'].published_revision_id,first_id)
+        edit=reverse('web:question_edit',kwargs={'question_id':question_id})
+        token=hidden_fields(self.client.get(edit))['context_token']
+        inputs.update(request_key=str(uuid4()),context_token=token,printed_text='2 + 4 = ?')
+        response=self.client.post(edit,inputs)
+        self.assertEqual(response.status_code,302,response.content.decode())
+        self.assertEqual(self.client.post(edit,inputs).status_code,302)
+        stale={**inputs,'request_key':str(uuid4()),'printed_text':'2 + 5 = ?'}
+        self.assertEqual(self.client.post(edit,stale).status_code,409)
+        detail=web_services.question_detail(self.owner,question_id)
+        self.assertEqual(len(detail['history']),2)
+        self.assertNotEqual(detail['question'].published_revision_id,first_id)
+
     def test_question_sources_edit_conflict_and_review_history(self):
         page = self.upload("first.png")["page_id"]
         preview = web_services.preview_file(self.owner, page, 0)

@@ -116,6 +116,7 @@ class ModelConfig(models.Model):
 
 class ModelRun(models.Model):
     class TaskKind(models.TextChoices):
+        MATERIAL = "material", "资料内容草稿"
         QUESTION = "question", "题干识别草稿"
         KNOWLEDGE = "knowledge", "知识草稿"
         ASSESSMENT = "assessment", "作答评价草稿"
@@ -170,7 +171,7 @@ class ModelRun(models.Model):
         ordering = ("-created_at", "-id")
         constraints = [
             models.UniqueConstraint(fields=("household", "request_key"), name="ai_modelrun_request_unique"),
-            models.CheckConstraint(condition=models.Q(task_kind__in=("question", "knowledge", "assessment", "variant")),
+            models.CheckConstraint(condition=models.Q(task_kind__in=("material", "question", "knowledge", "assessment", "variant")),
                 name="ai_modelrun_task_valid"),
             models.CheckConstraint(condition=models.Q(status__in=("queued", "running", "awaiting_review",
                 "failed", "cancelled", "stale", "applied")), name="ai_modelrun_status_valid"),

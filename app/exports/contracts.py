@@ -11,7 +11,7 @@ from PIL import Image
 
 
 SCHEMA_VERSION = "study-workbench.print.v0.1"
-GENERATOR_VERSION = "study-workbench.renderer.a2.v2"
+GENERATOR_VERSION = "study-workbench.renderer.a2.v3"
 PURPOSES = {"knowledge_summary", "classification_index", "evidence_report", "independent_practice", "parent_answers"}
 TEXT_KINDS = {"title", "sub", "h", "p", "small", "key", "warn", "bridge", "erratum"}
 INDEPENDENT_ROLES = {"title", "instruction", "question", "answer_space"}
@@ -215,13 +215,24 @@ def validate_document(document):
                         _text(value)
                         if plain_text(value) != value:
                             raise ExportError("invalid_map", "Map labels are literal text")
-            elif kind == "formula_image":
-                if not isinstance(content, dict) or set(content) != {"storage_key", "sha256", "source_ref", "alt", "width_points"}:
+            elif kind in {"formula_image", "diagram"}:
+                diagram_fields={"vector_storage_key", "vector_sha256", "conditions", "min_label_points", "independent_safe"} if kind=="diagram" else set()
+                if not isinstance(content, dict) or set(content) != {"storage_key", "sha256", "source_ref", "alt", "width_points"} | diagram_fields:
                     raise ExportError("invalid_fallback", "Formula image needs local bytes, source and alternative text")
                 for name in ("storage_key", "source_ref", "alt"):
                     _text(content[name])
                 if not isinstance(content["sha256"], str) or not SHA_RE.fullmatch(content["sha256"]) or type(content["width_points"]) not in (int, float) or not 1 <= content["width_points"] <= 490:
                     raise ExportError("invalid_fallback", "Invalid formula image hash or printable size")
+                if kind=="diagram":
+                    _text(content['vector_storage_key'])
+                    if (not isinstance(content['vector_sha256'],str) or not SHA_RE.fullmatch(content['vector_sha256']) or
+                        type(content['min_label_points']) not in (int,float) or not 9<=content['min_label_points']<=40 or
+                        type(content['independent_safe']) is not bool or
+                        not isinstance(content['conditions'],(list,tuple)) or not 1<=len(content['conditions'])<=30):
+                        raise ExportError('invalid_diagram','Teaching diagrams require vector provenance, conditions and readable labels')
+                    for condition in content['conditions']:_text(condition)
+                    if document.purpose=='independent_practice' and not content['independent_safe']:
+                        raise ExportError('independent_hint','Practice diagrams require explicit confirmation that labels and conditions contain no hints')
             else:
                 raise ExportError("unsupported_block", "Unknown blocks must not disappear silently")
 
@@ -274,4 +285,17 @@ def resolve_formula_image(content, asset_root):
         if image.width * image.height > 4_000_000:
             raise ExportError("invalid_fallback", "Formula image exceeds the pixel limit")
         image.load()
+    return path
+
+
+def resolve_diagram(content, asset_root):
+    """Verify both printable PNG and its retained vector source; never execute SVG."""
+    path=resolve_formula_image(content,asset_root)
+    root=Path(asset_root).resolve();key=Path(content['vector_storage_key']);vector=(root/key).resolve()
+    if (key.is_absolute() or '..' in key.parts or not vector.is_relative_to(root) or
+        not vector.is_file() or vector.stat().st_size>8*1024*1024 or vector.suffix.lower() not in {'.pdf','.svg'}):
+        raise ExportError('invalid_diagram','Vector source must stay inside the asset root')
+    raw=vector.read_bytes()
+    if digest(raw)!=content['vector_sha256']:
+        raise ExportError('diagram_hash_mismatch','Vector source differs from its recorded hash')
     return path

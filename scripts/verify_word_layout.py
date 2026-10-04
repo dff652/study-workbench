@@ -63,11 +63,14 @@ def main():
             raise RuntimeError('Office regression sources must be verified project export snapshots')
         manifest=verify_snapshot(directory)
         original=directory/'document.docx'
-        name=manifest['inputs']['document']['document_id']
+        source_document_id=manifest['inputs']['document']['document_id']
+        name=manifest['export_id']
         if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}',name):raise RuntimeError('Invalid local document ID')
+        if any(record['document_id']==name for record in records):
+            raise RuntimeError('Office regression sources must contain distinct export snapshots')
         destination=inputs/(name+'.docx')
         shutil.copyfile(original,destination);destination.chmod(0o600)
-        records.append({'document_id':name,'source_directory':str(directory),
+        records.append({'document_id':name,'source_document_id':source_document_id,'source_directory':str(directory),
             'source_sha256':manifest['files']['document.docx']['sha256'],
             'source_export_id':manifest['export_id'],'expected_pages':manifest['page_count']})
     name=owner

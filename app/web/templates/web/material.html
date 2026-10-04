@@ -10,6 +10,11 @@
   {% if upload_result == "saved" %}<p class="notice success" role="status">照片已加入资料集。</p>{% endif %}
   {% if upload_result == "duplicate" %}<p class="notice" role="status">检测到相同原图，已复用文件并关联到资料集。</p>{% endif %}
   <section class="panel">
+    <h2>整理与交付</h2>
+    <p>先对照原图确认题目和家长答案，再一次生成知识整理、分类索引、学习证据、独立复测和家长答案五册。</p>
+    <a class="primary-button link-button" href="{% url 'printing:packet_prepare' material.pk %}">继续核对并生成五册</a>
+  </section>
+  <section class="panel">
     <h2>上传照片</h2>
     <p class="muted">支持 JPEG、PNG。原图会保持不变；上传文件逐张处理。</p>
     <form id="upload-form" method="post" enctype="multipart/form-data" action="{% url 'web:material_detail' material.id %}" class="inline-form">
@@ -31,6 +36,7 @@
             <li data-page-id="{{ page.id }}">
               <span class="page-number">{{ page.position }}</span>
               <a class="page-title" href="{% url 'web:page_detail' page.id %}">{{ page.original_name|default:"原图" }}</a>
+              <span class="muted">{% with latest=page.reading_revisions.first %}{% if latest %}{{ latest.get_reading_display }} · {{ latest.get_coverage_display }}{% else %}未阅读 · 待补分区{% endif %}{% endwith %}</span>
               <div class="move-buttons"><button type="button" class="quiet-button move-up" aria-label="上移第 {{ page.position }} 页">上移</button><button type="button" class="quiet-button move-down" aria-label="下移第 {{ page.position }} 页">下移</button></div>
             </li>
           {% endfor %}

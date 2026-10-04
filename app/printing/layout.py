@@ -5,7 +5,7 @@ import re
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import Paragraph
 
-from app.exports.contracts import Block, ExportError, resolve_formula_image
+from app.exports.contracts import Block, ExportError, resolve_formula_image, resolve_diagram
 from app.exports.renderer import (
     _MathLine, _formula_image_flowables, _paragraph_styles, _register_fonts,
 )
@@ -23,9 +23,9 @@ def paginate(blocks, fonts, asset_root):
             return float(block.content)
         if block.kind == 'math':
             flowables = [_MathLine(block.content, registered['math'])]
-        elif block.kind == 'formula_image':
-            path = resolve_formula_image(block.content, asset_root)
-            flowables = _formula_image_flowables(block.content, path, styles)
+        elif block.kind in {'formula_image','diagram'}:
+            path = (resolve_diagram if block.kind=='diagram' else resolve_formula_image)(block.content, asset_root)
+            flowables = _formula_image_flowables(block.content, path, styles,diagram=block.kind=='diagram')
         else:
             flowables = [Paragraph(pdf_markup(block.content), styles[block.kind])]
         return sum(f.wrap(width, capacity)[1] + f.getSpaceBefore() + f.getSpaceAfter()
@@ -35,6 +35,21 @@ def paginate(blocks, fonts, asset_root):
     pages, page, used = [], [], 0
     while queue:
         block = queue.pop(0)
+        # Keep a short question with its figure and writing space. Measuring
+        # each block alone can strand the next question's text at a page foot.
+        if block.role == 'question' and page:
+            group = [block]
+            for following in queue:
+                if following.role == 'question':
+                    group.append(following)
+                else:
+                    if following.kind == 'space':
+                        group.append(following)
+                    break
+            group_height = sum(height(item) for item in group)
+            if group_height <= capacity and used + group_height > capacity:
+                pages.append(tuple(page))
+                page, used = [], 0
         required = height(block)
         if required > capacity:
             if block.kind not in {'p', 'small'}:

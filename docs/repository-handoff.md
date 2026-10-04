@@ -2,7 +2,7 @@
 
 ## 当前 PC 本地交付（2026-10-05）
 
-远端 main 经只读核对为 `7c16583`。当前工作树 `codex/bootstrap-docs` 的 PC 实现已本地提交 `98773ca`，122 个源码／测试路径与完整已验输入一致。README 已单独提交 `edb43fb`，项目文档独立成批；完整未 push review 与结果见 [后续清单](pc-follow-up-20261005.md)和 [交付 review](reviews/pc-handoff-20261005.md)。本轮没有 push 或升级 36。
+远端 main 经只读核对为 `7c16583`。当前工作树 `codex/bootstrap-docs` 的 PC 实现已本地提交 `98773ca`，122 个源码／测试路径与完整已验输入一致。README 已单独提交 `edb43fb`，项目文档 `3d6c80a`（16 路径）及历史引用修复 `dae7e1c` 也已提交；独立第二轮 review 最终 PASS，全部当前分支未 push 内容已经审查。具体证据与结果见 [后续清单](pc-follow-up-20261005.md)和 [交付 review](reviews/pc-handoff-20261005.md)。本轮没有 push 或升级 36。
 
 另一个 `codex/web-foundation` 工作树保持其独立实现和提交；两者源码／测试输入不同，不能混用验收数量或将它的提交视为当前工作树已交付。本次待推送审查范围是当前工作树从实际远端 main 到 HEAD 的全部提交及工作区。
 

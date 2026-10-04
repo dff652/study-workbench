@@ -1,5 +1,7 @@
 # SOP、可选 agent、shadcn-admin 与 Workbench 融合技术方案
 
+2026-10-05 设计补充：用户确认原“更多工具”应归入左侧业务导航，页面在统一主框架内操作。新增 [PC 统一与 skill 页面化方案](pc-product-integration-plan-20261005.md)细化原逐页替换目标、普通用户文案及逐题／分讲／合集解析任务。skill 新模块已有本地源码提交 `72e9a3d`，尚未接入 Workbench；此轮仅方案和文档更新，不能将下方原有融合验收记作全部 PC 页面统一完成。
+
 > 本文保留最初只读选型与技术方案的证据快照，不将历史“当前尚未实现”写成最新状态。2026-10-04 已按本机实现、review、统一提交／手动 push、36 备份恢复升级完成有界核心：新前端、进度／计划、完整 skill records 与配对教学图、人工核对五册流程。真实两题小样通过，运行版本为 0.2.0-dev。最新范围、旧 formula_image 明确拒绝及人工未验项见 [实施任务](fusion-execution-20261004.md)、[skill 完整接入](skill-integration-completion-20261004.md)和 [DEV_STATE](../DEV_STATE.md)。下述矩阵是选型时差距，不替代实际交付回执。
 
 

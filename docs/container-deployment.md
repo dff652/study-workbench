@@ -19,6 +19,8 @@ The runtime image uses the Python 3.12.14 slim Bookworm base by digest, Django a
 
 The image also installs the Bookworm packages `fonts-noto-cjk=1:20220127+repack1-1` and `fonts-dejavu-core=2.37-6` from Debian's [Bookworm package metadata for Noto](https://packages.debian.org/bookworm/fonts-noto-cjk) and [DejaVu](https://packages.debian.org/bookworm/fonts-dejavu-core). These provide the original TTC/TTF inputs at the paths used by the printing service. The two license notices are copied into `/app/licenses/`. The container font package revisions differ from the host revisions recorded in [third-party notices](third-party-notices.md), so generated print snapshots record their actual font hashes; container output is not claimed to be byte-for-byte or pixel-identical to prior host output.
 
+The local PC companion implementation adds Debian `poppler-utils` for PDF page-count verification and page previews. Its Debian package revision is not pinned; the executed `pdftoppm` version is recorded in each immutable output recipe. Rendering also preserves the actual native generator, font, adapter and fixed companion source hashes. The deterministic solution queue shares the existing background worker and runs with the model disabled. `solutions.0001` and `0002` add draft, confirmation, PNG and output/event history; upgrade and recovery require the paired database and complete private directory. This local change has not upgraded host 36. See the [PC contract](pc-companion-contract.md) and current DEV_STATE for actual acceptance.
+
 The Web process runs as uid/gid `10001`, has no Linux capabilities, uses a read-only root filesystem, and writes uploads and generated materials only under the private named volume mounted at `/var/lib/study-workbench/private`. PostgreSQL uses a separate named volume. Compose labels both projects' owned containers, volumes, networks, and the built application image; the acceptance script refuses existing resource names and removes only resources whose labels match its generated project and owner IDs.
 
 ## First local start
@@ -27,23 +29,20 @@ Requirements: Docker Engine with the Compose v2 plugin, Python 3 for the verifie
 
 ```sh
 umask 077
-install -m 0600 container.env.example .env.container.local
 python3 - <<'PY'
 from pathlib import Path
 import secrets
 
 path = Path(".env.container.local")
-lines = path.read_text(encoding="utf-8").splitlines()
+lines = Path("container.env.example").read_text(encoding="utf-8").splitlines()
 for name, length in (("SWB_DB_PASSWORD", 36), ("SWB_SECRET_KEY", 48)):
     prefix = f"{name}="
-    for index, line in enumerate(lines):
-        if line.startswith(prefix):
-            if not line[len(prefix):]:
-                lines[index] = prefix + secrets.token_urlsafe(length)
-            break
-    else:
-        raise SystemExit(f"Missing {name} in the local environment template")
-path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    indices = [index for index, line in enumerate(lines) if line.startswith(prefix)]
+    if len(indices) != 1:
+        raise SystemExit(f"Expected one {name} in the environment template")
+    lines[indices[0]] = prefix + secrets.token_urlsafe(length)
+with path.open("x", encoding="utf-8") as target:
+    target.write("\n".join(lines) + "\n")
 path.chmod(0o600)
 print("Local secrets generated without displaying their values.")
 PY
@@ -53,6 +52,8 @@ docker compose --env-file .env.container.local --project-name study-workbench -f
 docker compose --env-file .env.container.local --project-name study-workbench -f compose.yaml up --detach --wait
 curl --fail http://127.0.0.1:8000/healthz
 ```
+
+The configuration command creates a new file exclusively. If `.env.container.local` already exists, including a symbolic link, it refuses to replace it. Keep the existing protected configuration for subsequent starts; do not rerun initialization to rotate credentials.
 
 The settings reject missing secrets, database values, or allowed hosts. There is no default password and no public account registration. Create the first account with an interactive password prompt; do not put a password in a command argument:
 

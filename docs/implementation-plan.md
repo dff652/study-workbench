@@ -1,5 +1,9 @@
 # 实施分工与验收顺序
 
+## 当前任务清单：PC 统一与 skill 页面化（2026-10-05）
+
+用户同意统一 PC 页面，要求原“更多工具”进入左侧导航并在主框架内操作。最新 [PC-00～10 清单](pc-product-integration-plan-20261005.md)列出导航、实用功能、文件范围、输入输出、依赖、一个 luna6-worker 与主代理的职责和逐页验收。PC-01～10 本地实现及主代理验收已完成，结果见 [PC 本机验收](pc-acceptance-20261005.md)；独立复核最终 PASS，见 [增量 review](reviews/pc-unification-20261005.md)；PC 源码已本地提交，README／文档交付与完整未 push review 见 [后续清单](pc-follow-up-20261005.md)；本轮尚未 push 或部署。移动开发不进入该清单。下方既有交付仍是有效历史，不能代替这次界面统一或新 companion 接入验收。
+
 ## 当前交付状态（2026-10-05）
 
 融合版源码 c4aa96f／skill 三文件 c947710 已完成完整差异与独立源码复核后手动 push。完整结构化伴随 records 与配对教学图接通，真实两题五册 11 页已验；36 备份、空实例恢复与融合升级完成，26 运维／14 组真实 HTTPS 浏览器通过。实际回执见 [DEV_STATE](../DEV_STATE.md)、[融合实施任务](fusion-execution-20261004.md)与[交付 review](reviews/skill-delivery-20261004.md)。

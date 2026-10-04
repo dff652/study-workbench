@@ -1,5 +1,13 @@
 # GitHub 仓库交付记录
 
+## 当前 PC 本地交付（2026-10-05）
+
+远端 main 经只读核对为 `7c16583`。当前工作树 `codex/bootstrap-docs` 的 PC 实现已本地提交 `98773ca`，122 个源码／测试路径与完整已验输入一致。README 已单独提交 `edb43fb`，项目文档独立成批；完整未 push review 与结果见 [后续清单](pc-follow-up-20261005.md)和 [交付 review](reviews/pc-handoff-20261005.md)。本轮没有 push 或升级 36。
+
+另一个 `codex/web-foundation` 工作树保持其独立实现和提交；两者源码／测试输入不同，不能混用验收数量或将它的提交视为当前工作树已交付。本次待推送审查范围是当前工作树从实际远端 main 到 HEAD 的全部提交及工作区。
+
+下方融合／移动／SOP 段落保留为已发生的历史，当前状态以本节、DEV_STATE 与 Git 为准。
+
 ## 当前融合交付（2026-10-04～05）
 
 完整 skill 接入、小样与源码交付门槛独立 PASS。Workbench `c4aa96f1aeb696f882259edcebdecb0e016a0d83`（205 路径）与 skill `c9477100a2d5b40ebae620228fb24e5f399eb99a`（只含转换器、测试、integration 参考）已手动 push 各自 main，远端 SHA 一致。Workbench 本地分支仍为 codex/bootstrap-docs；skill 另一会话的 dirty 工作未纳入提交。

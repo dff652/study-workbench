@@ -13,6 +13,8 @@
 
 A1b 的 Django、psycopg 及既有依赖继续按原固定版本使用，本轮没有改变数据库或服务器选型。PyMuPDF 不进入新项目渲染依赖；地图 PNG 及预览由本机已有 Poppler 工具生成。
 
+2026-10-05 的 PC companion 复用本项目的 ReportLab／python-docx／字体工具链。四个纯校验与组织模块来自本项目作者的 [study-material-workflow](https://github.com/dff652/study-material-workflow) 固定提交 `72e9a3d178859d47581db17a71bee3babaa31ee8`，原路径、SHA 及相对导入适配记录在 [SOURCE.json](../app/solutions/vendor/SOURCE.json)。没有引入该 skill 的另一套 PDF 渲染器。运行镜像新增 Debian Bookworm `poppler-utils`，用于 PDF 页数与逐页预览，实际工具版本写入每份生成配方。
+
 ## B1 开发验证依赖
 
 以下仅固定在 [requirements-dev.txt](../requirements-dev.txt)，没有增加运行依赖或发布浏览器镜像：

@@ -1,8 +1,10 @@
 # Single-host container service
 
-## 当前融合交付（2026-10-04）
+## 当前融合交付（2026-10-04～05）
 
-完整 skill 接入与代表性小样工程验收完成；最新授权已包含统一提交／手动 push、36 一致性备份／空实例恢复后升级。当前尚未执行运行切换，结果在执行后补录；以下未交付限制与旧运行版本均为对应阶段历史。新工作台使用 `/app/`，原入口及高级业务保留。准确范围见 [本轮 review](reviews/skill-delivery-20261004.md) 和 [DEV_STATE](../DEV_STATE.md)。
+36 已完成融合版升级，运行源码 `c4aa96f`／镜像标签 `test-20261004-fusion-c4aa96f`，版本 `0.2.0-dev`。26 项运维和 14 组严格 HTTPS 浏览器通过。前后停两写入服务获取配套备份，并分别实际空实例恢复；41 张旧表原记录、24 文件及原数据库容器／卷保持，私有 CA 全状态备份／解包／密钥配对通过且当前 CA 不变。后续运行命令仍须使用 compose.yaml＋compose.mobile.yaml；旧版本回退仅以旧配套备份恢复空项目，不能连接升级后数据库。
+
+根地址登录后进入 `/app/`，旧资料库保留在 `/materials/`；原业务入口继续可访问。运行身份固定为源码提交，之后文档提交不等于重建镜像。精确门槛及人工未验项见 [本轮 review](reviews/skill-delivery-20261004.md)和 [DEV_STATE](../DEV_STATE.md)。
 
 
 This document covers the local Docker Compose service and its private backup and restore workflow. The Compose file binds the Web service to `127.0.0.1:8000` by default; PostgreSQL has no published host port. It is not a public deployment recipe. Put a separately managed TLS reverse proxy in front of the loopback listener before exposing access beyond the machine.

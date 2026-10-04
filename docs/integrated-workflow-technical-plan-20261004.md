@@ -1,5 +1,8 @@
 # SOP、可选 agent、shadcn-admin 与 Workbench 融合技术方案
 
+> 本文保留最初只读选型与技术方案的证据快照，不将历史“当前尚未实现”写成最新状态。2026-10-04 已按本机实现、review、统一提交／手动 push、36 备份恢复升级完成有界核心：新前端、进度／计划、完整 skill records 与配对教学图、人工核对五册流程。真实两题小样通过，运行版本为 0.2.0-dev。最新范围、旧 formula_image 明确拒绝及人工未验项见 [实施任务](fusion-execution-20261004.md)、[skill 完整接入](skill-integration-completion-20261004.md)和 [DEV_STATE](../DEV_STATE.md)。下述矩阵是选型时差距，不替代实际交付回执。
+
+
 日期：2026-10-04（Asia/Shanghai）。原方案阶段为文档设计；随后用户授权按清单连续本机实施、Luna6 分工与主代理验收。当前实现和范围见 [融合实施任务](fusion-execution-20261004.md)、[API 契约](fusion-api-contract.md)、[工具交换契约](skill-exchange-contract.md)。本文下方保留设计时证据和后续阶段，不代表未来移动客户端、真实外发、Git 交付、NAS 或 36 部署自动获授权。
 
 ## 1. 决策与证据范围

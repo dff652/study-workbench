@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="480" viewBox="0 0 1200 480" role="img" aria-labelledby="title desc">
+  <title id="title">Study Workbench：来源、题目与独立学习记录</title>
+  <desc id="desc">原图与题目、题目与知识双向关联。题目可整理为解析文档，也可关联单独记录的作答、评价及复测；文档生成不会创建学习者作答。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 1 1 L 9 5 L 1 9" fill="none" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="480" rx="24" fill="#f8fafc"/>
+  <g id="relationships" fill="none" stroke="#64748b" stroke-width="3">
+    <path d="M 372 124 H 436" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <path d="M 764 124 H 828" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <path d="M 600 200 V 256 H 288 V 304" marker-end="url(#arrow)"/>
+    <path d="M 600 256 H 912 V 304" marker-end="url(#arrow)"/>
+  </g>
+  <g id="source" transform="translate(64 48)">
+    <rect width="288" height="152" rx="20" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
+    <path d="M 24 48 V 24 H 48 M 240 24 H 264 V 48 M 24 104 V 128 H 48 M 240 128 H 264 V 104" fill="none" stroke="#0f766e" stroke-width="3"/>
+    <text x="144" y="99" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="64" font-weight="650" fill="#0f172a">原图</text>
+  </g>
+  <g id="question" transform="translate(456 48)">
+    <rect width="288" height="152" rx="20" fill="#1e293b"/>
+    <text x="144" y="99" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="64" font-weight="650" fill="#fff">题目</text>
+  </g>
+  <g id="knowledge" transform="translate(848 48)">
+    <rect width="288" height="152" rx="20" fill="#fff" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="144" y="99" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="64" font-weight="650" fill="#0f172a">知识</text>
+  </g>
+  <g id="solution-documents" transform="translate(64 324)">
+    <rect width="448" height="112" rx="20" fill="#eaf0f7"/>
+    <text x="224" y="79" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="64" font-weight="650" fill="#1e293b">解析文档</text>
+  </g>
+  <g id="learning-records" transform="translate(688 324)">
+    <rect width="448" height="112" rx="20" fill="#e6f4ef"/>
+    <text x="224" y="79" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,PingFang SC,Microsoft YaHei,sans-serif" font-size="64" font-weight="650" fill="#0f766e">学习记录</text>
+  </g>
+</svg>

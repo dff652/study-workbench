@@ -1,8 +1,8 @@
 # MOB-01：HTTPS 与最小 PWA
 
-更新日期：2026-10-04（Asia/Shanghai）。用户已同意实施 MOB-01，本轮范围为源码、配置、说明及**本机合成隔离验收**。不升级 36，不提交／推送，不安装手机证书，不开发 Flutter 或原生 API，不调用模型或外发照片。真实手机和主屏幕安装结果须另记录，不能由模拟浏览器代替。
+更新日期：2026-10-04（Asia/Shanghai）。用户同意 MOB-01 的首轮为源码和合成隔离验收，当时不升级 36、不提交／推送。同日另获同意后，源码已交付、36 已备份升级并通过运行与恢复验收。Android 手机证书／主屏幕安装仍待实际操作；不开发原生 API／Flutter，不调用模型或外发照片。
 
-上述为首轮实现边界。用户随后同意源码提交／push 和 36 备份升级；部署结果以 [DEV_STATE](../DEV_STATE.md) 的最新记录为准。手机信任、主屏幕安装及家庭试用仍需实际操作；不会因此启动原生客户端或模型测试。
+Android 优先、局域网 IP＋私有 CA 已固定；部署结果以 [DEV_STATE](../DEV_STATE.md) 的最新记录为准。手机信任、主屏幕安装及家庭试用仍需实际操作；不会因此启动原生客户端或模型测试。
 
 ## 1. 已实现的交付物
 
@@ -56,7 +56,7 @@ PLAYWRIGHT_BROWSERS_PATH=/path/to/private/browser-cache .venv/bin/python scripts
 PLAYWRIGHT_BROWSERS_PATH=/path/to/private/browser-cache .venv/bin/python scripts/verify_mobile.py --tls-host 127.0.0.1
 ```
 
-脚本生成唯一 owner／项目／镜像标签，只绑定 loopback，使用虚构题目、图片、账号与三次作答。测试前拒绝现有同名资源；不访问 36。官方 Caddy 与 PostgreSQL 镜像须已缓存，验收脚本不自行 pull；构建应用使用既有 Dockerfile。
+脚本生成唯一 owner／项目／镜像标签，只绑定 loopback，使用虚构题目、图片、账号与三次作答。测试前拒绝现有同名资源；不访问既有 36 项目。官方 Caddy 与 PostgreSQL 镜像须已缓存，验收脚本不自行 pull；构建应用使用既有 Dockerfile。
 
 TLS 验证使用独立 CA 文件和默认 hostname 验证，同时验证无该 CA 的客户端拒绝连接。Chromium 的两个 NSS 目录只在临时 mount namespace 映射到新的私有数据库；sudo 显式保留原用户 HOME，测试用户不改 HOME。Playwright 的 Node 请求客户端用进程级 `NODE_EXTRA_CA_CERTS` 信任同一根证书。宿主原目录不写入，不使用 `ignoreHTTPSErrors` 或证书错误豁免参数。浏览器与其子进程退出后该 namespace 消失；测试 CA／诊断材料只留在被忽略的验收目录。
 
@@ -64,15 +64,15 @@ TLS 验证使用独立 CA 文件和默认 hostname 验证，同时验证无该 C
 
 报告、合成截图及诊断保存在 `artifacts/mobile-verification/<owner>/`。包含测试凭据的 `browser.local.json` 为 0600，父目录 0700；不发布整个目录或 CA 状态。脚本核对标签后移除自有容器／卷／网络及测试镜像，保留已有官方镜像和其他项目资源。测试失败不能记录为通过，当前真实结果见 DEV_STATE。
 
-## 5. 后续家庭部署操作准备
+## 5. 家庭部署与本次 36 结果
 
-这组说明用于**将来获目标实例部署授权后的操作**，本轮没有执行。已有 36 不应另建同名空项目，也不能照搬测试 owner、用户名或 localhost 地址。
+36 已按本节流程完成授权升级，源码 `34a8630`；29 项运维及 12 组浏览器检查通过。原 41 张表的升级前记录、19 文件、DB 容器和卷保持；前后备份均空实例恢复，独立 CA 也已解包及证书／密钥校验。其他实例或入口变更仍以相应授权为准。已有 36 不应另建同名空项目，也不能照搬测试 owner、用户名或 localhost 地址。
 
 1. 固定使用中的项目名、原 DB／资料卷和当前镜像；取得升级前一致备份及恢复证据，按[容器 SOP](container-deployment.md)处理。
 2. 准备选定的家庭 hostname／DNS／VPN 和私有代理目录；在受保护的原 env 副本追加 TLS 变量，确认 UID／GID，生成新的候选镜像标签。配置中的密码、签名与私钥不发到聊天。
 3. 带完整两个 Compose 文件做配置检查并构建 `web caddy`，先在隔离项目验证相同入口策略。只用 `config --quiet` 检查，避免输出合并后的凭据。
 4. 按授权的升级窗口停止原 Web／worker，备份并校验；以原项目和原卷使用覆盖配置启动候选版本，确认直接 Web 端口消失、DB 无发布端口。
-5. 用导出的根证书核对 TLS，验证登录／私有图片、历史、打印与模型关闭；完成手机信任及业务验收后才更新部署状态。初次 CA、域名变化和入口变化都记录到私有部署清单。
+5. 用导出的根证书核对 TLS，验证登录／私有图片、历史、打印与模型关闭；分别记录服务运行及实际手机验收结果；手机未测不影响如实记录服务器已部署。初次 CA、域名变化和入口变化都记录到私有部署清单。
 
 完整文件列表示例，`SWB_TARGET_PROJECT` 与私有 env 路径必须按目标实例固定；未设置项目变量时命令直接拒绝：
 
@@ -82,7 +82,7 @@ docker compose --env-file .env.mobile.local -p "${SWB_TARGET_PROJECT:?先设置�
 docker compose --env-file .env.mobile.local -p "${SWB_TARGET_PROJECT:?先设置已核实的原项目名}" -f compose.yaml -f compose.mobile.yaml up --detach --no-build --wait
 ```
 
-该配置只监听 HTTPS，不发布 HTTP 跳转端口；使用明确的 `https://<hostname>:<端口>`。loopback 改为家庭接口、DNS、路由／防火墙及 VPN 变化是目标部署步骤，本轮未执行。
+该配置只监听 HTTPS，不发布 HTTP 跳转端口；使用明确的 `https://<hostname>:<端口>`。本次绑定选定的 36 家庭接口，未改共享 DNS／代理、路由／防火墙或 VPN。原 `data/runtime-36/compose.env` 已同步 TLS 配置；对原项目运行 `up` 等命令必须带两个 Compose 文件，入口、CA 指纹与恢复点见私有部署清单。Android 根证书及操作／结果表为私有 `data/runtime-36/android-acceptance.local.md`，待真机填写。
 
 ## 6. 根证书和手机接入
 

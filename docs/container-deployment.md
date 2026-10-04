@@ -2,7 +2,7 @@
 
 This document covers the local Docker Compose service and its private backup and restore workflow. The Compose file binds the Web service to `127.0.0.1:8000` by default; PostgreSQL has no published host port. It is not a public deployment recipe. Put a separately managed TLS reverse proxy in front of the loopback listener before exposing access beyond the machine.
 
-The optional [MOB-01 HTTPS/PWA overlay](mobile-deployment.md) adds an owned non-root Caddy proxy, removes the direct Web host port, and uses a private CA. Its isolated synthetic acceptance is recorded in DEV_STATE; host 36 has not been upgraded with this overlay. Keep both Compose files in subsequent operations and handle the private CA state separately from the database/file backup.
+The optional [MOB-01 HTTPS/PWA overlay](mobile-deployment.md) adds an owned non-root Caddy proxy, removes the direct Web host port, and uses a private CA. Its isolated acceptance and authorized host-36 upgrade/recovery are recorded in DEV_STATE; Android physical-device acceptance is still pending. Keep both Compose files in subsequent operations and handle the private CA state separately from the database/file backup.
 
 ## Pinned runtime
 
@@ -135,12 +135,12 @@ Do not use `down --volumes` unless permanent deletion of both PostgreSQL records
 
 ## 36 LAN test instance
 
-The authorized test runs on host 36 as Compose project `study-workbench-36`, with dedicated database/private volumes. Its exact LAN listener is recorded only in the ignored `data/runtime-36/deployment.local.json`. This is LAN HTTP testing, not a public HTTPS deployment. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); account details stay in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
+The authorized test runs on host 36 as Compose project `study-workbench-36`, with dedicated database/private volumes. Its exact LAN listener is recorded only in the ignored `data/runtime-36/deployment.local.json`. This initially used LAN HTTP; the authorized MOB-01 upgrade now uses LAN HTTPS with a separate private CA. It is not a public deployment; both Compose files are required for subsequent service updates. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); account details stay in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
 
 Use the existing configuration without displaying its contents:
 
 ```sh
-docker compose --env-file data/runtime-36/compose.env --project-name study-workbench-36 -f compose.yaml ps
+docker compose --env-file data/runtime-36/compose.env --project-name study-workbench-36 -f compose.yaml -f compose.mobile.yaml ps
 ```
 
 The initial backup at `backups/runtime-36/20261003-initial/` was made with both Web and worker stopped and then resumed. Follow [local data policy](local-data-policy.md) when exporting a later retirement ledger or restoring an older backup; a backup cannot contain deletions recorded after its creation.

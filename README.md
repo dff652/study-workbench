@@ -4,7 +4,7 @@
 
 当前阶段：**知识与题库、逐次作答／评价、打印、复习／报告及容器服务的主要人工流程已实现并通过对应工程验收。本轮已补齐公式打印、检索、手机放大、外发确认和三类持久派生处理，并完成工程验收；实体手机及真实家庭流程仍待人工试用，M1a 尚未判全部通过。模型默认关闭，真实供应商测试留待手动配置；完整边界见 [DEV_STATE](DEV_STATE.md)。**
 
-GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。本轮补齐源码 `ce698f9` 已审查、独立验收并手动推送 public 仓库 `main`。36 已备份、恢复演练并升级到同一源码，16 项运行复验及升级后备份通过；原记录、资料和历史导出保持。交付状态及人工下一步见[仓库交付记录](docs/repository-handoff.md)。
+GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workbench)。最新 MOB-01 源码 `34a8630` 已审查并手动推送 public 仓库 `main`。36 已备份、恢复演练并升级至 HTTPS／PWA；29 项运维和 12 组运行浏览器检查通过，原记录、资料和历史导出保持，数据库／资料及独立 CA 的备份恢复均已验证。交付状态及人工下一步见[仓库交付记录](docs/repository-handoff.md)。
 
 两条核心主线：
 
@@ -63,7 +63,7 @@ GitHub 项目：[dff652/study-workbench](https://github.com/dff652/study-workben
 
 容器交付用 Docker Compose 分开运行 Web、模型任务 worker 和 PostgreSQL；原图、派生文件、导出及数据库使用独立持久化卷。已在独立的 36 局域网实例测试；连接信息在被忽略的 `data/runtime-36/deployment.local.json`，账号在受保护的 `credentials.local.json`。服务状态及验收见 DEV_STATE，启动与恢复见容器说明。
 
-移动交付按家庭自用优先推进：用户同意 MOB-01 后，已实现 [HTTPS 与最小 PWA](docs/mobile-deployment.md)，通过本机合成隔离浏览器验收；36 尚未升级此版本，真机证书／主屏幕安装仍待实际操作。独立 Flutter App、完整原生 API 和离线同步仍为[后续方案](docs/mobile-client-technical-plan.md)，尚未实施；模型继续关闭。
+移动交付按家庭自用优先推进：已实现 [HTTPS 与最小 PWA](docs/mobile-deployment.md)，通过隔离验收并在另获用户同意后完成 36 备份升级。入口采用局域网 IP＋私有 CA，Android 优先，真机证书／主屏幕安装仍待实际操作。独立 Flutter App、完整原生 API 和离线同步仍为[后续方案](docs/mobile-client-technical-plan.md)，尚未实施；模型继续关闭。
 
 首版流程：上传照片 → 框选题目 → 人工录入或 AI 草稿 → 关联知识点、方法和题型 → 审核及打印 → 评价手写过程并记录个人档案。已加入有来源的变式草稿、手工复习计划及学习证据报告；不生成掌握分数。
 

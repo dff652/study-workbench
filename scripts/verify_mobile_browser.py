@@ -20,7 +20,7 @@ def verify(config_path):
         raise RuntimeError('Requires the protected, owned mobile acceptance configuration')
     config = json.loads(path.read_text())
     origin = config['origin']
-    if (urlsplit(origin).scheme != 'https' or urlsplit(origin).hostname != 'localhost'
+    if (urlsplit(origin).scheme != 'https' or urlsplit(origin).hostname not in ('localhost', '127.0.0.1')
             or not config['owner'] or (path.parent / 'owner').read_text() != config['owner']):
         raise RuntimeError('Only the owned loopback synthetic HTTPS instance is accepted')
     checks, errors, outside = [], [], []

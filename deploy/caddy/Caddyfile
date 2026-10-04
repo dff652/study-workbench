@@ -2,6 +2,8 @@
     admin off
     auto_https disable_redirects
     skip_install_trust
+    # IP-address clients omit SNI; select this instance's exact certificate.
+    default_sni {$SWB_TLS_HOST}
 }
 
 https://{$SWB_TLS_HOST}:8443 {

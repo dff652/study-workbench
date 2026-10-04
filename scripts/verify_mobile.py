@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build MOB-01 in a new owned Compose project; never touch 36 or global CA trust."""
+import argparse
 import hashlib
 import json
 import os
@@ -96,6 +97,10 @@ print(json.dumps({'sha256':hashlib.sha256(json.dumps(rows,sort_keys=True,default
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--tls-host', choices=('localhost', '127.0.0.1'), default='localhost',
+        help='Use 127.0.0.1 to verify IP clients that omit TLS SNI')
+    args = parser.parse_args()
     endpoint = os.environ.get('DOCKER_HOST') or base.command([
         'docker', 'context', 'inspect', '--format', '{{.Endpoints.docker.Host}}']).stdout.strip()
     if not endpoint.startswith('unix://'):
@@ -113,12 +118,13 @@ def main():
     proxy_image = 'study-workbench-caddy:' + tag
     port = base.free_loopback_port()
     env = base.compose_env(owner, tag, base.free_loopback_port(), secrets.token_urlsafe(48), secrets.token_urlsafe(32))
-    env.update(SWB_TLS_HOST='localhost', SWB_TLS_BIND_ADDRESS='127.0.0.1', SWB_TLS_HOST_PORT=str(port),
+    env.update(SWB_TLS_HOST=args.tls_host, SWB_TLS_BIND_ADDRESS='127.0.0.1', SWB_TLS_HOST_PORT=str(port),
         SWB_PROXY_UID=str(os.getuid()), SWB_PROXY_GID=str(os.getgid()), SWB_CADDY_STATE_DIR=str(state),
         SWB_SOURCE_REVISION='working-tree-mob01')
-    origin = f'https://localhost:{port}'
+    origin = f'https://{args.tls_host}:{port}'
     report = {'owner': owner, 'project': project, 'passed': False, 'caddy_image': CADDY_IMAGE,
-        'remote_36_changed': False, 'global_trust_changed': False, 'physical_device_tested': False}
+        'tls_host': args.tls_host, 'remote_36_changed': False,
+        'global_trust_changed': False, 'physical_device_tested': False}
     try:
         base.assert_project_absent(project)
         base.assert_image_absent(image)

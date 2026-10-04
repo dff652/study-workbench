@@ -42,6 +42,8 @@ worker 脚本本身 no-store，注册使用 `updateViaCache: none`；发布新�
 | `SWB_PROXY_UID`／`SWB_PROXY_GID` | 上述目录实际所有者的数字 UID／GID；代理非 root |
 | 原 `SWB_*` | 保留显式 DB／密码／secret／镜像标签／资源所有者等；密钥仍在私有 env 文件 |
 
+单一 TLS 入口也可填写局域网 IP。Caddy 的 `default_sni` 与该入口一致，让不发送 SNI 的纯 IP 客户端选择正确证书；客户端仍必须验证 CA 和 IP SAN，不忽略证书错误。选项含义见 [Caddy 官方说明](https://caddyserver.com/docs/caddyfile/options#default-sni)。
+
 覆盖配置将 Web 的 allowed host、CSRF origin 和三个 HTTPS 开关绑定到上述单一 TLS 入口，不能把旧 HTTP origin 当作本阶段外部入口。原 `compose.yaml` 的独立 HTTP 模式继续保留；在同一已升级项目漏掉覆盖文件会重新发布旧 Web 端口，操作时必须保持完整文件列表。
 
 ## 4. 可复验的本机隔离验收
@@ -50,6 +52,8 @@ worker 脚本本身 no-store，注册使用 `updateViaCache: none`；发布新�
 
 ```sh
 PLAYWRIGHT_BROWSERS_PATH=/path/to/private/browser-cache .venv/bin/python scripts/verify_mobile.py
+# 纯 IP 入口回归：使用同一隔离边界，实际验证无 SNI 客户端。
+PLAYWRIGHT_BROWSERS_PATH=/path/to/private/browser-cache .venv/bin/python scripts/verify_mobile.py --tls-host 127.0.0.1
 ```
 
 脚本生成唯一 owner／项目／镜像标签，只绑定 loopback，使用虚构题目、图片、账号与三次作答。测试前拒绝现有同名资源；不访问 36。官方 Caddy 与 PostgreSQL 镜像须已缓存，验收脚本不自行 pull；构建应用使用既有 Dockerfile。

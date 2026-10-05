@@ -61,7 +61,7 @@ export function RetryState({
   title?: string
 }) {
   return (
-    <div className='rounded-xl border border-amber-300/70 bg-amber-50/70 p-5' role='alert'>
+    <div className='rounded-xl border border-amber-300/70 bg-amber-50/70 p-5 dark:border-amber-900 dark:bg-amber-950/30' role='alert'>
       <div className='flex items-start gap-3'>
         <CircleHelp className='mt-0.5 size-5 shrink-0 text-amber-700' aria-hidden='true' />
         <div className='min-w-0 flex-1'>

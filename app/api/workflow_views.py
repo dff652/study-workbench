@@ -1,8 +1,10 @@
 """Material and SOP adapters. POST commands delegate to authorized services."""
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import reverse
+from django.db import transaction
 from urllib.parse import urlencode
 from app.web import services as materials
+from app.web import subjects
 from app.web.models import MaterialSet
 from app.web.models import PageReadingRevision
 from app.printing import packets
@@ -19,6 +21,7 @@ def body(request, fields):
 
 def material_row(row):
     return {"id": str(row.pk), "title": row.title, "page_count": row.pages.count(),
+            "classification": subjects.current(row),
             "created_at": row.created_at, "material_url": reverse("web:material_detail", args=[row.pk]),
             "prepare_url": reverse("printing:packet_prepare", args=[row.pk])}
 
@@ -30,6 +33,10 @@ def material_list(request):
     query = request.GET.get("q", "").strip()[:200]
     if query:
         rows = rows.filter(title__icontains=query)
+    subject = request.GET.get("subject", "")
+    if subject:
+        subjects.validate(subject)
+        rows = subjects.classified(rows).filter(school_subject=subject)
     try:
         page = int(request.GET.get("page", "1"))
         page_size = int(request.GET.get("page_size", "20"))
@@ -41,7 +48,36 @@ def material_list(request):
     total = rows.count()
     start = (page - 1) * page_size
     return {"items": [material_row(row) for row in rows[start:start + page_size]], "total": total,
-            "page": page, "page_size": page_size, "has_next": start + page_size < total, "query": query}
+            "page": page, "page_size": page_size, "has_next": start + page_size < total, "query": query, "subject": subject}
+
+
+@api()
+@transaction.atomic
+def classification(request, material_id):
+    row = materials._material(request.user, material_id)
+    rows = row.classifications.select_related("created_by").order_by("-version")
+    before = request.GET.get("before")
+    if before is not None:
+        try:
+            before = int(before)
+            if before < 1:
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ValueError("Invalid classification history cursor")
+        rows = rows.filter(version__lt=before)
+    selected = list(rows[:51])
+    return {"classification": subjects.current(row), "history": [{"version": item.version, "subject": item.subject,
+        "reason": item.reason, "author": item.created_by.get_username(), "created_at": item.created_at.isoformat()}
+        for item in selected[:50]], "history_next_before": selected[49].version if len(selected) > 50 else None}
+
+
+@api("POST")
+@transaction.atomic
+def classification_save(request, material_id):
+    value = body(request, {"subject", "expected_version", "request_key", "reason"})
+    saved = subjects.save(request.user, material_id, **value)
+    row = materials._material(request.user, material_id)
+    return {"material": material_row(row), "saved_classification": {"subject": saved.subject, "version": saved.version}}
 
 
 @api("POST")

@@ -44,7 +44,7 @@ function savedPrivateDraft(body: Record<string, unknown>) {
 }
 
 async function selectPanel(user: ReturnType<typeof userEvent.setup>, name: '编辑讲解' | '生成文件' | '历史版本') {
-  await user.click(screen.getByRole('button', { name }))
+  await user.click(screen.getByRole('tab', { name: new RegExp(name) }))
 }
 
 async function openDocumentSettings(user: ReturnType<typeof userEvent.setup>) {
@@ -69,7 +69,7 @@ describe('SolutionWorkspace', () => {
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} />)
     expect((await screen.findByRole('alert')).textContent).toContain('临时读取失败')
     await user.click(screen.getByRole('button', { name: '重试' }))
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     expect(reads).toBe(2)
   })
 
@@ -90,7 +90,7 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite initialPanel='outputs' onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     expect((await screen.findByRole('alert', {}, { timeout: 5000 })).textContent).toContain('状态读取失败')
     expect(reads).toBe(2)
     await user.click(screen.getByRole('button', { name: '重试读取状态' }))
@@ -112,11 +112,11 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite initialPanel='outputs' onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     const preview = await screen.findByRole('img', { name: '仅 Word 文档 第 1 页预览' })
     expect(preview.getAttribute('src')).toBe('/previews/word-page-1.png')
     expect(screen.queryByTitle('仅 Word 文档 PDF 预览')).toBeNull()
-    expect(screen.getByRole('button', { name: '生成文件' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('tab', { name: /生成文件/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.queryByRole('button', { name: '保存为新版本' })).toBeNull()
   })
 
@@ -129,7 +129,7 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     await openDocumentSettings(user)
     const title = screen.getByRole('textbox', { name: '文档标题' }) as HTMLInputElement
     await user.type(title, '暂存内容')
@@ -138,6 +138,34 @@ describe('SolutionWorkspace', () => {
     await selectPanel(user, '编辑讲解')
     expect(screen.getByRole('textbox', { name: '文档标题' })).toBe(title)
     expect(title.value).toBe('测试解析暂存内容')
+  })
+
+  it('syncs route tabs without resetting editor input and reports explicit changes', async () => {
+    const user = userEvent.setup()
+    const onTabChange = vi.fn()
+    const props = { materialId: 'material-1', householdId: 'household-1', csrfToken: 'csrf', canWrite: true, onUnauthorized: vi.fn(), onBack: vi.fn(), onTabChange }
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname.includes('/drafts/')) return emptyPrivateDraft()
+      return Response.json(response())
+    }))
+
+    const view = render(<SolutionWorkspace {...props} initialTab='history' />)
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /历史版本/ }).getAttribute('aria-selected')).toBe('true')
+    await selectPanel(user, '编辑讲解')
+    await openDocumentSettings(user)
+    const title = screen.getByRole('textbox', { name: '文档标题' }) as HTMLInputElement
+    await user.clear(title)
+    await user.type(title, '保留的编辑内容')
+    await selectPanel(user, '历史版本')
+    expect(onTabChange).toHaveBeenLastCalledWith('history')
+
+    view.rerender(<SolutionWorkspace {...props} initialTab='outputs' />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: /生成文件/ }).getAttribute('aria-selected')).toBe('true'))
+    await selectPanel(user, '编辑讲解')
+    expect(screen.getByRole('textbox', { name: '文档标题' })).toBe(title)
+    expect(title.value).toBe('保留的编辑内容')
   })
 
   it('reuses action keys after a lost generation response and output-action response', async () => {
@@ -191,13 +219,15 @@ describe('SolutionWorkspace', () => {
       throw new Error(`unexpected request ${url.pathname}`)
     }))
 
-    render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    const onTabChange = vi.fn()
+    render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} onTabChange={onTabChange} />)
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '生成 PDF / Word' }))
     expect((await screen.findByRole('alert')).textContent).toContain('生成结果响应丢失')
     await user.click(screen.getByRole('button', { name: '生成 PDF / Word' }))
     expect(await screen.findByText('服务端队列中已有文档')).toBeTruthy()
-    expect(screen.getByRole('button', { name: '生成文件' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('tab', { name: /生成文件/ }).getAttribute('aria-selected')).toBe('true')
+    expect(onTabChange).toHaveBeenCalledWith('outputs')
     expect(generationRequests).toHaveLength(2)
     expect(generationRequests[0]).toMatchObject({ action: 'generate', expected_version: 1, reason: '整理逐题解析' })
     expect(generationRequests[1].request_key).toBe(generationRequests[0].request_key)
@@ -241,7 +271,7 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} onUnsavedChange={onUnsavedChange} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '明确确认解析' }))
     expect(await screen.findByText('当前正式版本已明确确认。修改并保存后会形成新的版本。')).toBeTruthy()
     await new Promise((resolve) => window.setTimeout(resolve, 800))
@@ -348,7 +378,7 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     await selectPanel(user, '历史版本')
     await user.click(screen.getByRole('button', { name: '读取更早版本' }))
     expect(await screen.findByText(/版本 1 · parent/)).toBeTruthy()
@@ -410,7 +440,7 @@ describe('SolutionWorkspace', () => {
     }))
 
     render(<SolutionWorkspace materialId='material-1' householdId='household-1' csrfToken='csrf' canWrite initialPanel='outputs' onUnauthorized={vi.fn()} onBack={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题解析' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '测试资料 · 逐题讲解' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: '读取更早文档' }))
     expect(await screen.findByText('较早文档仍在生成')).toBeTruthy()
     expect(await screen.findByText('较早文档已生成完成', {}, { timeout: 5000 })).toBeTruthy()

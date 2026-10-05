@@ -10,10 +10,10 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react'
-import { api, ApiError } from './api'
+import { api, getErrorMessage } from './api'
 import { AboutPanel } from './components/about-panel'
 import { LearningStart } from './components/learning-start'
-import { Disclosure } from './components/disclosure'
+import { WorkspacePanel, WorkspaceTabs } from './components/workspace-tabs'
 import { NavButton } from './components/nav-button'
 import { EmptyState, isUnauthorized, type Remote } from './components/shared'
 import { Main } from './components/layout/main'
@@ -25,21 +25,18 @@ import { ProgressWorkspace } from './features/progress/workspace'
 import { WorkspacePage } from './features/workspace/page'
 import { SolutionWorkspace } from './features/solutions/workspace'
 import { SolutionsLauncher } from './features/solutions/launcher'
-import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, safeBusinessPath, screenForView, solutionMaterialId, solutionScreen, withoutFragment, type AppRoute, type View } from './routing/routes'
+import { KnowledgeWorkspace } from './features/knowledge/workspace'
+import { fragmentOfPath, householdIdForBusinessPath, isFilePath, knowledgeMaterialId, knowledgeScreen, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, safeBusinessPath, screenForView, solutionMaterialId, solutionScreen, withoutFragment, type AppRoute, type View } from './routing/routes'
 import type { WorkspacePageScope } from './features/workspace/page-api'
 import type { AboutResponse, LearnersResponse, SessionResponse } from './types'
 
 const PRIMARY_NAV = [
   { view: 'overview', label: '学习总览', icon: Layers3 },
+  { view: 'materials', label: '资料整理', icon: House },
   { view: 'knowledge', label: '知识与题库', icon: BookOpenCheck },
+  { view: 'learning', label: '学习档案', icon: GraduationCap },
   { view: 'progress', label: '进度与复测', icon: CalendarClock },
   { view: 'documents', label: '文档中心', icon: FileText },
-] as const
-
-const FAMILY_NAV = [
-  { view: 'materials', label: '资料整理', icon: House },
-  { view: 'learning', label: '学习档案', icon: GraduationCap },
-  { view: 'settings', label: '设置', icon: Settings },
 ] as const
 
 const PAGE_TITLES: Record<View, string> = {
@@ -181,6 +178,16 @@ export default function App() {
     unsavedRef.current = changed
     setHasUnsavedChanges(changed)
   }, [])
+  const handleWorkspaceTab = useCallback((tab: string) => {
+    replaceRoute({ ...routeRef.current, tab })
+  }, [replaceRoute])
+  const handleMaterialLocation = useCallback((location: { materialId: string; query: string; page: number; subject?: string }) => {
+    const current = routeRef.current
+    if (current.view !== 'materials' || current.screen) return
+    const next = { ...current, materialId: location.materialId, materialQuery: location.query, materialPage: location.page, materialSubject: location.subject ?? current.materialSubject ?? '' }
+    if (current.materialId && location.materialId && location.materialId !== current.materialId) window.history.pushState({}, '', routeUrl(next))
+    replaceRoute(next)
+  }, [replaceRoute])
   const handleWorkspaceScope = useCallback((scope: WorkspacePageScope, requestedUrl: string) => {
     const current = routeRef.current
     const activeSession = sessionRef.current
@@ -206,7 +213,7 @@ export default function App() {
         : data.households[0]?.id || ''
       const urlParams = new URLSearchParams(window.location.search)
       if (household !== current.household) {
-        replaceRoute({ ...current, household, learner: '', screen: screenForView(current.view, household) })
+        replaceRoute({ ...current, household, learner: '', screen: screenForView(current.view, household), materialId: undefined, materialQuery: undefined, materialPage: undefined })
       } else if (householdIdForBusinessPath(current.screen)
         && (urlParams.get('household') || urlParams.get('household_id')) !== current.household) {
         replaceRoute(current)
@@ -266,24 +273,27 @@ export default function App() {
   }, [session.status, householdId, learnersRetry, handleUnauthorized])
 
   useEffect(() => {
+    // A child workspace may have just recorded its material or tab in this commit.
+    const current = routeRef.current
     if (session.status !== 'loaded' || learners.status !== 'loaded' || !householdId
-      || learnersHouseholdRef.current !== householdId || hasUnsavedChanges || route.household !== householdId) return
-    const screenLearner = route.screen ? learnerIdForBusinessPath(route.screen, learners.data.items) : null
+      || learnersHouseholdRef.current !== householdId || unsavedRef.current || current.household !== householdId) return
+    const screenLearner = current.screen ? learnerIdForBusinessPath(current.screen, learners.data.items) : null
     if (screenLearner) {
-      if (route.learner !== screenLearner) replaceRoute({ ...route, learner: screenLearner })
+      if (current.learner !== screenLearner) replaceRoute({ ...current, learner: screenLearner })
       return
     }
-    if (route.learner && learners.data.items.some((item) => item.id === route.learner)) return
-    const learner = viewNeedsLearner(route.view) ? learners.data.items[0]?.id || '' : ''
-    const isLearningLanding = route.view === 'learning' && (!route.screen || businessPathname(route.screen) === '/learning/')
-    const screen = isLearningLanding ? screenForView(route.view, householdId, learner) : route.screen
-    if (route.learner !== learner || route.screen !== screen) replaceRoute({ ...route, learner, screen })
+    if (current.learner && learners.data.items.some((item) => item.id === current.learner)) return
+    const learner = viewNeedsLearner(current.view) ? learners.data.items[0]?.id || '' : ''
+    const isLearningLanding = current.view === 'learning' && (!current.screen || businessPathname(current.screen) === '/learning/')
+    const screen = isLearningLanding ? screenForView(current.view, householdId, learner) : current.screen
+    if (current.learner !== learner || current.screen !== screen) replaceRoute({ ...current, learner, screen })
   }, [session.status, learners, householdId, hasUnsavedChanges, route, replaceRoute])
 
   useEffect(() => {
-    if (session.status !== 'loaded' || !householdId || route.screen) return
-    const screen = screenForView(route.view, householdId, route.learner)
-    if (screen) replaceRoute({ ...route, screen })
+    const current = routeRef.current
+    if (session.status !== 'loaded' || !householdId || current.household !== householdId || current.screen) return
+    const screen = screenForView(current.view, householdId, current.learner)
+    if (screen) replaceRoute({ ...current, screen })
   }, [session.status, householdId, route, replaceRoute])
 
   useEffect(() => {
@@ -337,12 +347,18 @@ export default function App() {
   const workspaceAnchor = fragmentOfPath(effectiveScreen)
   const solutionId = route.view === 'documents' ? solutionMaterialId(route.screen) : null
   const isSolutionScreen = solutionId !== null
+  const knowledgeId = ['knowledge', 'documents'].includes(route.view) ? knowledgeMaterialId(route.screen) : null
+  const isKnowledgeScreen = knowledgeId !== null
+  const isKnowledgeLauncher = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/__app__/knowledge-explanations/'
+  const isKnowledgeIndex = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/knowledge/'
   const isDocumentsLanding = route.view === 'documents' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/prints/' && !isSolutionScreen
+  const documentsTab = route.tab === 'practice' ? 'practice' : route.tab === 'knowledge' ? 'knowledge' : 'solutions'
   const isBusinessScreen = Boolean(effectiveScreen) && (route.view === 'knowledge' || route.view === 'learning'
     || route.view === 'documents' || route.view === 'settings' || Boolean(route.screen))
-  const needsLearner = route.view === 'overview' || route.view === 'attempts' || route.view === 'progress'
-    || route.view === 'learning' || route.view === 'documents'
+  const needsLearner = viewNeedsLearner(route.view)
   const needsNativeLearner = needsLearner && !isBusinessScreen
+  const hasLearnerWorkspace = route.view === 'overview' || route.view === 'attempts'
+    || route.view === 'learning' || route.view === 'progress'
 
   const selectHousehold = (nextId: string) => {
     navigateRoute({
@@ -350,6 +366,10 @@ export default function App() {
       household: nextId,
       learner: '',
       screen: screenForView(route.view, nextId),
+      materialId: undefined,
+      materialQuery: undefined,
+      materialPage: undefined,
+      materialSubject: undefined,
     })
   }
 
@@ -377,7 +397,7 @@ export default function App() {
 
   const selectView = (view: View) => {
     const learnerId = route.learner || (viewNeedsLearner(view) && learners.status === 'loaded' ? learners.data.items[0]?.id || '' : '')
-    navigateRoute({ ...route, view, learner: learnerId, screen: screenForView(view, householdId, learnerId) })
+    navigateRoute({ ...route, view, learner: learnerId, screen: screenForView(view, householdId, learnerId), tab: '', materialId: undefined, materialQuery: undefined, materialPage: undefined })
   }
 
   const selectSettingsScreen = (path: string) => {
@@ -394,43 +414,41 @@ export default function App() {
   return (
     <div className='min-h-svh bg-muted/30 text-foreground'>
       <a href='#content' className='fixed left-4 top-2 z-[100] -translate-y-16 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0'>跳到主要内容</a>
-      <div className='min-h-svh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]'>
-        <aside className='border-b bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:h-svh lg:border-b-0 lg:border-r'>
-          <div className='flex items-center gap-3 px-5 py-5'>
-            <div className='flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground'><GraduationCap className='size-5' aria-hidden='true' /></div>
-            <div>
-              <p className='font-semibold leading-tight'>学习工作台</p>
-              <p className='mt-1 text-xs text-muted-foreground'>家庭学习与资料整理</p>
-            </div>
+      <div className='min-h-svh lg:grid lg:grid-cols-[13rem_minmax(0,1fr)]'>
+        <aside className='flex flex-col border-b bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:h-svh lg:border-b-0 lg:border-r'>
+          <div className='flex min-h-14 items-center gap-2 px-4 py-3'>
+            <div className='flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'><GraduationCap className='size-4' aria-hidden='true' /></div>
+            <p className='font-semibold leading-tight'>学习工作台</p>
           </div>
-          <nav aria-label='主导航' className='flex gap-2 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible'>
+          <nav aria-label='主导航' className='flex flex-wrap gap-1 px-3 pb-3 lg:flex-1 lg:flex-col lg:flex-nowrap'>
             {PRIMARY_NAV.map(({ view, label, icon }) => (
-              <NavButton key={view} active={route.view === view} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
+              <NavButton key={view} active={route.view === view || (view === 'learning' && route.view === 'attempts')} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
             ))}
-            <details className='shrink-0 lg:mt-3 lg:border-t lg:pt-2' open={['materials', 'learning', 'attempts', 'settings'].includes(route.view) || undefined}>
-              <summary className='min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary'>家长协助</summary>
-              <div className='flex gap-2 pt-1 lg:flex-col'>{FAMILY_NAV.map(({ view, label, icon }) => (
-                <NavButton key={view} active={route.view === view || (view === 'learning' && route.view === 'attempts')} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
-              ))}</div>
-            </details>
+            <div className='lg:mt-auto lg:border-t lg:pt-3'><NavButton active={route.view === 'settings'} icon={Settings} onClick={() => selectView('settings')}>设置</NavButton></div>
           </nav>
-          {householdId ? <section className='mx-3 mb-4 rounded-lg border border-sidebar-border px-3 py-3'>
-            <h2 className='mb-2 text-xs font-semibold tracking-wide text-muted-foreground'>当前家庭</h2>
-            <p className='truncate text-sm font-medium'>{selectedHousehold?.name || '正在读取家庭…'}</p>
-          </section> : null}
         </aside>
 
         <div className='min-w-0'>
           <header className='sticky top-0 z-30 border-b bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/75'>
-            <div className='flex min-h-16 items-center justify-between gap-4 px-4 py-3 sm:px-6 xl:px-8'>
-              <div className='min-w-0'>
-                <p className='text-xs font-medium uppercase tracking-wide text-muted-foreground'>{title}</p>
-                <p className='truncate text-sm font-semibold'>{selectedHousehold?.name || '家庭学习工作台'}</p>
+            <div className='flex min-h-14 flex-wrap items-center justify-between gap-2 px-4 py-2 sm:px-6'>
+              <div className='flex min-w-0 flex-wrap items-center gap-2 sm:gap-4'>
+                {households.length > 1 ? <label className='flex min-w-0 items-center gap-2 text-sm'>
+                  <span className='text-muted-foreground'>家庭</span>
+                  <select aria-label='家庭' className='h-9 max-w-[12rem] rounded-md border bg-background px-2 text-sm' value={householdId} onChange={(event) => selectHousehold(event.target.value)}>{households.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+                </label> : <p className='max-w-[18rem] truncate text-sm font-medium' title={selectedHousehold?.name}>{selectedHousehold?.name || '家庭学习工作台'}</p>}
+                {householdId && needsLearner ? <div className='flex min-w-0 items-center gap-2 text-sm'>
+                  <span className='text-muted-foreground'>学习者</span>
+                  {learners.status === 'loading' ? <span role='status' className='text-muted-foreground'>读取中…</span> : null}
+                  {learners.status === 'error' ? <span role='alert' className='flex items-center gap-2 text-destructive'>读取失败<button type='button' className='underline' onClick={() => setLearnersRetry((count) => count + 1)}>重试</button></span> : null}
+                  {learners.status === 'loaded' && learners.data.items.length === 1 ? <span className='max-w-[12rem] truncate font-medium' title={learner?.display_name}>{learner?.display_name || '尚未选择'}</span> : null}
+                  {learners.status === 'loaded' && learners.data.items.length > 1 ? <select aria-label='学习者' className='h-9 max-w-[12rem] rounded-md border bg-background px-2 text-sm' value={route.learner} onChange={(event) => selectLearner(event.target.value)}>{learners.data.items.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.grade ? ` · ${item.grade}` : ''}</option>)}</select> : null}
+                  {learners.status === 'loaded' && learners.data.items.length === 0 ? <span className='text-muted-foreground'>暂无记录</span> : null}
+                </div> : null}
               </div>
               <div className='flex shrink-0 items-center gap-2'>
                 <details className='relative'>
                   <summary className='cursor-pointer list-none rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted'>
-                    {about.status === 'loaded' ? `关于 · v${about.data.version}` : '关于'}
+                    关于
                   </summary>
                   <div className='absolute right-0 top-full z-50 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg'>
                     <AboutPanel about={about} onRetry={() => setAboutRetry((count) => count + 1)} />
@@ -451,41 +469,12 @@ export default function App() {
             </div>
           </header>
 
-          <Main id='content' fluid className='mx-auto w-full max-w-[88rem] space-y-5 px-4 py-5 sm:px-6 xl:px-8'>
-            {!isBusinessScreen || isDocumentsLanding ? <div className='flex flex-wrap items-end justify-between gap-4'>
-              <div>
-                <h1 className='text-2xl font-semibold tracking-tight sm:text-3xl'>{title}</h1>
-                <p className='mt-2 max-w-2xl text-sm leading-6 text-muted-foreground'>{descriptionFor(route.view)}</p>
-              </div>
-            </div> : null}
+          <Main id='content' fluid className='w-full min-w-0 space-y-4 px-4 py-4 sm:px-6'>
+            {!isBusinessScreen || (isDocumentsLanding && documentsTab !== 'practice') || isSolutionScreen || isKnowledgeScreen || isKnowledgeLauncher ? <h1 className='text-xl font-semibold tracking-tight'>{isSolutionScreen ? '逐题讲解' : isKnowledgeScreen || isKnowledgeLauncher ? '知识点讲解' : title}</h1> : null}
 
             {households.length === 0 ? (
               <EmptyState title='当前账号没有可访问的家庭' detail='请使用有权限的账号登录，或联系家庭所有者调整访问权限。' icon={House} />
-            ) : <Card className='shadow-sm'>
-              <CardContent className='grid gap-3 p-3 sm:grid-cols-[minmax(10rem,0.8fr)_minmax(12rem,1fr)] sm:items-end sm:px-4'>
-                <div>
-                  <p id='household-label' className='mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'><House className='size-3.5' aria-hidden='true' />家庭</p>
-                  {households.length === 1 ? (
-                    <div className='flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm font-medium'>{households[0].name}</div>
-                  ) : (
-                    <select aria-labelledby='household-label' className='h-10 w-full rounded-md border bg-background px-3 text-sm' value={householdId} onChange={(event) => selectHousehold(event.target.value)}>
-                      {households.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                    </select>
-                  )}
-                </div>
-                {needsLearner ? <div>
-                  <p id='learner-label' className='mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'><GraduationCap className='size-3.5' aria-hidden='true' />学习者</p>
-                  {learners.status === 'loading' ? <div className='flex h-10 items-center rounded-md border bg-muted/20 px-3 text-sm text-muted-foreground'>读取学习者…</div> : null}
-                  {learners.status === 'error' ? <div className='flex h-10 items-center justify-between rounded-md border border-amber-300 bg-amber-50 px-3 text-xs text-amber-900'><span>读取失败</span><button type='button' className='underline' onClick={() => setLearnersRetry((count) => count + 1)}>重试</button></div> : null}
-                  {learners.status === 'loaded' && learners.data.items.length > 0 ? (
-                    <select aria-labelledby='learner-label' className='h-10 w-full rounded-md border bg-background px-3 text-sm' value={route.learner} onChange={(event) => selectLearner(event.target.value)}>
-                      {learners.data.items.map((item) => <option key={item.id} value={item.id}>{item.display_name}{item.grade ? ` · ${item.grade}` : ''}</option>)}
-                    </select>
-                  ) : null}
-                  {learners.status === 'loaded' && learners.data.items.length === 0 ? <div className='flex h-10 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground'>暂无学习者记录</div> : null}
-                </div> : null}
-              </CardContent>
-            </Card>}
+            ) : null}
 
             {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningStart
               learnerName={learner?.display_name || ''}
@@ -506,9 +495,16 @@ export default function App() {
                 })}
               </nav>
             ) : null}
+            {households.length > 0 && isDocumentsLanding ? <WorkspaceTabs
+              id='document-center'
+              label='文档分类'
+              tabs={[{ value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '逐题讲解' }, { value: 'practice', label: '五册与练习' }]}
+              value={documentsTab}
+              onChange={handleWorkspaceTab}
+            /> : null}
 
             {households.length > 0 && isBusinessScreen && effectiveScreen ? (
-              isDocumentsLanding ? <SolutionsLauncher
+              isDocumentsLanding ? <WorkspacePanel id='document-center' value='solutions' active={documentsTab}><SolutionsLauncher
                 key={householdId}
                 householdId={householdId}
                 onUnauthorized={handleUnauthorized}
@@ -517,21 +513,46 @@ export default function App() {
                   ? (materialId) => navigateBusinessPath(`/prints/materials/${encodeURIComponent(materialId)}/five-books/`)
                   : undefined}
                 onMaterials={() => selectView('materials')}
-              /> : null
+              /></WorkspacePanel> : null
             ) : null}
+            {households.length > 0 && isKnowledgeIndex ? <div className='flex flex-wrap items-center gap-3 border-b pb-3'><Button type='button' size='sm' variant='outline' onClick={() => navigateRoute({ ...route, screen: '/__app__/knowledge-explanations/', tab: undefined })}>整理知识点讲解</Button><p className='text-sm text-muted-foreground'>按资料编写完整结论、条件与依据，再生成知识讲解文档。</p></div> : null}
+            {households.length > 0 && (isKnowledgeLauncher || isDocumentsLanding) ? <WorkspacePanel id='document-center' value='knowledge' active={isKnowledgeLauncher ? 'knowledge' : documentsTab}><SolutionsLauncher
+              key={`${householdId}:knowledge`}
+              mode='knowledge'
+              householdId={householdId}
+              onUnauthorized={handleUnauthorized}
+              onOpen={(materialId) => navigateRoute({ ...route, screen: knowledgeScreen(materialId), tab: isDocumentsLanding ? 'outputs' : 'editor' })}
+              onMaterials={() => selectView('materials')}
+            /></WorkspacePanel> : null}
             {households.length > 0 && isSolutionScreen && solutionId ? <SolutionWorkspace
-              key={`${householdId}:${solutionId}:${new URL(effectiveScreen, window.location.origin).searchParams.get('panel') || 'editor'}`}
+              key={`${householdId}:${solutionId}`}
               materialId={solutionId}
               householdId={householdId}
               initialPanel={new URL(effectiveScreen, window.location.origin).searchParams.get('panel') === 'outputs' ? 'outputs' : 'editor'}
+              initialTab={route.tab || undefined}
+              onTabChange={handleWorkspaceTab}
               csrfToken={session.data.csrf_token}
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
               onUnauthorized={handleUnauthorized}
               onUnsavedChange={handleUnsavedChange}
+              onScopeLoaded={handleWorkspaceScope}
               onBack={() => navigateRoute({ ...route, screen: screenForView('documents', householdId, route.learner) })}
             /> : null}
-            {households.length > 0 && isBusinessScreen && effectiveScreen && !isSolutionScreen ? (
-              <BusinessPageFrame documentsLanding={isDocumentsLanding}><WorkspacePage
+            {households.length > 0 && isKnowledgeScreen && knowledgeId ? <KnowledgeWorkspace
+              key={`${householdId}:knowledge:${knowledgeId}`}
+              materialId={knowledgeId}
+              householdId={householdId}
+              initialTab={route.tab || 'editor'}
+              onTabChange={handleWorkspaceTab}
+              csrfToken={session.data.csrf_token}
+              canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
+              onUnauthorized={handleUnauthorized}
+              onUnsavedChange={handleUnsavedChange}
+              onScopeLoaded={handleWorkspaceScope}
+              onBack={() => navigateRoute({ ...route, screen: route.view === 'documents' ? screenForView('documents', householdId) : '/__app__/knowledge-explanations/', tab: route.view === 'documents' ? 'knowledge' : undefined })}
+            /> : null}
+            {households.length > 0 && isBusinessScreen && effectiveScreen && !isSolutionScreen && !isKnowledgeScreen && !isKnowledgeLauncher ? (
+              <DocumentPracticePanel landing={isDocumentsLanding} active={documentsTab}><WorkspacePage
                 key={workspaceUrl}
                 url={workspaceUrl}
                 householdId={householdId}
@@ -542,7 +563,9 @@ export default function App() {
                 onScopeLoaded={handleWorkspaceScope}
                 onUnauthorized={handleUnauthorized}
                 onUnsavedChange={handleUnsavedChange}
-              /></BusinessPageFrame>
+                initialTab={route.tab || ''}
+                onTabChange={handleWorkspaceTab}
+              /></DocumentPracticePanel>
             ) : null}
             {households.length > 0 && !isBusinessScreen && route.view === 'materials' ? (
               <MaterialWorkspace
@@ -555,7 +578,14 @@ export default function App() {
                 learners={learners.status === 'loaded' ? learners.data.items : []}
                 selectedLearnerId={route.learner}
                 onUnauthorized={handleUnauthorized}
-                onOpenSolutions={(materialId) => navigateRoute({ ...route, view: 'documents', screen: solutionScreen(materialId) })}
+                onOpenSolutions={(materialId) => navigateBusinessPath(solutionScreen(materialId))}
+                initialTab={route.tab || 'pages'}
+                onTabChange={handleWorkspaceTab}
+                initialMaterialId={route.materialId || ''}
+                initialQuery={route.materialQuery || ''}
+                initialPage={route.materialPage || 1}
+                initialSubject={route.materialSubject || ''}
+                onLocationChange={handleMaterialLocation}
               />
             ) : null}
             {households.length > 0 && needsNativeLearner && learners.status === 'error' ? (
@@ -564,7 +594,7 @@ export default function App() {
             {households.length > 0 && needsNativeLearner && learners.status === 'loaded' && learners.data.items.length === 0 ? (
               <EmptyState title='这个家庭还没有学习者' detail='添加学习者后，这里会显示真实的作答和证据记录。' icon={GraduationCap} />
             ) : null}
-            {households.length > 0 && needsNativeLearner && learner ? (
+            {households.length > 0 && needsNativeLearner && hasLearnerWorkspace && learner ? (
               route.view === 'progress' ? (
                 <ProgressWorkspace
                   key={`${householdId}:${learner.id}`}
@@ -573,9 +603,12 @@ export default function App() {
                   csrfToken={session.data.csrf_token}
                   canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
                   onUnauthorized={handleUnauthorized}
+                  onUnsavedChange={handleUnsavedChange}
+                  initialTab={route.tab || 'plans'}
+                  onTabChange={handleWorkspaceTab}
                 />
               ) : (
-                <EvidenceWorkspace key={`${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} onUnauthorized={handleUnauthorized} />
+                <EvidenceWorkspace key={`${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} initialTab={route.tab || undefined} onTabChange={handleWorkspaceTab} onUnauthorized={handleUnauthorized} />
               )
             ) : null}
           </Main>
@@ -600,10 +633,8 @@ export default function App() {
   )
 }
 
-function BusinessPageFrame({ documentsLanding, children }: { documentsLanding: boolean; children: React.ReactNode }) {
-  return documentsLanding
-    ? <Disclosure title='制作练习与其他文档' description='需要打印练习、五册文档或证据报告时，在这里选择。'>{children}</Disclosure>
-    : children
+function DocumentPracticePanel({ landing, active, children }: { landing: boolean; active: string; children: React.ReactNode }) {
+  return landing ? <WorkspacePanel id='document-center' value='practice' active={active}>{children}</WorkspacePanel> : children
 }
 
 function LoginRequired({ onRetry }: { onRetry: () => void }) {
@@ -625,8 +656,7 @@ function LoginRequired({ onRetry }: { onRetry: () => void }) {
 }
 
 function messageFor(error: unknown) {
-  if (error instanceof ApiError) return error.message
-  return error instanceof Error ? error.message : '连接暂时不可用，请重试。'
+  return getErrorMessage(error)
 }
 
 function businessPathname(value: string) {
@@ -639,19 +669,6 @@ function previewTitle(pathname: string, kind: 'image' | 'pdf') {
   if (kind === 'image' && /\/derivative\/[^/]+\/?$/.test(pathname)) return '派生图预览'
   if (kind === 'image' && /\/png\/?$/.test(pathname)) return '教学图预览'
   return filename.includes('.') ? decodeURIComponent(filename) : kind === 'pdf' ? 'PDF 预览' : '图片预览'
-}
-
-function descriptionFor(view: View) {
-  switch (view) {
-    case 'materials': return '整理家庭资料、核对题面与原图，并检查整理结果。'
-    case 'overview': return '选一道题开始，回看讲解，或继续上次的复习。'
-    case 'attempts':
-    case 'learning': return '查看逐次作答、来源、评价和订正历史。未知与未测状态会明确保留。'
-    case 'progress': return '查看资料整理进展、已记录的学习证据和复测计划。'
-    case 'knowledge': return '找一道题练习，也可以查看相关知识点与解题方法。'
-    case 'documents': return '生成、检查和下载家庭学习资料。'
-    case 'settings': return '由家长管理家庭成员、辅助工具和资料保留方式。'
-  }
 }
 
 function roleLabel(role: string) {

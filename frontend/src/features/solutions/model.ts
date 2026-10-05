@@ -43,10 +43,11 @@ export function newSolutionStep(): SolutionStep {
 }
 
 export function toStructuredSolutionContent(content: AnySolutionContent): StructuredSolutionContent {
-  if (content.schema_version === 'swb.solution.v2') return content
+  if (content.schema_version !== 'swb.solution.v1') return { ...content, schema_version: 'swb.solution.v3', school_subject: content.school_subject || 'unknown' }
   return {
     ...content,
-    schema_version: 'swb.solution.v2',
+    schema_version: 'swb.solution.v3',
+    school_subject: 'unknown',
     questions: content.questions.map((question) => ({
       ...question,
       steps: question.steps.map((text) => ({ id: newSolutionId('step'), text, formula: null, figure: null, new_page: false })),
@@ -56,9 +57,10 @@ export function toStructuredSolutionContent(content: AnySolutionContent): Struct
 }
 
 export function isAnySolutionContent(value: unknown): value is AnySolutionContent {
-  if (!isRecord(value) || !['swb.solution.v1', 'swb.solution.v2'].includes(String(value.schema_version))) return false
+  if (!isRecord(value) || !['swb.solution.v1', 'swb.solution.v2', 'swb.solution.v3'].includes(String(value.schema_version))) return false
+  if (value.schema_version === 'swb.solution.v3' && typeof value.school_subject !== 'string') return false
   if (typeof value.title !== 'string' || !Array.isArray(value.lectures) || !value.lectures.every(isLecture)) return false
-  if (!Array.isArray(value.questions) || !value.questions.every((question) => isSolutionQuestion(question, value.schema_version === 'swb.solution.v2'))) return false
+  if (!Array.isArray(value.questions) || !value.questions.every((question) => isSolutionQuestion(question, value.schema_version !== 'swb.solution.v1'))) return false
   const outputs = value.outputs
   if (!isRecord(outputs)) return false
   return ['per_question', 'per_lecture', 'combined'].every((key) => isFormatList(outputs[key]))

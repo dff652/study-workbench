@@ -1,5 +1,7 @@
 """A plan completion is a real attempt, never a UI counter mutation."""
 import json
+from datetime import date
+from unittest.mock import patch
 from django.test import Client, TransactionTestCase
 from app.study.models import StudySchedule, ScheduleRevision
 from app.web import page_reading, knowledge_services
@@ -104,3 +106,29 @@ class ProgressAPITests(TransactionTestCase):
         protected.force_login(self.owner)
         self.assertEqual(self.post(protected, self.url("schedules"), value).status_code, 403)
         self.assertEqual(StudySchedule.objects.count(), 0)
+
+    def test_overdue_uses_server_date_and_only_pending_plans(self):
+        client = Client()
+        client.force_login(self.owner)
+        options = client.get(self.url("schedules/options")).json()
+        value = {"question_revision_id": self.question_revision_id, "due_date": "2026-10-01",
+            "goal": "复测", "prompt_plan": "", "reason": "合成日期边界",
+            "expected": options["context"], "request_key": key()}
+        created = self.post(client, self.url("schedules"), value)
+        self.assertEqual(created.status_code, 200, created.content)
+        for today, expected in ((date(2026, 9, 30), False), (date(2026, 10, 1), False),
+                                (date(2026, 10, 2), True)):
+            with patch("app.api.progress.timezone.localdate", return_value=today):
+                body = client.get(self.url("schedules")).json()
+            self.assertIs(body["items"][0]["overdue"], expected)
+            self.assertEqual(body["counts"]["overdue"], int(expected))
+        row = body["items"][0]
+        cancelled = self.post(client, f"/api/v1/schedules/{created.json()['schedule_id']}/actions/",
+            {"action": "cancelled", "expected": row["context"], "reason": "合成取消",
+             "request_key": key()})
+        self.assertEqual(cancelled.status_code, 200, cancelled.content)
+        with patch("app.api.progress.timezone.localdate", return_value=date(2026, 10, 2)):
+            body = client.get(self.url("schedules")).json()
+        self.assertIs(body["items"][0]["overdue"], False)
+        self.assertEqual(body["counts"]["overdue"], 0)
+        self.assertEqual(body["counts"]["cancelled"], 1)

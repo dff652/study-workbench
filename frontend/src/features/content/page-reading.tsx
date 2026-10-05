@@ -40,6 +40,7 @@ export function PageReading({
   workspaceBusy,
   onUnauthorized,
   onBusyChange,
+  onUnsavedChange,
 }: {
   page: MaterialPage
   csrfToken: string
@@ -47,6 +48,7 @@ export function PageReading({
   workspaceBusy: boolean
   onUnauthorized: () => void
   onBusyChange: (busy: boolean) => void
+  onUnsavedChange?: (dirty: boolean) => void
 }) {
   const [remote, setRemote] = useState<Remote<PageReadingResponse>>({ status: 'loading' })
   const [refresh, setRefresh] = useState(0)
@@ -84,6 +86,7 @@ export function PageReading({
   const pendingItems = pendingText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
   const hasUnknown = partitions.some((partition) => partition.kind === 'unknown')
   const completeBlocked = reading !== 'read' || partitions.length === 0 || hasUnknown || pendingItems.length > 0
+  const markUnsaved = () => onUnsavedChange?.(true)
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -104,6 +107,7 @@ export function PageReading({
       const key = requestKeyFor(requestKey, JSON.stringify([page.id, payload]))
       await api.savePageReading(page.id, { ...payload, request_key: key }, csrfToken)
       requestKey.current = null
+      onUnsavedChange?.(false)
       setNotice('本页阅读记录已保存，历史修订仍保留。')
       setRefresh((value) => value + 1)
     } catch (cause) {
@@ -136,12 +140,12 @@ export function PageReading({
             <form className='space-y-4' onSubmit={(event) => void save(event)}>
               <div className='grid gap-3 sm:grid-cols-2'>
                 <label className='block text-sm font-medium'>阅读状态
-                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={reading} onChange={(event) => setReading(event.target.value as ReadingState)} disabled={!canWrite || busy || workspaceBusy}>
+                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={reading} onChange={(event) => { setReading(event.target.value as ReadingState); markUnsaved() }} disabled={!canWrite || busy || workspaceBusy}>
                     {Object.entries(READING_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
                 <label className='block text-sm font-medium'>阅读覆盖
-                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={coverage} onChange={(event) => setCoverage(event.target.value as Coverage)} disabled={!canWrite || busy || workspaceBusy}>
+                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={coverage} onChange={(event) => { setCoverage(event.target.value as Coverage); markUnsaved() }} disabled={!canWrite || busy || workspaceBusy}>
                     {Object.entries(COVERAGE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
@@ -151,7 +155,7 @@ export function PageReading({
               ) : null}
               <div className='space-y-3'>
                 <label className='block max-w-xs text-sm font-medium'>新分区类型
-                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={partitionKind} onChange={(event) => setPartitionKind(event.target.value as PartitionKind)} disabled={!canWrite || busy || workspaceBusy}>
+                  <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={partitionKind} onChange={(event) => { setPartitionKind(event.target.value as PartitionKind); markUnsaved() }} disabled={!canWrite || busy || workspaceBusy}>
                     {Object.entries(PARTITION_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
@@ -159,23 +163,24 @@ export function PageReading({
                   page={page}
                   boxes={partitions.map((partition, index) => ({ bbox: partition.bbox, label: `${PARTITION_LABELS[partition.kind]}分区 ${index + 1}`, color: partition.kind === 'unknown' ? '#b7791f' : '#356c3f' }))}
                   disabled={!canWrite || busy || workspaceBusy}
-                  onAdd={(bbox) => setPartitions((current) => [...current, { kind: partitionKind, bbox }])}
+                  onSelectionChange={(hasSelection) => { if (hasSelection) markUnsaved() }}
+                  onAdd={(bbox) => { setPartitions((current) => [...current, { kind: partitionKind, bbox }]); markUnsaved() }}
                   addLabel={`确认添加${PARTITION_LABELS[partitionKind]}分区`}
                 />
                 {partitions.length ? <ul className='space-y-2'>
                   {partitions.map((partition, index) => (
                     <li key={`${partition.bbox.join('-')}:${index}`} className='flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm'>
                       <span>{PARTITION_LABELS[partition.kind]} · 原图区域 [{partition.bbox.join(', ')}] px</span>
-                      {canWrite ? <button type='button' className='text-destructive underline' onClick={() => setPartitions((current) => current.filter((_, rowIndex) => rowIndex !== index))} disabled={busy || workspaceBusy}>移除分区</button> : null}
+                      {canWrite ? <button type='button' className='text-destructive underline' onClick={() => { setPartitions((current) => current.filter((_, rowIndex) => rowIndex !== index)); markUnsaved() }} disabled={busy || workspaceBusy}>移除分区</button> : null}
                     </li>
                   ))}
                 </ul> : <p className='text-sm text-muted-foreground'>暂未标记页面分区；看不清的区域请标为未知。</p>}
               </div>
               <label className='block text-sm font-medium'>待补事项（每行一项）
-                <textarea className='mt-1 min-h-24 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={pendingText} onChange={(event) => setPendingText(event.target.value)} disabled={!canWrite || busy || workspaceBusy} placeholder='例如：第 2 页右下角字迹待辨认' />
+                <textarea className='mt-1 min-h-24 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={pendingText} onChange={(event) => { setPendingText(event.target.value); markUnsaved() }} disabled={!canWrite || busy || workspaceBusy} placeholder='例如：第 2 页右下角字迹待辨认' />
               </label>
               <label className='block text-sm font-medium'>阅读依据（必填）
-                <textarea className='mt-1 min-h-20 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={basis} onChange={(event) => setBasis(event.target.value)} required disabled={!canWrite || busy || workspaceBusy} />
+                <textarea className='mt-1 min-h-20 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={basis} onChange={(event) => { setBasis(event.target.value); markUnsaved() }} required disabled={!canWrite || busy || workspaceBusy} />
               </label>
               {error ? <p role='alert' className='text-sm text-destructive'>{error}</p> : null}
               {notice ? <p role='status' className='text-sm text-emerald-800'>{notice}</p> : null}

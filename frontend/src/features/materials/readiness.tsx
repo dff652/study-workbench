@@ -1,7 +1,6 @@
 import { Check, CircleAlert, FileImage, FileText, ListChecks } from 'lucide-react'
 import type { MaterialDetailResponse, WorkflowJob } from '../../types'
 import { ApiLink } from '../../components/shared'
-import { Disclosure } from '../../components/disclosure'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -9,16 +8,10 @@ import { workflowStateLabel, localDateTime } from './workflow-labels'
 
 export function MaterialReadiness({
   detail,
-  selectedJobId,
-  onSelectJob,
-  busy,
 }: {
   detail: MaterialDetailResponse
-  selectedJobId: string
-  onSelectJob: (jobId: string) => void
-  busy: boolean
 }) {
-  const { material, pages, readiness, jobs } = detail
+  const { material, pages, readiness } = detail
   return (
     <div className='space-y-5'>
       <Card>
@@ -101,26 +94,33 @@ export function MaterialReadiness({
           </section>
         </CardContent>
       </Card>
-
-      <Disclosure title='资料任务历史' description='只显示最近任务；选择一项可查看阶段、事件和当前操作。'>
-        <div>
-          {jobs.length === 0 ? <p className='text-sm text-muted-foreground'>尚未为此资料创建任务。</p> : (
-            <ul className='space-y-2'>
-              {jobs.map((job: WorkflowJob) => (
-                <li key={job.id} className='flex flex-wrap items-center justify-between gap-3 rounded-lg border px-4 py-3'>
-                  <div className='min-w-0'>
-                    <p className='font-medium'>{workflowStateLabel(job.state)}</p>
-                    <p className='mt-1 text-xs text-muted-foreground'>{localDateTime(job.updated_at)} · {job.record_count} 项结构化记录</p>
-                  </div>
-                  <Button type='button' variant={selectedJobId === job.id ? 'secondary' : 'outline'} size='sm' disabled={busy} onClick={() => onSelectJob(job.id)}>
-                    {selectedJobId === job.id ? '正在查看' : '查看任务'}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </Disclosure>
     </div>
   )
+}
+
+export function MaterialTaskHistory({ jobs, selectedJobId, onSelectJob, busy }: {
+  jobs: WorkflowJob[]
+  selectedJobId: string
+  onSelectJob: (jobId: string) => void
+  busy: boolean
+}) {
+  return <section className='space-y-2 border-t pt-4' aria-labelledby='material-task-history-title'>
+    <div className='flex flex-wrap items-baseline justify-between gap-2'>
+      <h2 id='material-task-history-title' className='text-sm font-semibold'>整理任务历史</h2>
+      <span className='text-xs text-muted-foreground'>{jobs.length} 项</span>
+    </div>
+    {jobs.length === 0 ? <p className='text-sm text-muted-foreground'>尚未为此资料创建任务。</p> : (
+      <ul className='divide-y'>
+        {jobs.map((job) => <li key={job.id} className='flex flex-wrap items-center justify-between gap-3 py-3'>
+          <div className='min-w-0'>
+            <p className='font-medium'>{workflowStateLabel(job.state)}</p>
+            <p className='mt-1 text-xs text-muted-foreground'>{localDateTime(job.updated_at)} · {job.record_count} 项内容</p>
+          </div>
+          <Button type='button' variant={selectedJobId === job.id ? 'secondary' : 'outline'} size='sm' disabled={busy} onClick={() => onSelectJob(job.id)}>
+            {selectedJobId === job.id ? '正在查看' : '查看任务'}
+          </Button>
+        </li>)}
+      </ul>
+    )}
+  </section>
 }

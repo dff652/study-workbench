@@ -14,7 +14,7 @@ export function NavButton({
   children: ReactNode
 }) {
   return (
-    <Button type='button' variant={active ? 'secondary' : 'ghost'} className={`h-10 justify-start ${active ? 'bg-primary/10 text-primary hover:bg-primary/15' : 'text-muted-foreground'}`} aria-current={active ? 'page' : undefined} onClick={onClick}>
+    <Button type='button' variant={active ? 'secondary' : 'ghost'} className={`h-10 justify-start lg:w-full ${active ? 'bg-primary/10 text-primary hover:bg-primary/15' : 'text-muted-foreground'}`} aria-current={active ? 'page' : undefined} onClick={onClick}>
       <Icon className='size-4' aria-hidden='true' />{children}
     </Button>
   )

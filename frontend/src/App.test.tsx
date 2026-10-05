@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -54,6 +54,7 @@ function installRouteAppApi({
       schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1', households,
     }))
     if (url.pathname === '/api/v1/about/') return Promise.resolve(Response.json(about))
+    if (url.pathname === '/api/v1/materials/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items: [], total: 0, page: 1, page_size: 20 }))
     if (url.pathname === '/api/v1/learners/') {
       learnerHouseholdRequests.push(url.searchParams.get('household') || '')
       return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items: learners }))
@@ -73,6 +74,9 @@ function installRouteAppApi({
     }
     const scheduleMatch = url.pathname.match(/^\/api\/v1\/learners\/([^/]+)\/schedules\/$/)
     if (scheduleMatch) return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', scope: { household_id: url.searchParams.get('household') || '', learner_id: scheduleMatch[1] }, counts: { pending: 0, overdue: 0, completed: 0, cancelled: 0 }, items: [] }))
+    if (/^\/api\/v1\/learners\/[^/]+\/schedules\/options\/$/.test(url.pathname)) return Promise.resolve(Response.json({
+      schema_version: 'swb.api.v1', questions: [{ revision_id: 'question-revision-1', label: '第 1 题' }], context: { version: 1, stamp: 'synthetic-context' },
+    }))
     throw new Error(`unexpected request: ${url.pathname}`)
   }))
   return { requestedPages, nativeLearnerRequests, learnerHouseholdRequests }
@@ -86,22 +90,160 @@ describe('App URL navigation', () => {
     window.history.replaceState({}, '', '/app/')
   })
 
-  it('starts with learning actions and reveals family navigation only when requested', async () => {
-    const user = userEvent.setup()
+  it('starts with learning actions and keeps all core navigation directly visible', async () => {
     installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
     render(<App />)
-    expect(await screen.findByRole('heading', { name: '小甲，今天从哪里开始？' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '今天从哪里开始？' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '选题练习' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '查看讲解' })).toBeTruthy()
-    const familyNavigation = screen.getByText('家长协助', { exact: true }).closest('details') as HTMLDetailsElement
-    expect(familyNavigation.open).toBe(false)
-    expect(familyNavigation.contains(screen.getByRole('button', { name: '资料整理' }))).toBe(true)
-    expect((screen.getByText('查看学习记录与待核对项').closest('details') as HTMLDetailsElement).open).toBe(false)
-    await user.click(screen.getByText('家长协助', { exact: true }))
-    expect(familyNavigation.open).toBe(true)
-    expect(screen.getByRole('button', { name: '资料整理' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '学习档案' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: '设置' })).toBeTruthy()
+    const nav = within(screen.getByRole('navigation', { name: '主导航' }))
+    for (const name of ['学习总览', '资料整理', '知识与题库', '学习档案', '进度与复测', '文档中心', '设置']) {
+      expect(nav.getByRole('button', { name }).closest('details')).toBeNull()
+    }
+    expect(screen.queryByText('家长协助', { exact: true })).toBeNull()
+    expect(screen.getAllByRole('combobox', { name: '家庭' })).toHaveLength(1)
+    expect(await screen.findAllByRole('combobox', { name: '学习者' })).toHaveLength(1)
+  })
+
+  it('keeps the three document modes reachable and filters the knowledge launcher by subject', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=documents&household=home-1')
+    const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>练习准备</h1></main>' })
+    render(<App />)
+    const knowledge = await screen.findByRole('tab', { name: '知识点讲解' })
+    expect(screen.getByRole('tab', { name: '逐题讲解' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '五册与练习' })).toBeTruthy()
+    await user.click(knowledge)
+    const filter = await screen.findByRole('combobox', { name: '资料学科' })
+    await user.selectOptions(filter, 'english')
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => {
+      const url = new URL(String(input), window.location.origin)
+      return url.pathname === '/api/v1/materials/' && url.searchParams.get('subject') === 'english'
+    })).toBe(true))
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('knowledge')
+    expect(requestedPages.some((path) => path.startsWith('/__app__/'))).toBe(false)
+  })
+
+  it('opens the knowledge launcher from the index without requesting an app-only path as a native page', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=knowledge&household=home-1')
+    const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>知识目录</h1></main>' })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: '整理知识点讲解' }))
+    expect(await screen.findByRole('heading', { name: '知识点讲解' })).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('screen')).toBe('/__app__/knowledge-explanations/')
+    expect(requestedPages.some((path) => path.startsWith('/__app__/'))).toBe(false)
+  })
+
+  it('restores a material subject filter and clears it when switching household', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=materials&household=home-1&subject=physics')
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    const filter = await screen.findByRole('combobox', { name: '资料学科' })
+    expect((filter as HTMLSelectElement).value).toBe('physics')
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => new URL(String(input), window.location.origin).searchParams.get('subject') === 'physics')).toBe(true))
+    await user.selectOptions(screen.getByRole('combobox', { name: '家庭' }), 'home-2')
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('subject')).toBe(false))
+    expect((await screen.findByRole('combobox', { name: '资料学科' }) as HTMLSelectElement).value).toBe('')
+  })
+
+  it('clears a former household material location before loading a replacement household', async () => {
+    window.history.replaceState({}, '', '/app/?view=materials&household=former-home&material=former-material&q=former-query&page=3')
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    expect(await screen.findByText('还没有资料')).toBeTruthy()
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('household')).toBe('home-1')
+    for (const key of ['material', 'q', 'page']) expect(params.has(key)).toBe(false)
+    const requests = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), window.location.origin))
+    expect(requests.filter((url) => url.pathname === '/api/v1/materials/').every((url) => url.searchParams.get('household') === 'home-1' && !url.searchParams.has('q') && url.searchParams.get('page') === '1')).toBe(true)
+    expect(requests.some((url) => url.pathname.includes('former-material'))).toBe(false)
+  })
+
+  it('guards module and learner changes for a dirty plan while preserving tab input', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('confirm', confirm)
+    window.history.replaceState({}, '', '/app/?view=progress&household=home-1&learner=learner-a')
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: '新增复测计划' }))
+    const goal = await screen.findByRole('textbox', { name: '复测目标（必填）' })
+    await user.type(goal, '保留这一份未保存计划')
+    await user.click(screen.getByRole('tab', { name: '学习证据' }))
+    await user.click(screen.getByRole('tab', { name: '复测计划' }))
+    expect((goal as HTMLInputElement).value).toBe('保留这一份未保存计划')
+    await user.selectOptions(screen.getByRole('combobox', { name: '学习者' }), 'learner-b')
+    expect((screen.getByRole('combobox', { name: '学习者' }) as HTMLSelectElement).value).toBe('learner-a')
+    const materials = within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '资料整理' })
+    await user.click(materials)
+    expect(new URLSearchParams(window.location.search).get('view')).toBe('progress')
+    expect((goal as HTMLInputElement).value).toBe('保留这一份未保存计划')
+    expect(confirm).toHaveBeenCalledTimes(2)
+    confirm.mockReturnValue(true)
+    await user.click(materials)
+    expect(await screen.findByText('还没有资料')).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('view')).toBe('materials')
+  })
+
+  it('restores selected materials through back, forward and remount', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=materials&household=home-1&material=material-a')
+    installRouteAppApi({ pageHtml: () => '', households: [{ id: 'home-1', name: '甲家庭', role: 'viewer' }], learners: [] })
+    const fallbackFetch = vi.mocked(fetch).getMockImplementation()!
+    const items = ['a', 'b'].map((suffix) => ({ id: `material-${suffix}`, title: `资料${suffix}`, page_count: 0, created_at: '2026-10-05T00:00:00Z', material_url: `/materials/material-${suffix}/`, prepare_url: '/prepare/' }))
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items, total: 2, page: 1, page_size: 20 }))
+      const material = items.find((item) => url.pathname === `/api/v1/materials/${item.id}/`)
+      if (material) return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', material, pages: [], jobs: [], readiness: { ready: false, gaps: [], content_gaps: [], questions: [] } }))
+      return fallbackFetch(input, init)
+    }))
+    const view = render(<App />)
+    expect(await screen.findByRole('heading', { name: '资料a' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /资料b/ }))
+    expect(await screen.findByRole('heading', { name: '资料b' })).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('material')).toBe('material-b')
+    await act(async () => { window.history.back() })
+    expect(await screen.findByRole('heading', { name: '资料a' })).toBeTruthy()
+    await act(async () => { window.history.forward() })
+    expect(await screen.findByRole('heading', { name: '资料b' })).toBeTruthy()
+    view.unmount()
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '资料b' })).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('material')).toBe('material-b')
+  })
+
+  it('preserves a material content form while tabs update the outer URL', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=materials&household=home-1')
+    installRouteAppApi({ pageHtml: () => '', households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }] })
+    const fallbackFetch = vi.mocked(fetch).getMockImplementation()!
+    const material = { id: 'material-a', title: '资料a', page_count: 1, created_at: '2026-10-05T00:00:00Z', material_url: '/materials/material-a/', prepare_url: '/prepare/' }
+    const page = { id: 'page-a', position: 1, width: 100, height: 100, sha256: 'synthetic', page_url: '/page/', preview_url: '/preview/' }
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items: [material], total: 1, page: 1, page_size: 20 }))
+      if (url.pathname === '/api/v1/materials/material-a/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', material, pages: [page], jobs: [], readiness: { ready: false, gaps: [], content_gaps: [], questions: [] } }))
+      if (url.pathname === '/api/v1/materials/material-a/content/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', context: { source_stamp: 'synthetic' }, questions: [], nodes: [] }))
+      if (url.pathname.endsWith('/reading/')) return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', context: { reading_version: 1 }, current: null, history: [] }))
+      if (url.pathname.startsWith('/api/v1/drafts/')) return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', draft: null }))
+      return fallbackFetch(input, init)
+    }))
+    render(<App />)
+    await user.click(await screen.findByRole('tab', { name: /题面核对/ }))
+    expect(await screen.findAllByRole('combobox', { name: '学习者' })).toHaveLength(1)
+    expect(screen.queryByRole('tab', { name: '学习概况' })).toBeNull()
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get('material')).toBe('material-a'))
+    const printed = await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.type(printed, '切换标签仍保留题面')
+    await user.click(screen.getByRole('tab', { name: /整理任务/ }))
+    await user.click(screen.getByRole('tab', { name: /题面核对/ }))
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('content')
+    expect(printed.isConnected).toBe(true)
+    expect(screen.getByLabelText('图中印刷题面转写（必填）')).toBe(printed)
+    expect(printed.value).toBe('切换标签仍保留题面')
   })
 
   it('keeps a direct URL selection, routes business links, restores popstate, and clears record context on household change', async () => {
@@ -155,7 +297,7 @@ describe('App URL navigation', () => {
     expect(await screen.findByRole('heading', { name: '知识条目详情' })).toBeTruthy()
     expect(new URLSearchParams(window.location.search).get('screen')).toBe('/knowledge/entity/12/?household_id=home-b')
     await user.click(screen.getByRole('button', { name: '学习总览' }))
-    expect(await screen.findByText('作答来源', { selector: '[data-slot="card-title"]' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '作答来源' })).toBeTruthy()
     expect(window.location.search).toContain('learner=learner-b')
 
     await act(async () => { window.history.back() })
@@ -231,7 +373,8 @@ describe('App URL navigation', () => {
     render(<App />)
     expect(await screen.findByRole('heading', { name: '小甲复测计划' })).toBeTruthy()
     await user.selectOptions(screen.getByRole('combobox', { name: '学习者' }), 'learner-b')
-    expect(await screen.findByText('当前学习者：小乙')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '复测计划' })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: '学习者' }) as HTMLSelectElement).value).toBe('learner-b')
     await waitFor(() => expect(nativeLearnerRequests).toContain('learner-b'))
     const params = new URLSearchParams(window.location.search)
     expect(params.get('view')).toBe('progress')
@@ -252,7 +395,8 @@ describe('App URL navigation', () => {
     render(<App />)
     expect(await screen.findByRole('heading', { name: '小甲复测详情' })).toBeTruthy()
     await user.selectOptions(screen.getByRole('combobox', { name: '学习者' }), 'learner-b')
-    expect(await screen.findByText('当前学习者：小乙')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '复测计划' })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: '学习者' }) as HTMLSelectElement).value).toBe('learner-b')
     await waitFor(() => expect(nativeLearnerRequests).toContain('learner-b'))
     const params = new URLSearchParams(window.location.search)
     expect(params.get('view')).toBe('progress')
@@ -290,7 +434,8 @@ describe('App URL navigation', () => {
 
     confirmMock.mockReturnValue(true)
     await user.selectOptions(screen.getByRole('combobox', { name: '学习者' }), 'learner-b')
-    expect(await screen.findByText('当前学习者：小乙')).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '复测计划' })).toBeTruthy()
+    expect((screen.getByRole('combobox', { name: '学习者' }) as HTMLSelectElement).value).toBe('learner-b')
     await waitFor(() => expect(nativeLearnerRequests).toContain('learner-b'))
     expect(new URLSearchParams(window.location.search).get('learner')).toBe('learner-b')
     expect(new URLSearchParams(window.location.search).get('screen')).toBeNull()
@@ -437,7 +582,7 @@ describe('App URL navigation', () => {
 
     confirmMock.mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: '学习总览' }))
-    expect(await screen.findByText('作答来源', { selector: '[data-slot="card-title"]' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '作答来源' })).toBeTruthy()
     expect(new URLSearchParams(window.location.search).get('view')).toBe('overview')
   })
 
@@ -572,7 +717,7 @@ describe('App URL navigation', () => {
     expect(new URLSearchParams(window.location.search).get('screen')).toBe('/learning/profile/learner-a/')
 
     await user.click(screen.getByRole('button', { name: '学习总览' }))
-    expect(await screen.findByText('作答来源', { selector: '[data-slot="card-title"]' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: '作答来源' })).toBeTruthy()
     expect(requestedOverviewLearners).toEqual(['learner-a'])
     expect(requestedPages).toContain('/learning/profile/learner-b/')
     expect(requestedPages).toContain('/learning/profile/learner-a/')

@@ -37,6 +37,12 @@ function fixture(post?: () => Promise<Response>) {
       }
       return Response.json(response)
     }
+    if (path.endsWith('/materials/material-1/content/')) {
+      return Response.json({ schema_version: 'swb.api.v1', context: { source_stamp: 'stamp' }, questions: [], nodes: [] })
+    }
+    if (path.includes('/pages/page/reading/')) {
+      return Response.json({ schema_version: 'swb.api.v1', context: { reading_version: 1 }, current: null, history: [] })
+    }
     return Response.json(path.includes('/materials/material-1/') ? detail : { schema_version: 'swb.api.v1', items: [material], total: 1 })
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -47,53 +53,98 @@ function fixture(post?: () => Promise<Response>) {
 describe('MaterialWorkspace navigation', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
-  it('keeps the loaded material and selected task when clicking its current card again', async () => {
+  it('keeps the loaded material and selected task when clicking its current list row again', async () => {
     const user = userEvent.setup()
     fixture()
+    await user.click(await screen.findByRole('tab', { name: /整理任务/ }))
     await screen.findByRole('button', { name: '加入处理队列' })
-    await user.click(screen.getByRole('button', { name: /测试资料.*当前资料/ }))
-    expect(screen.getByText('资料页 1')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /测试资料.*1 页/ }))
+    expect(screen.getByRole('tab', { name: /整理任务/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('button', { name: '加入处理队列' })).toBeTruthy()
-    expect(screen.queryByText('正在读取资料页…')).toBeNull()
+    expect(screen.queryByText('正在读取资料页、完整度和任务历史…')).toBeNull()
   })
 
-  it('groups material work into mounted sections and the current-task action opens its details', async () => {
+  it('keeps visited tab inputs mounted and task selection opens the selected task', async () => {
+    const user = userEvent.setup()
+    const fetchMock = fixture()
+    await user.click(await screen.findByRole('tab', { name: /整理任务/ }))
+    await screen.findByRole('button', { name: '加入处理队列' })
+    await user.click(screen.getByRole('button', { name: '新建整理任务' }))
+    const choice = screen.getByLabelText(/所选学习者的全部历史记录/) as HTMLInputElement
+    await user.click(choice)
+
+    await user.click(screen.getByRole('tab', { name: /原图与进度/ }))
+    expect(choice.isConnected).toBe(true)
+    expect(choice.checked).toBe(true)
+    await user.click(screen.getByRole('tab', { name: /整理任务/ }))
+    expect(screen.getByLabelText(/所选学习者的全部历史记录/)).toBe(choice)
+
+    await user.click(screen.getAllByRole('button', { name: '查看任务' })[0])
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('/workflows/job-2/'))).toBe(true))
+    expect(screen.getByRole('tab', { name: /整理任务/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('keeps unsaved content input mounted while switching module tabs', async () => {
     const user = userEvent.setup()
     fixture()
-    const queueButton = await screen.findByRole('button', { name: '加入处理队列' })
-    const fileInput = screen.getByLabelText('选择多张原图')
-    const summaries = Array.from(document.querySelectorAll('details > summary'), (summary) => summary.textContent?.trim() || '')
-    for (const section of ['1. 原图', '2. 题目核对', '3. 讲解', '4. 整理任务']) {
-      expect(summaries.some((summary) => summary.startsWith(section))).toBe(true)
-    }
+    await user.click(await screen.findByRole('tab', { name: /题面核对/ }))
+    const printed = await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.type(printed, '切换标签后仍保留')
 
-    const original = Array.from(document.querySelectorAll('details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('1. 原图'))
-    expect(original).toBeTruthy()
-    if (!original) throw new Error('原图区域未渲染')
-    await user.click(original.querySelector(':scope > summary') as HTMLElement)
-    expect(original.open).toBe(true)
-    await user.click(original.querySelector(':scope > summary') as HTMLElement)
-    expect(original.open).toBe(false)
-    expect(fileInput.isConnected).toBe(true)
-    expect(queueButton.isConnected).toBe(true)
+    await user.click(screen.getByRole('tab', { name: /整理任务/ }))
+    expect(printed.isConnected).toBe(true)
+    await user.click(screen.getByRole('tab', { name: /题面核对/ }))
+    expect(screen.getByLabelText('图中印刷题面转写（必填）')).toBe(printed)
+    expect(printed.value).toBe('切换标签后仍保留')
+  })
 
-    const history = Array.from(document.querySelectorAll('details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('资料任务历史'))
-    expect(history).toBeTruthy()
-    if (!history) throw new Error('资料任务历史区域未渲染')
-    await user.click(history.querySelector(':scope > summary') as HTMLElement)
-    await user.click(await screen.findByRole('button', { name: '查看任务' }))
-    expect((document.querySelector('.materials-task-disclosure') as HTMLDetailsElement).open).toBe(true)
-    expect((Array.from(document.querySelectorAll('.materials-task-disclosure details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('当前任务')) as HTMLDetailsElement).open).toBe(true)
+  it('confirms before changing materials or refreshing away from content input', async () => {
+    const user = userEvent.setup()
+    const other = { ...material, id: 'material-2', title: '第二份资料' }
+    const onUnsavedChange = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') {
+        return Response.json({ schema_version: 'swb.api.v1', items: [material, other], total: 2, page: 1, page_size: 20, has_next: false })
+      }
+      if (url.pathname.startsWith('/api/v1/drafts/')) return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      if (url.pathname === '/api/v1/materials/material-1/') return Response.json(detail)
+      if (url.pathname === '/api/v1/materials/material-2/') return Response.json({ ...detail, material: other, jobs: [] })
+      if (url.pathname.endsWith('/content/')) return Response.json({ schema_version: 'swb.api.v1', context: { source_stamp: 'stamp' }, questions: [], nodes: [] })
+      if (url.pathname.endsWith('/reading/')) return Response.json({ schema_version: 'swb.api.v1', context: { reading_version: 1 }, current: null, history: [] })
+      return Response.json({ schema_version: 'swb.api.v1' })
+    }))
+    render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={onUnsavedChange} />)
+    const contentTab = await screen.findByRole('tab', { name: /题面核对/ })
+    await user.click(contentTab)
+    const printed = await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.type(printed, '尚未保存的题面')
+    await waitFor(() => expect(onUnsavedChange).toHaveBeenLastCalledWith(true))
 
-    await user.click(await screen.findByRole('button', { name: '查看当前任务' }))
-    expect((document.querySelector('.materials-task-disclosure') as HTMLDetailsElement).open).toBe(true)
-    expect((Array.from(document.querySelectorAll('.materials-task-disclosure details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('当前任务')) as HTMLDetailsElement).open).toBe(true)
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true).mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const otherRow = screen.getByRole('button', { name: /第二份资料/ })
+    await user.click(otherRow)
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('尚未保存的题面')
+    await user.click(otherRow)
+    expect(await screen.findByRole('heading', { name: '第二份资料' })).toBeTruthy()
+
+    await user.click(await screen.findByRole('tab', { name: /题面核对/ }))
+    const otherInput = await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.type(otherInput, '第二份未保存题面')
+    await waitFor(() => expect(onUnsavedChange).toHaveBeenLastCalledWith(true))
+    await user.click(screen.getByRole('button', { name: '刷新资料' }))
+    expect(otherInput.value).toBe('第二份未保存题面')
+    await user.click(screen.getByRole('button', { name: '刷新资料' }))
+    await screen.findByLabelText('图中印刷题面转写（必填）')
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('')
+    expect(confirm).toHaveBeenCalledTimes(4)
   })
 
   it('prevents task switching while a write is pending and restores navigation afterwards', async () => {
     const user = userEvent.setup()
     let finish!: (response: Response) => void
     const fetchMock = fixture(() => new Promise<Response>((resolve) => { finish = resolve }))
+    await user.click(await screen.findByRole('tab', { name: /整理任务/ }))
     await user.click(await screen.findByRole('button', { name: '加入处理队列' }))
     await waitFor(() => expect(screen.getByRole('button', { name: '查看任务' }).matches(':disabled')).toBe(true))
     await user.click(screen.getByRole('button', { name: '查看任务' }))
@@ -118,12 +169,55 @@ describe('MaterialWorkspace navigation', () => {
     }))
     render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} />)
     await screen.findByRole('button', { name: /测试资料/ })
-    await user.type(screen.getByPlaceholderText('例如：数学周练'), '分数')
+    await user.type(screen.getByPlaceholderText('输入资料名称'), '分数')
     await user.click(screen.getByRole('button', { name: '搜索' }))
     await waitFor(() => expect(listRequests.some((url) => url.searchParams.get('q') === '分数' && url.searchParams.get('page') === '1' && url.searchParams.get('page_size') === '20')).toBe(true))
 
     await user.click(await screen.findByRole('button', { name: '下一页' }))
     await waitFor(() => expect(listRequests.some((url) => url.searchParams.get('q') === '分数' && url.searchParams.get('page') === '2' && url.searchParams.get('page_size') === '20')).toBe(true))
+  })
+
+  it('keeps a deep-linked material outside the current result page and reports location changes', async () => {
+    const user = userEvent.setup()
+    const deepMaterial = { ...material, id: 'private-material-key', title: '深链接资料' }
+    const otherMaterial = { ...material, id: 'other-material', title: '列表中的资料' }
+    const listRequests: URL[] = []
+    const onLocationChange = vi.fn()
+    const onTabChange = vi.fn()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') {
+        listRequests.push(url)
+        const page = Number(url.searchParams.get('page'))
+        return Response.json({ schema_version: 'swb.api.v1', items: [otherMaterial], total: 45, page, page_size: 20, has_next: true })
+      }
+      if (url.pathname.startsWith('/api/v1/drafts/')) return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      if (url.pathname === `/api/v1/materials/${deepMaterial.id}/`) return Response.json({ ...detail, material: deepMaterial, jobs: [] })
+      if (url.pathname === `/api/v1/materials/${otherMaterial.id}/`) return Response.json({ ...detail, material: otherMaterial, jobs: [] })
+      return Response.json({ schema_version: 'swb.api.v1', items: [] })
+    }))
+    render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} initialMaterialId={deepMaterial.id} initialQuery='关键字' initialPage={3} initialTab='pages' onLocationChange={onLocationChange} onTabChange={onTabChange} />)
+
+    expect(await screen.findByRole('heading', { name: '深链接资料' })).toBeTruthy()
+    await waitFor(() => expect(listRequests.some((url) => url.searchParams.get('q') === '关键字' && url.searchParams.get('page') === '3')).toBe(true))
+    expect(screen.queryByText(deepMaterial.id)).toBeNull()
+    expect(onLocationChange).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /列表中的资料/ }))
+    expect(onLocationChange).toHaveBeenLastCalledWith({ materialId: otherMaterial.id, query: '关键字', page: 3 })
+    expect(onTabChange).toHaveBeenLastCalledWith('pages')
+    await screen.findByRole('heading', { name: '列表中的资料' })
+
+    await user.type(screen.getByPlaceholderText('输入资料名称'), '补充')
+    await user.click(screen.getByRole('button', { name: '搜索' }))
+    expect(onLocationChange).toHaveBeenLastCalledWith({ materialId: otherMaterial.id, query: '关键字补充', page: 1 })
+    await user.click(await screen.findByRole('button', { name: '下一页' }))
+    expect(onLocationChange).toHaveBeenLastCalledWith({ materialId: otherMaterial.id, query: '关键字补充', page: 2 })
+    await user.click(screen.getByRole('button', { name: '清除' }))
+    expect(onLocationChange).toHaveBeenLastCalledWith({ materialId: otherMaterial.id, query: '', page: 1 })
+
+    await user.click(screen.getByRole('tab', { name: /整理任务/ }))
+    expect(onTabChange).toHaveBeenLastCalledWith('tasks')
   })
 
   it('ignores a delayed material list from a previous household', async () => {

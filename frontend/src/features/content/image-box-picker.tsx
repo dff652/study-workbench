@@ -24,12 +24,14 @@ export function ImageBoxPicker({
   page,
   boxes,
   onAdd,
+  onSelectionChange,
   disabled = false,
   addLabel = '将选区加入来源',
 }: {
   page: MaterialPage
   boxes: ImageBox[]
   onAdd: (bbox: [number, number, number, number]) => void
+  onSelectionChange?: (hasSelection: boolean) => void
   disabled?: boolean
   addLabel?: string
 }) {
@@ -86,6 +88,7 @@ export function ImageBoxPicker({
     const next = bboxFromDrag(startRef.current.point, pointFromEvent(event), page.width, page.height)
     startRef.current = null
     setSelection(next ? { imageKey, bbox: next } : null)
+    if (next) onSelectionChange?.(true)
   }
 
   const handleImageLoad = () => {

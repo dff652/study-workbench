@@ -19,7 +19,7 @@ from app.exports.snapshots import export_document, private_directory, verify_sna
 from app.printing.layout import paginate
 from app.printing.services import _font_inputs
 from app.web.services import asset_path
-from . import bridge
+from . import bridge, knowledge_bridge, queries
 from .vendor import model
 from .vendor.common import assert_no_symlinks
 from .vendor.contracts import document_dict as companion_document_dict
@@ -70,11 +70,14 @@ def _paginate_questions(content, fonts, root):
 def render(output, assets):
     root = Path(settings.SWB_DATA_ROOT).resolve()
     assert_no_symlinks(root)
-    content = bridge.companion_content(output.revision, assets)
+    knowledge = output.revision.mode == "knowledge"
+    content_bridge = knowledge_bridge if knowledge else bridge
+    content = content_bridge.companion_content(output.revision, assets)
     manifest = output.revision.sources["manifest"]
-    bridge.verify_assets(content, manifest, root)
-    plans = model.compile_documents(content)
-    documents = [bridge.native_document(plan["document"], content["lectures"]) for plan in plans]
+    if not knowledge:
+        bridge.verify_assets(content, manifest, root)
+    plans = knowledge_bridge.plans(content, output.revision) if knowledge else model.compile_documents(content)
+    documents = [plan["document"] if knowledge else bridge.native_document(plan["document"], content["lectures"]) for plan in plans]
     destination = root / "solutions" / "outputs" / output.pk.hex / f"version-{output.version}"
     assert_no_symlinks(destination)
     parent = private_directory(destination.parent)
@@ -83,19 +86,22 @@ def render(output, assets):
     stage = Path(tempfile.mkdtemp(prefix=".rendering-", dir=parent))
     try:
         fonts, font_manifest = prepare_fonts(documents, stage / "fonts", **_font_inputs())
-        _paginate_questions(content, fonts, root)
-        model.validate_content(content, manifest)
-        plans = model.compile_documents(content)
+        if knowledge:
+            plans = knowledge_bridge.plans(content, output.revision, fonts, root)
+        else:
+            _paginate_questions(content, fonts, root)
+            model.validate_content(content, manifest)
+            plans = model.compile_documents(content)
         tool_version = _tool("pdftoppm", "-v").stderr.decode("utf-8", "replace").splitlines()[0]
         recipe = {"content_hash": output.revision.content_hash, "sources": output.revision.sources,
-            "companion_source": bridge.verify_vendor(), "font_manifest": font_manifest, "preview_tool": tool_version,
+            "companion_source": content_bridge.verify_vendor(), "font_manifest": font_manifest, "preview_tool": tool_version,
             "adapter": {path.name: digest(path.read_bytes()) for path in sorted(Path(__file__).parent.glob("*.py"))}}
         write_private(stage / "companion-content.json", content)
         write_private(stage / "source-manifest.json", manifest)
         write_private(stage / "recipe.json", recipe)
         result_documents = []
         for plan in plans:
-            document = bridge.native_document(plan["document"], content["lectures"])
+            document = plan["document"] if knowledge else bridge.native_document(plan["document"], content["lectures"])
             directory, generated = export_document(document, stage / "documents", fonts, font_manifest, asset_root=root)
             verify_snapshot(directory)
             _verify_word(directory / "document.docx", document)
@@ -110,10 +116,11 @@ def render(output, assets):
                 raise ExportError("invalid_preview", "Some PDF pages have no preview")
             files = {"document.pdf": directory / "document.pdf", "document.docx": directory / "document.docx"}
             files.update({f"page-{index}.png": path for index, path in enumerate(previews, 1)})
-            organization = "per_question" if document.document_id.startswith("question-") else "per_lecture" if document.document_id.startswith("lecture-") else "combined"
+            organization = plan["organization"] if knowledge else "per_question" if document.document_id.startswith("question-") else "per_lecture" if document.document_id.startswith("lecture-") else "combined"
             result_documents.append({"id": document.document_id, "title": document.title,
-                "organization": organization, "question_ids": plan["question_ids"], "formats": plan["formats"],
-                "page_count": len(document.pages), "page_questions": plan["page_questions"],
+                "organization": organization, "question_ids": plan.get("question_ids", []), "formats": plan["formats"],
+                **({"knowledge_ids": plan["knowledge_ids"], "page_knowledge": plan["page_knowledge"]} if knowledge else {"page_questions": plan["page_questions"]}),
+                "page_count": len(document.pages),
                 "previews": [f"page-{index}.png" for index in range(1, len(previews) + 1)],
                 "files": {name: {"key": str(destination.relative_to(root) / path.relative_to(stage)),
                     "sha256": digest(path.read_bytes()), "size": path.stat().st_size} for name, path in files.items()},
@@ -123,10 +130,9 @@ def render(output, assets):
         size = sum(path.stat().st_size for path in stage.rglob("*") if path.is_file())
         if size > 512 * 1024 * 1024:
             raise ExportError("solution_output_large", "Generated output exceeds the bounded size")
-        result = {"recipe_sha256": digest(canonical(recipe)), "content_hash": output.revision.content_hash,
+        result = {"mode": output.revision.mode, "recipe_sha256": digest(canonical(recipe)), "content_hash": output.revision.content_hash,
             "documents": result_documents, "machine_verified": True, "zip": True,
-            "source_revision": output.revision_id, "checks": {name: {"status": "not_tested", "notes": ""}
-                for name in ("content", "math", "pdf_visual", "word_pc", "word_macos")}}
+            "source_revision": output.revision_id, "checks": queries.default_checks(output.revision.mode)}
         write_private(stage / "output-manifest.json", result)
         # Cancellation and source changes are checked by the claiming service
         # before this immutable version can become a visible successful result.
@@ -169,6 +175,7 @@ def archive(output):
         result.writestr("checks.json", canonical({"content_hash": output.result["content_hash"],
             "recipe_sha256": output.result["recipe_sha256"], "output_version": output.version,
             "machine_verified": True, "checks": checks}))
-        result.writestr("README.txt", "逐题解析 · 家长答案\n不同组织方式重复使用同一题目正文。\n机器检查不代表内容、数学、PDF版式或 Word 客户端已核对。具体范围见 checks.json。\n原始照片不包含在此压缩包中。\n")
+        label = "知识点讲解" if output.revision.mode == "knowledge" else "逐题解析 · 家长答案"
+        result.writestr("README.txt", label + "\n不同组织方式重复使用同一条目正文。\n机器检查不代表内容、学科依据、PDF版式或 Word 客户端已核对。具体范围见 checks.json。\n原始照片不包含在此压缩包中。\n")
     buffer.seek(0)
     return buffer

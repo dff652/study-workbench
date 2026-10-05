@@ -1,6 +1,6 @@
 {% load product %}
 <figure class="history-source">
-  {% if source.missing %}<span class="history-image-placeholder">{{ source.label }}</span>
+  {% if source.missing %}<span class="history-image-placeholder">原图暂不可用{% if source.label %}：{{ source.label }}{% endif %}</span>
   {% else %}<a class="history-image-link" href="{{ source.page_url }}" aria-label="在资料页中查看原图来源">
     <span class="history-image-wrap"><img src="{{ source.preview_url }}" alt="原图 {{ source.label }}">{% if source.region_style %}<span class="history-region-box" style="{{ source.region_style }}"></span>{% endif %}</span>
   </a>{% endif %}

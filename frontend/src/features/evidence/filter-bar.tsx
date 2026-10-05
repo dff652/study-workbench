@@ -2,13 +2,12 @@ import { RefreshCw } from 'lucide-react'
 import type { Filters, SourceKind } from '../../types'
 import { INITIAL_FILTERS, SOURCE_LABELS } from '../../components/shared'
 import { Button } from '../../components/ui/button'
-import { Card, CardContent } from '../../components/ui/card'
 import { SOURCE_KINDS } from '../../types'
 
 export function FilterBar({ filters, onChange }: { filters: Filters; onChange: (filters: Filters) => void }) {
   return (
-    <Card className='shadow-sm'>
-      <CardContent className='grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(9rem,0.8fr)_minmax(9rem,0.8fr)_minmax(13rem,1fr)_auto] sm:p-5'>
+    <section aria-label='筛选作答记录' className='border-b pb-4'>
+      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(9rem,0.8fr)_minmax(9rem,0.8fr)_minmax(13rem,1fr)_auto]'>
         <div>
           <label htmlFor='date-from' className='mb-1.5 block text-xs font-medium text-muted-foreground'>实际作答日期起</label>
           <input id='date-from' type='date' className='h-10 w-full rounded-md border bg-background px-3 text-sm' value={filters.dateFrom} onChange={(event) => onChange({ ...filters, dateFrom: event.target.value })} />
@@ -29,7 +28,7 @@ export function FilterBar({ filters, onChange }: { filters: Filters; onChange: (
             <RefreshCw className='size-4' aria-hidden='true' />清除筛选
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

@@ -4,8 +4,15 @@
 
 ## 使用与当前交付
 
+- [三种资料模式与学科契约](knowledge-subject-contract-20261005.md)：知识点讲解、逐题讲解、五册与练习，学校学科和讲解依据分别保存。
+- [知识集成与匿名小批次验收](reviews/knowledge-integration-20261005.md)：本机候选、实际验证和空实例恢复，区分源码、正式运行与 Word 实机状态。
+- [知识源码交付与 review](reviews/knowledge-handoff-20261005.md)：本地源码／文档提交、完整待推送范围、GitHub PR 与独立交付结果。
+- [Web 体验改进方案与任务清单](web-ux-improvement-plan-20261005.md)：导航／空间／任务交互／文案、改进顺序及新产品验收门槛。
+- [Web 体验实施契约](web-ux-implementation-contract-20261005.md)：公共组件、URL／输入保持、业务模板及三个 Luna6 任务的文件归属。
+- [Web 体验改进验收](reviews/web-ux-20261005.md)：当前候选的实际测试、浏览器与独立复核进展，区分真实试用和运行交付。
 - [Web 第一期范围与交付门槛](web-phase1-release-20261005.md)：第一期完整 Web 产品、第二期手机端，以及工程／运行／真实试用的完成条件。
 - [本轮整合源码交付 review](reviews/web-handoff-20261005.md)：提交范围、输入一致性、阶段文档及 push／PR 门槛。
+- [36 Web 体验改版部署验收](reviews/web-ux-deployment-20261005.md)：当前已审本地运行身份、前后恢复、实际 HTTPS 与未验边界。
 - [36 Web 整合部署验收](reviews/web-deployment-20261005.md)：前后配套恢复、迁移、实际 HTTPS 与数据保留。
 - [真实家庭 Web 小批次](web-family-trial-20261005.md)：真实资料、学习者、草稿、文档、作答与复测的实际反馈条件。
 - [PC 使用说明](pc-usage.md)：从照片、原图对照解析到真实作答／复测与下载。
@@ -67,3 +74,5 @@
 | [协作约定](../AGENTS.md) |
 | [虚构关系包](../tests/fixtures/domain/synthetic-v0.1.json) |
 | [requirements.txt](../requirements.txt) |
+
+- [Web 体验改版本地交付 review](reviews/web-ux-handoff-20261005.md)：源码／测试本地提交与配套文档交付，运行升级另行记录。

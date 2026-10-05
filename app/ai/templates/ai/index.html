@@ -4,7 +4,7 @@
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>模型草稿</span></nav>
   <div class="page-heading"><div><p class="eyebrow">明确选择 · 人工复核</p><h1>模型配置与任务</h1><p class="muted">模型输出只作为待复核草稿。只有当前家庭已发布来源和主动选择的图像区域会进入任务。</p></div></div>
   {% if households %}
-    <section class="panel">
+    <section class="panel {% if household_id %}workspace-scope-field{% endif %}">
       <form method="get" class="inline-form">
         <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>家庭 {{ forloop.counter }}</option>{% endfor %}</select></div>
         <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>

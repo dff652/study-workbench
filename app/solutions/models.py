@@ -7,6 +7,7 @@ from django.db import models
 
 class SolutionRevision(models.Model):
     material = models.ForeignKey("workbench_web.MaterialSet", on_delete=models.PROTECT, related_name="solution_revisions")
+    mode = models.CharField(max_length=16, default="solution")
     version = models.PositiveIntegerField()
     content = models.JSONField()
     content_hash = models.CharField(max_length=64)
@@ -21,8 +22,9 @@ class SolutionRevision(models.Model):
     class Meta:
         ordering = ("version",)
         constraints = [
-            models.UniqueConstraint(fields=("material", "version"), name="swb_solution_revision_version"),
-            models.UniqueConstraint(fields=("material", "request_key"), name="swb_solution_revision_request"),
+            models.UniqueConstraint(fields=("material", "mode", "version"), name="swb_solution_revision_mode_version"),
+            models.UniqueConstraint(fields=("material", "mode", "request_key"), name="swb_solution_revision_mode_request"),
+            models.CheckConstraint(condition=models.Q(mode__in=("solution", "knowledge")), name="swb_companion_mode"),
         ]
 
 

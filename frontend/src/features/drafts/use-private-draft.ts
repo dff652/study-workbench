@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadPrivateDraft, savePrivateDraft, type PrivateDraft } from './client'
 import { makeRequestKey } from '../materials/request-keys'
+import { userMessage } from '../../lib/user-message'
 
 type DraftPayload<T> = T | { cleared: true }
 
@@ -27,6 +28,7 @@ export function usePrivateDraft<T>({ key, householdId, csrfToken, baseStamp, ena
   const inFlight = useRef<Promise<void> | null>(null)
   const pending = useRef(false)
   const tombstoning = useRef(false)
+  const clearing = useRef<{ scope: number; promise: Promise<boolean> } | null>(null)
   const sequence = useRef(0)
   const suppressedThrough = useRef(0)
   const conflictRef = useRef<PrivateDraft<DraftPayload<T>> | null | undefined>(undefined)
@@ -141,7 +143,7 @@ export function usePrivateDraft<T>({ key, householdId, csrfToken, baseStamp, ena
       loadFailed.current = true
       loaded.current = false
       loadedScope.current = -1
-      setLoadError(cause instanceof Error ? cause.message : '私人草稿暂时无法读取。')
+      setLoadError(userMessage(cause instanceof Error ? cause.message : '', '私人草稿暂时无法读取，请保留当前输入，稍后重试。'))
       setGeneration((value) => value + 1)
     })
     return () => {
@@ -166,7 +168,7 @@ export function usePrivateDraft<T>({ key, householdId, csrfToken, baseStamp, ena
     setConflict(undefined)
   }, [setCandidateValue])
 
-  const tombstone = useCallback(async (draft?: PrivateDraft<DraftPayload<T>>) => {
+  const clearDraft = useCallback(async (draft?: PrivateDraft<DraftPayload<T>>) => {
     const requestScope = scopeRef.current.generation
     if (scopeRef.current.key !== key || scopeRef.current.householdId !== householdId) return false
     tombstoning.current = true
@@ -210,6 +212,19 @@ export function usePrivateDraft<T>({ key, householdId, csrfToken, baseStamp, ena
       }
     }
   }, [canAutosave, csrfToken, householdId, key, onUnauthorized, schedule, setCandidateValue, setConflictValue])
+
+  const tombstone = useCallback((draft?: PrivateDraft<DraftPayload<T>>) => {
+    const scope = scopeRef.current.generation
+    // Saving and immediately confirming can both request cleanup. They must
+    // share one CAS write rather than conflict with this window's own write.
+    if (clearing.current?.scope === scope) return clearing.current.promise
+    const operation = { scope, promise: clearDraft(draft) }
+    clearing.current = operation
+    void operation.promise.finally(() => {
+      if (clearing.current === operation) clearing.current = null
+    })
+    return operation.promise
+  }, [clearDraft])
 
   const keepCurrent = useCallback(() => {
     const pendingCandidate = candidateRef.current

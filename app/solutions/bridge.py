@@ -27,7 +27,8 @@ def verify_vendor():
 
 def source_manifest(material, content, pages):
     batch_id = "material-" + material.pk.hex
-    used = {ref["page_id"] for question in content["questions"] for ref in question["sources"]}
+    entries = content.get("knowledge", content.get("questions", []))
+    used = {ref["page_id"] for item in entries for ref in item["sources"]}
     result, mapping = [], {}
     for page in sorted((pages[page_id] for page_id in used), key=lambda page: page.position):
         data = page.image.payload
@@ -49,9 +50,9 @@ def _text_block(value, role="method", kind="p"):
     return {"kind": kind, "content": escape(value).replace("\n", "<br/>"), "role": role}
 
 
-def verify_assets(content, manifest, root):
+def verify_assets(content, manifest, root, *, validate=model.validate_content):
     """Match the upload service's RGBA source contract without altering pinned vendor code."""
-    model.validate_content(content, manifest)
+    validate(content, manifest)
     source_contract.verify_sources(manifest, root)
     sources = {item["source_id"]: item for item in manifest["sources"]}
     for asset in content["assets"]:
@@ -122,7 +123,7 @@ def companion_content(revision, assets):
                 if step["figure"] is not None:
                     add_figure(step["figure"])
 
-        if content["schema_version"] == schema.STRUCTURED_SCHEMA:
+        if content["schema_version"] in (schema.STRUCTURED_SCHEMA, schema.CLASSIFIED_SCHEMA):
             for label, field in (("先想什么", "thinking"), ("本讲解法", "lecture_method")):
                 if question[field] or field == "lecture_method":
                     blocks.extend([_text_block(label, "method", "h"), _text_block(question[field] or "解法待补。")])

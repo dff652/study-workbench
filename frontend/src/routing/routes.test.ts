@@ -2,12 +2,38 @@ import { describe, expect, it } from 'vitest'
 import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, screenForView, safeBusinessPath, solutionMaterialId, withoutFragment } from './routes'
 
 describe('app routing', () => {
+  it('restores material selection, submitted search and page within the material scope', () => {
+    const route = { view: 'materials' as const, household: 'home', learner: 'child', screen: '', tab: 'content',
+      materialId: 'material-2', materialQuery: '分数', materialPage: 2 }
+    expect(parseRoute(new URL(routeUrl(route), 'https://study.test'))).toEqual(route)
+    expect(routeForBusinessPath('/knowledge/?household_id=home', route)?.materialId).toBeUndefined()
+    const otherModule = parseRoute(new URL('https://study.test/app/?view=progress&material=material-2&q=x&page=2'))
+    expect(otherModule.materialId).toBeUndefined()
+    expect(otherModule.materialQuery).toBeUndefined()
+    const invalid = parseRoute(new URL('https://study.test/app/?view=materials&material=%2Fother&page=Infinity'))
+    expect(invalid.materialId).toBeUndefined()
+    expect(invalid.materialPage).toBeUndefined()
+  })
+  it('restores a module tab and discards it when moving to another module', () => {
+    const route = { view: 'materials' as const, household: 'home', learner: 'child', screen: '', tab: 'tasks' }
+    expect(parseRoute(new URL(routeUrl(route), 'https://study.test'))).toEqual(route)
+    expect(routeForBusinessPath('/knowledge/?household_id=home', route)?.tab).toBeUndefined()
+    expect(parseRoute(new URL('https://study.test/app/?tab=%3Cscript%3E')).tab).toBeUndefined()
+    expect(routeUrl({ ...route, tab: 'invalid value' })).not.toContain('tab=')
+  })
   it('preserves the document viewing panel through refresh without accepting an encoded slash', () => {
     const route = { view: 'documents' as const, household: 'home', learner: 'child', screen: '/__app__/solutions/material-1/?panel=outputs' }
     const restored = parseRoute(new URL(routeUrl(route), 'https://study.test'))
     expect(restored).toEqual(route)
     expect(solutionMaterialId(restored.screen)).toBe('material-1')
     expect(solutionMaterialId('/__app__/solutions/material%2Fother/?panel=outputs')).toBeNull()
+  })
+  it('opens a material solution in the document workspace and clears the former module location', () => {
+    const current = { view: 'materials' as const, household: 'home', learner: 'child', screen: '', tab: 'solutions',
+      materialId: 'material-1', materialQuery: '分数', materialPage: 2 }
+    expect(routeForBusinessPath('/__app__/solutions/material-1/', current)).toEqual({
+      view: 'documents', household: 'home', learner: 'child', screen: '/__app__/solutions/material-1/',
+    })
   })
   it('round-trips the selected page and household, learner, and business screen through the URL', () => {
     const route = {

@@ -29,7 +29,7 @@ const FIELD_LABELS: Record<string, string> = {
   structural_features: '结构特征', body: '答案内容', basis: '答案依据', formulas: '公式', role: '关系类型',
   legibility: '辨识情况',
   placement: '放置位置', png_asset: '教学图预览', vector_asset: '矢量图文件', alt: '图示说明',
-  width_points: '排版宽度（pt）', min_label_points: '最小标签字号（pt）', independent_safe: '题面无提示确认',
+  width_points: '图示宽度', min_label_points: '图示文字大小', independent_safe: '题面提示核对结果',
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -130,8 +130,8 @@ export function WorkflowPanel({
       <Card>
         <CardHeader className='flex flex-wrap items-start justify-between gap-3 border-b pb-4'>
           <div>
-            <CardTitle className='flex items-center gap-2 text-base'>资料整理任务 <Badge variant={job.state === 'complete' ? 'secondary' : 'outline'}>{workflowStateLabel(job.state)}</Badge></CardTitle>
-            <CardDescription className='mt-1'>最近更新：{localDateTime(job.updated_at)} · {job.record_count} 项结构化记录</CardDescription>
+            <CardTitle className='flex items-center gap-2 text-base'>整理任务 <Badge variant={job.state === 'complete' ? 'secondary' : 'outline'}>{workflowStateLabel(job.state)}</Badge></CardTitle>
+            <CardDescription className='mt-1'>最近更新：{localDateTime(job.updated_at)} · {job.record_count} 项待核对内容</CardDescription>
           </div>
           <Button type='button' variant='outline' size='sm' onClick={refresh} disabled={busy}><RefreshCw className='size-4' aria-hidden='true' />刷新任务</Button>
         </CardHeader>
@@ -140,11 +140,11 @@ export function WorkflowPanel({
           {job.state === 'queued' || job.state === 'running' ? <p role='status' className='rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-950'>任务{job.state === 'queued' ? '正在等待执行' : '正在处理中'}；此页面不会自动刷新，可点击“刷新任务”查看最新状态。</p> : null}
           {error ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950'>{error}</p> : null}
           <div className='flex flex-wrap gap-x-5 gap-y-2 text-sm'>
-            <ApiLink href={links.material_url}>旧版资料页</ApiLink>
-            <ApiLink href={links.prepare_url}>五册准备页</ApiLink>
-            <ApiLink href={links.ai_url}>AI 辅助页面</ApiLink>
-            {links.preview_url ? <ApiLink href={links.preview_url}>查看五册检查版</ApiLink> : null}
-            {links.download_url ? <ApiLink href={links.download_url}>下载完整五册 ZIP</ApiLink> : null}
+            <ApiLink href={links.material_url}>查看资料记录</ApiLink>
+            <ApiLink href={links.prepare_url}>准备配套练习</ApiLink>
+            <ApiLink href={links.ai_url}>AI 辅助</ApiLink>
+            {links.preview_url ? <ApiLink href={links.preview_url}>查看五册预览</ApiLink> : null}
+            {links.download_url ? <ApiLink href={links.download_url}>下载五册文件</ApiLink> : null}
           </div>
           {!canWrite ? <p className='text-sm text-muted-foreground'>当前成员只读；确认和处理由家庭所有者或审核成员操作。</p> : null}
           <fieldset disabled={!canWrite} className='space-y-4'>
@@ -179,7 +179,7 @@ export function WorkflowPanel({
               <Button type='button' onClick={() => void runAction('check_output', outputReason.trim(), checks)} disabled={busy || !checks.pdf || !checks.docx || !checks.purposes || outputReason.trim().length === 0}><CircleCheck className='size-4' aria-hidden='true' />确认输出检查</Button>
             </section>
           ) : null}
-          {job.state === 'complete' ? <div className='flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 p-4 text-emerald-950'><CircleCheck className='size-5' aria-hidden='true' /><p className='mr-auto font-medium'>五册输出检查已完成。</p>{links.download_url ? <Button asChild><a href={links.download_url}><ArrowDownToLine className='size-4' aria-hidden='true' />下载完整五册 ZIP</a></Button> : null}</div> : null}
+          {job.state === 'complete' ? <div className='flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 p-4 text-emerald-950'><CircleCheck className='size-5' aria-hidden='true' /><p className='mr-auto font-medium'>五册输出检查已完成。</p>{links.download_url ? <Button asChild><a href={links.download_url}><ArrowDownToLine className='size-4' aria-hidden='true' />下载五册文件</a></Button> : null}</div> : null}
           {job.state === 'failed' ? <Button type='button' variant='outline' onClick={() => void runAction('resume')} disabled={busy}>恢复处理</Button> : null}
           {!['complete', 'failed', 'cancelled'].includes(job.state) ? <Button type='button' variant='ghost' size='sm' className='text-destructive' onClick={() => void runAction('cancel')} disabled={busy}>取消任务</Button> : null}
           </fieldset>
@@ -232,11 +232,12 @@ function RecordReview({ records, sourcePages, assets }: {
         {Object.entries(record.data).map(([field, value]) => {
           if (field === 'sources' || field === 'source') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{record.kind === 'diagram' ? '教学图来源' : '原图来源'}</dt><dd><SourceEvidence value={value} sourcePages={sourcePages} /></dd></div>
           if (field === 'question' || field === 'node') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{field === 'question' ? '关联题目' : '关联节点'}</dt><dd className='text-sm'>{labels.get(String(value)) || '关联对象无法识别'}</dd></div>
-          if (field === 'role') value = ROLE_LABELS[String(value)] || String(value)
+          if (field === 'role') value = ROLE_LABELS[String(value)] || '关系类型待核对'
           if (field === 'formulas') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>公式</dt><dd><FormulaReview value={value} /></dd></div>
-          if (field === 'png_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>教学图预览</dt><dd><DiagramAssetPreview asset={typeof value === 'string' ? assets[value] : undefined} filename={typeof value === 'string' ? value : ''} /></dd></div>
-          if (field === 'vector_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>矢量图源</dt><dd className='text-sm'>{typeof value === 'string' ? value : '未记录'}<span className='ml-2 text-xs text-muted-foreground'>（用于保留可缩放图源）</span></dd></div>
-          return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{FIELD_LABELS[field] || field}</dt><dd className='whitespace-pre-wrap break-words text-sm'>{formatValue(value)}</dd></div>
+          if (field === 'png_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>教学图预览</dt><dd><DiagramAssetPreview asset={typeof value === 'string' ? assets[value] : undefined} /></dd></div>
+          if (field === 'vector_asset') return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>可缩放图源</dt><dd className='text-sm'>{typeof value === 'string' ? '已保留' : '未记录'}</dd></div>
+          if (!(field in FIELD_LABELS)) return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>其他待核对内容</dt><dd className='text-sm'>此项内容已保留，当前没有可直接展示的说明。</dd></div>
+          return <div key={field} className='contents'><dt className='text-sm text-muted-foreground'>{FIELD_LABELS[field]}</dt><dd className='whitespace-pre-wrap break-words text-sm'>{formatValue(value)}</dd></div>
         })}
       </dl>
     </li>
@@ -246,9 +247,15 @@ function RecordReview({ records, sourcePages, assets }: {
 function formatValue(value: unknown) {
   if (typeof value === 'boolean') return value ? '是' : '否'
   if (typeof value === 'string') return value || '未记录'
-  if (Array.isArray(value)) return value.map((item) => typeof item === 'string' ? item : JSON.stringify(item)).join('；') || '未记录'
+  if (Array.isArray(value)) {
+    const textValues = value.filter((item): item is string => typeof item === 'string')
+    const unrenderedCount = value.length - textValues.length
+    if (textValues.length && unrenderedCount) return `${textValues.join('；')}；另有 ${unrenderedCount} 项非文字内容，需继续核对。`
+    return textValues.length ? textValues.join('；') : value.length ? `包含 ${value.length} 项，需在后续核对中检查。` : '未记录'
+  }
   if (value === null || value === undefined) return '未记录'
-  return JSON.stringify(value)
+  if (typeof value === 'object') return '包含其他待核对内容，已完整保留。'
+  return '内容待核对。'
 }
 
 function SourceEvidence({ value, sourcePages }: { value: unknown; sourcePages: Map<string, MaterialPage | undefined> }) {
@@ -262,19 +269,19 @@ function SourceEvidence({ value, sourcePages }: { value: unknown; sourcePages: M
       const page = sourcePages.get(String(reference.source_id))
       const bbox = reference.bbox as number[]
       return <section key={index} className='space-y-1 rounded-md border p-2'>
-        <p className='text-xs text-muted-foreground'>资料页 {page?.position ?? '未映射'} · 原图像素区域：{bbox.join(', ')}</p>
+        <p className='text-xs text-muted-foreground'>资料页 {page?.position ?? '未映射'} · 原图来源区域 {index + 1}</p>
         {page ? <ImageBoxPicker page={page} boxes={[{ bbox: bbox as [number, number, number, number], label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm text-amber-900'>找不到该来源对应的原图页。</p>}
       </section>
     })}
   </div>
 }
 
-function DiagramAssetPreview({ asset, filename }: { asset: NonNullable<WorkflowDetailResponse['assets']>[string] | undefined; filename: string }) {
+function DiagramAssetPreview({ asset }: { asset: NonNullable<WorkflowDetailResponse['assets']>[string] | undefined }) {
   const src = asset?.media_type === 'image/png' ? sameOriginHref(asset.preview_url) : null
   return src ? <figure className='space-y-1'>
     <img src={src} alt='待核对教学图' className='max-h-72 max-w-full rounded-md border bg-white object-contain' />
-    <figcaption className='text-xs text-muted-foreground'>导入图像：{filename || '教学图'}</figcaption>
-  </figure> : <div className='rounded-md border border-dashed px-3 py-2 text-sm text-amber-900'>教学图预览暂不可用：{filename || '未记录图像文件'}。</div>
+    <figcaption className='text-xs text-muted-foreground'>教学图预览</figcaption>
+  </figure> : <div className='rounded-md border border-dashed px-3 py-2 text-sm text-amber-900'>教学图预览暂不可用，请重新核对该项内容。</div>
 }
 
 function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
@@ -288,5 +295,5 @@ function workflowErrorMessage(code: string) {
     permission_changed: '家庭访问权限已变化，任务未继续执行；请确认当前权限后联系家庭所有者。',
     render_failed: '五册生成失败，输入和任务历史已保留；请检查资料后再恢复处理。',
   }
-  return messages[code] || `任务遇到未识别的问题。联系支持时可提供代码：${code}`
+  return messages[code] || '任务遇到未识别的问题。请刷新状态；若问题持续，请联系家庭所有者。'
 }

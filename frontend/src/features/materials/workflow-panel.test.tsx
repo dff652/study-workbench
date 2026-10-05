@@ -13,13 +13,13 @@ const initialJob: WorkflowJob = {
 const records = [
   { id: 'q', kind: 'question', data: { original_number: '1', printed_text: '题面', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
   { id: 'k', kind: 'knowledge', data: { definition: '知识定义', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
-  { id: 'm', kind: 'method', data: { name: '方法名称', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
+  { id: 'm', kind: 'method', data: { name: '方法名称', conditions: ['适用条件', { internal_note: '私有内容' }], sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
   { id: 't', kind: 'question_type', data: { name: '题型名称', sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }] } },
   { id: 'a', kind: 'answer', data: { question: 'q', body: '答案内容', basis: '答案依据', formulas: [
     ['r', ['t', 'x'], ['t', '+'], ['t', '1']], ['f', ['t', '1'], ['t', '2']], ['u', ['t', 'x'], ['t', '2']],
   ] } },
   { id: 'l', kind: 'link', data: { question: 'q', node: 'm', role: 'primary' } },
-  { id: 'o', kind: 'observation', data: { sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }], notes: '观察内容' } },
+  { id: 'o', kind: 'observation', data: { sources: [{ source_id: 's', bbox: [0, 0, 20, 20] }], notes: '观察内容', future_payload: { raw_secret: '不可见内容' } } },
   { id: 'd', kind: 'diagram', data: { question: 'q', placement: 'question', png_asset: 'figure.png', vector_asset: 'figure.pdf', source: { source_id: 's', bbox: [10, 10, 80, 80] }, alt: '平行线辅助线图', conditions: ['延长线相交'], basis: '原图区域可追溯', width_points: 240, min_label_points: 12, independent_safe: true } },
 ] as WorkflowDetailResponse['records']
 
@@ -75,7 +75,7 @@ describe('WorkflowPanel', () => {
     const onBusyChange = vi.fn()
     render(<WorkflowPanel jobId='job-1' csrfToken='csrf-test' canWrite pages={pages} onUnauthorized={onUnauthorized} onJobUpdated={onJobUpdated} onBusyChange={onBusyChange} onOpenContent={vi.fn()} />)
 
-    for (const text of ['题面', '知识定义', '方法名称', '题型名称', '答案内容', '主要方法', '观察内容', '平行线辅助线图', '延长线相交', '原图区域可追溯']) {
+    for (const text of ['题面', '知识定义', '方法名称', '题型名称', '答案内容', '主要方法', '观察内容', '平行线辅助线图', '延长线相交', '原图区域可追溯', '适用条件；另有 1 项非文字内容，需继续核对。', '此项内容已保留，当前没有可直接展示的说明。']) {
       expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
     }
     expect(screen.getByLabelText('公式 x+1')).toBeTruthy()
@@ -84,6 +84,8 @@ describe('WorkflowPanel', () => {
     expect(screen.getByRole('img', { name: '待核对教学图' }).getAttribute('src')).toBe('/api/v1/workflows/job-1/assets/?key=figure.png')
     expect(screen.getAllByAltText('资料页 1 原图').length).toBeGreaterThan(0)
     expect(screen.queryByText('secret-hash')).toBeNull()
+    expect(screen.queryByText(/raw_secret|internal_note|不可见内容/)).toBeNull()
+    expect(screen.queryByText(/\[0, 0, 20, 20\]/)).toBeNull()
     const confirm = screen.getByRole('button', { name: '确认整包内容' })
     expect((confirm as HTMLButtonElement).disabled).toBe(true)
     await user.click(screen.getByRole('checkbox', { name: /已查看并核对/ }))
@@ -99,7 +101,7 @@ describe('WorkflowPanel', () => {
 
     state = 'output_check'
     await user.click(screen.getByRole('button', { name: '刷新任务' }))
-    expect((await screen.findByRole('link', { name: '打开五册检查版' })).getAttribute('href')).toBe('/preview-packet/')
+    expect((await screen.findByRole('link', { name: '查看五册预览' })).getAttribute('href')).toBe('/preview-packet/')
     await user.click(screen.getByRole('checkbox', { name: 'PDF 可以阅读' }))
     await user.click(screen.getByRole('checkbox', { name: 'Word 文档可以阅读' }))
     await user.click(screen.getByRole('checkbox', { name: '五册用途均正确' }))
@@ -107,7 +109,7 @@ describe('WorkflowPanel', () => {
     const outputConfirm = screen.getByRole('button', { name: '确认输出检查' })
     expect((outputConfirm as HTMLButtonElement).disabled).toBe(false)
     await user.click(outputConfirm)
-    const downloadLinks = await screen.findAllByRole('link', { name: '下载完整五册 ZIP' })
+    const downloadLinks = await screen.findAllByRole('link', { name: '下载五册文件' })
     expect(downloadLinks).toHaveLength(2)
     expect(downloadLinks.map((link) => link.getAttribute('href'))).toEqual(['/download/', '/download/'])
     expect(actions[2]).toMatchObject({ action: 'check_output', reason: '逐册检查完成', checks: { pdf: true, docx: true, purposes: true }, expected: initialJob.context })

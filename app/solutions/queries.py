@@ -5,17 +5,22 @@ from urllib.parse import quote
 
 from app.persistence import services as core
 from app.web.models import QuestionSource
-from . import schema, services
+from . import knowledge_schema, schema, services
 from .models import SolutionOutput
 
 
 CHECK_NAMES = ("content", "math", "pdf_visual", "word_pc", "word_macos")
+KNOWLEDGE_CHECK_NAMES = ("content", "subject", "pdf_visual", "word_pc", "word_macos")
 STATES = {"queued": "等待生成", "running": "正在生成", "output_check": "可预览，待检查",
           "complete": "检查已记录，可下载", "failed": "生成未完成", "cancelled": "已取消"}
 
 
-def default_checks():
-    return {name: {"status": "not_tested", "notes": ""} for name in CHECK_NAMES}
+def check_names(mode="solution"):
+    return KNOWLEDGE_CHECK_NAMES if mode == "knowledge" else CHECK_NAMES
+
+
+def default_checks(mode="solution"):
+    return {name: {"status": "not_tested", "notes": ""} for name in check_names(mode)}
 
 
 def output_row(row):
@@ -25,7 +30,7 @@ def output_row(row):
         def url(name):
             return reverse("api:solution_output_file", args=[row.pk, item["id"], name])
         documents.append({"id": item["id"], "title": item["title"], "organization": item["organization"],
-            "question_ids": item["question_ids"], "page_count": item["page_count"],
+            "question_ids": item.get("question_ids", []), "knowledge_ids": item.get("knowledge_ids", []), "page_count": item["page_count"],
             "pdf_url": url("document.pdf") if "pdf" in item["formats"] else None,
             "docx_url": url("document.docx") if "docx" in item["formats"] else None,
             "previews": [url(name) for name in item["previews"]]})
@@ -39,23 +44,24 @@ def output_row(row):
                        row.error_code, "生成未完成，请核对内容和图示后重试；旧文档仍保留。")
     downloadable = row.state in {"output_check", "complete"} and not any(
         item["status"] == "fail" for item in result.get("checks", {}).values())
-    return {"id": str(row.pk), "revision_id": row.revision_id, "revision_version": row.revision.version,
+    return {"id": str(row.pk), "mode": row.revision.mode, "revision_id": row.revision_id, "revision_version": row.revision.version,
         "version": row.version, "state": row.state, "state_label": STATES[row.state], "message": message,
         "created_at": row.created_at.isoformat(), "documents": documents,
-        "checks": result.get("checks", default_checks()),
+        "checks": result.get("checks", default_checks(row.revision.mode)),
         "zip_url": reverse("api:solution_output_zip", args=[row.pk]) if downloadable and result.get("zip") else None}
 
 
 def revision_row(row, *, include_content=True):
-    result = {"id": row.pk, "version": row.version, "created_at": row.created_at.isoformat(),
+    result = {"id": row.pk, "mode": row.mode, "version": row.version, "created_at": row.created_at.isoformat(),
         "author": row.author.get_username(), "reason": row.reason, "confirmed": row.confirmations.exists()}
     if include_content:
-        result.update(content=row.content, gaps=schema.gaps(row.content))
+        content_schema = knowledge_schema if row.mode == "knowledge" else schema
+        result.update(content=row.content, gaps=content_schema.gaps(row.content))
     return result
 
 
-def _history(material, before=None):
-    rows = material.solution_revisions.select_related("author").prefetch_related("confirmations").order_by("-version")
+def _history(material, before=None, mode="solution"):
+    rows = material.solution_revisions.filter(mode=mode).select_related("author").prefetch_related("confirmations").order_by("-version")
     if before is not None:
         rows = rows.filter(version__lt=before)
     selected = list(rows[:101])
@@ -63,8 +69,10 @@ def _history(material, before=None):
 
 
 def _nodes(revisions, history):
-    referenced = {link["revision_id"] for revision in history for question in revision.content["questions"]
+    referenced = {link["revision_id"] for revision in history for question in revision.content.get("questions", [])
                   for link in question["links"]}
+    referenced.update(item["knowledge_revision_id"] for revision in history for item in revision.content.get("knowledge", [])
+                      if item["knowledge_revision_id"])
     result = []
     for item in revisions.values():
         if item.entity.kind not in ("knowledge", "method", "question_type"):
@@ -80,8 +88,8 @@ def _nodes(revisions, history):
     return result
 
 
-def _outputs(material, before=None):
-    rows = SolutionOutput.objects.filter(revision__material=material).select_related("revision").order_by("-created_at", "-pk")
+def _outputs(material, before=None, mode="solution"):
+    rows = SolutionOutput.objects.filter(revision__material=material, revision__mode=mode).select_related("revision").order_by("-created_at", "-pk")
     if before is not None:
         cursor = rows.filter(pk=before).first()
         if cursor is None:
@@ -91,7 +99,7 @@ def _outputs(material, before=None):
     return [output_row(row) for row in selected[:50]], str(selected[49].pk) if len(selected) > 50 else None
 
 
-def history_page(actor, material_id, before=None):
+def history_page(actor, material_id, before=None, mode="solution"):
     row = services.material(actor, material_id)
     if before is not None:
         try:
@@ -100,19 +108,19 @@ def history_page(actor, material_id, before=None):
                 raise ValueError
         except (ValueError, TypeError):
             raise core.PersistenceError("invalid_solution", "历史版本范围无效，请重新读取。")
-    history, cursor = _history(row, before)
+    history, cursor = _history(row, before, mode)
     _, revisions, _ = services.inputs(row)
     return {"history": [revision_row(item, include_content=False) for item in history],
             "nodes": _nodes(revisions, history), "history_next_before": cursor}
 
 
-def outputs_page(actor, material_id, before=None):
+def outputs_page(actor, material_id, before=None, mode="solution"):
     row = services.material(actor, material_id)
-    outputs, cursor = _outputs(row, before)
+    outputs, cursor = _outputs(row, before, mode)
     return {"outputs": outputs, "output_next_before": cursor}
 
 
-def workspace(actor, material_id):
+def workspace(actor, material_id, mode="solution"):
     row = services.material(actor, material_id)
     pages, revisions, assets = services.inputs(row)
     try:
@@ -120,9 +128,9 @@ def workspace(actor, material_id):
         writable = True
     except core.PersistenceError:
         writable = False
-    current = services.latest(row)
-    history, history_cursor = _history(row)
-    outputs, output_cursor = _outputs(row)
+    current = services.latest(row, mode)
+    history, history_cursor = _history(row, mode=mode)
+    outputs, output_cursor = _outputs(row, mode=mode)
     question_sources = QuestionSource.objects.filter(material=row).select_related("revision__entity")
     questions = []
     for source in question_sources:
@@ -138,19 +146,27 @@ def workspace(actor, material_id):
             "statement": statement, "sources": refs,
             "detail_url": reverse("knowledge:question_detail", args=[question.entity_id])})
     nodes = _nodes(revisions, history)
-    return {"material": {"id": str(row.pk), "title": row.title}, "writable": writable,
+    from app.web import subjects
+    classification = subjects.current(row)
+    initial = {"schema_version": schema.CLASSIFIED_SCHEMA, "title": row.title + " · 逐题解析",
+        "school_subject": classification["subject"], "lectures": [{"id": "lecture-1", "title": "第 1 讲"}], "questions": [],
+        "outputs": {"per_question": ["pdf", "docx"], "per_lecture": [], "combined": ["pdf", "docx"]}}
+    if mode == "knowledge":
+        initial = {"schema_version": knowledge_schema.SCHEMA, "title": row.title + " · 知识讲解",
+            "school_subject": classification["subject"], "learner_level": "",
+            "lectures": [{"id": "lecture-1", "title": "第 1 讲", "rule_profile": "mathematics"}], "knowledge": [],
+            "outputs": {"inventory": ["pdf"], "per_knowledge": [], "per_lecture": [], "combined": ["pdf", "docx"]}}
+    return {"mode": mode, "material": {"id": str(row.pk), "title": row.title, "household_id": str(row.household_id), **classification}, "writable": writable,
         "revision": revision_row(current) if current else None,
-        "source_stamp": services.stamp(row, current.content if current else {"questions": []}),
-        "initial_content": {"schema_version": schema.STRUCTURED_SCHEMA, "title": row.title + " · 逐题解析",
-            "lectures": [{"id": "lecture-1", "title": "第 1 讲"}], "questions": [],
-            "outputs": {"per_question": ["pdf", "docx"], "per_lecture": [], "combined": ["pdf", "docx"]}},
+        "source_stamp": services.stamp(row, current.content if current else initial),
+        "initial_content": initial,
         "history": [revision_row(item, include_content=False) for item in history],
         "history_next_before": history_cursor,
         "outputs": outputs, "output_next_before": output_cursor,
         "assets": [{"id": str(item.pk), "kind": item.kind, "label": item.label, "basis": item.basis,
             "source": item.source, "width": item.width, "height": item.height,
             "url": reverse("api:solution_asset", args=[item.pk])} for item in assets.values()],
-        "pages": [{"id": str(page.pk), "label": f"第 {page.position} 页", "width": page.image.payload["width"],
+        "pages": [{"id": str(page.pk), "label": f"第 {page.position} 页", "position": page.position, "sha256": page.image.sha256, "width": page.image.payload["width"],
             "height": page.image.payload["height"], "preview_url": reverse("web:page_preview", args=[page.pk, 0]),
             "detail_url": reverse("web:page_detail", args=[page.pk])} for page in pages.values()],
         "questions": questions, "nodes": nodes}

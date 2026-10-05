@@ -12,6 +12,30 @@ class MaterialSet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+class MaterialClassificationRevision(models.Model):
+    """Manual school-subject history; absent history means unknown."""
+    material = models.ForeignKey(MaterialSet, on_delete=models.PROTECT, related_name="classifications")
+    version = models.PositiveIntegerField()
+    previous = models.ForeignKey("self", null=True, on_delete=models.PROTECT)
+    subject = models.CharField(max_length=20)
+    reason = models.CharField(max_length=1000)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    request_key = models.CharField(max_length=160)
+    fingerprint = models.CharField(max_length=64)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-version",)
+        constraints = [
+            models.UniqueConstraint(fields=("material", "version"), name="swb_material_class_version"),
+            models.UniqueConstraint(fields=("material", "request_key"), name="swb_material_class_request"),
+            models.CheckConstraint(condition=models.Q(version__gt=0), name="swb_material_class_positive"),
+            models.CheckConstraint(condition=models.Q(subject__in=("unknown", "mathematics", "chinese", "english",
+                "physics", "chemistry", "biology", "history", "geography", "politics", "science", "other")),
+                name="swb_material_class_subject"),
+        ]
+
+
 class MaterialPage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     material = models.ForeignKey(MaterialSet, on_delete=models.PROTECT, related_name='pages')

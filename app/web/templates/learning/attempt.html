@@ -3,21 +3,50 @@
 {% block title %}作答记录 · {{ learner.display_name }}{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="{% url 'learning:index' %}">学习档案</a><span aria-hidden="true">/</span><a href="{% url 'learning:profile_detail' learner.learner_id %}">{{ learner.display_name }}</a><span aria-hidden="true">/</span><span>作答</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">逐次作答</p><h1>{{ question_label }}</h1></div><div class="button-row"><a class="secondary-button" href="{{ edit_url }}">补充或更正本次作答</a><a class="secondary-button" href="{{ correction_url }}">更正作者／题目身份</a><a class="primary-button" href="{{ assessment_new_url }}">新增五维评价</a></div></div>
-  {% if independent_success %}<p class="notice success">此作答有已审核、直接可见的独立成功证据。它只描述这次作答，不代表长期掌握。</p>{% else %}<p class="notice">当前证据不足以确认独立成功。课堂、提示、未知作者、未知日期、看不清或未接受评价不会计为独立成功。</p>{% endif %}
-  <section class="panel"><h2>当前作答版本 {{ current_revision.header.revision_no }}</h2>
-      <dl class="learning-facts"><dt>学习者</dt><dd><a href="{% url 'learning:profile_detail' learner.learner_id %}">{{ learner.display_name }}</a></dd><dt>题目版本</dt><dd>保存作答时的题目版本</dd><dt>作答类型</dt><dd>{{ current_labels.attempt_kind }}</dd><dt>来源类型</dt><dd>{{ current_labels.source_kind }}</dd><dt>独立性</dt><dd>{{ current_labels.independence }}</dd><dt>提示情况</dt><dd>{{ current_labels.prompt_status }}{% if current_revision.prompts %}：{{ current_revision.prompts|join:"、" }}{% endif %}</dd><dt>实际日期</dt><dd>{% if current_revision.actual_date %}{{ current_revision.actual_date }}{% else %}未知{% endif %}</dd><dt>可读性</dt><dd>{{ current_labels.legibility }}</dd><dt>答案</dt><dd>{{ current_revision.answer_text|default:"未转写" }}</dd><dt>作者依据</dt><dd>{{ current_revision.authorship_basis }}</dd></dl>
-    {% if sources %}<h3>引用的来源区域</h3><div class="history-source-grid">{% for source in sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% else %}<p class="notice">这次作答没有可追溯来源证据。</p>{% endif %}
-    {% if attempt.previous_attempt_id %}<p>前次作答：<a href="{% url 'learning:attempt_detail' attempt.previous_attempt_id %}">查看前次作答</a></p>{% endif %}
-    {% if attempt.supersedes_attempt_id %}<p>此作答替代了：<a href="{% url 'learning:attempt_detail' attempt.supersedes_attempt_id %}">查看被替代的作答</a></p>{% endif %}
-  </section>
-  <details class="panel disclosure"><summary>回看这次作答的修改历史</summary><div class="disclosure-content"><h2>作答修订历史</h2><ol class="history-list">{% for item in history %}<li><h3>修订 {{ item.revision.header.revision_no }} · {{ item.revision.header.recorded_at }}</h3><p>{{ item.revision.header.change_reason }} · {{ item.labels.state|ui_label }}</p><p>{{ item.labels.attempt_kind }} · {{ item.labels.source_kind }} · {{ item.labels.independence }} · 提示 {{ item.labels.prompt_status }}</p><p>日期：{% if item.revision.actual_date %}{{ item.revision.actual_date }}{% else %}未知{% endif %}；答案：{{ item.revision.answer_text|default:"未转写" }}；作者依据：{{ item.revision.authorship_basis }}</p>{% if item.revision.withdrawal_reason %}<p class="notice">撤回原因：{{ item.revision.withdrawal_reason }}{% if item.revision.replacement_attempt_id %}；<a href="{% url 'learning:attempt_detail' item.revision.replacement_attempt_id %}">查看替代记录</a>{% endif %}</p>{% endif %}{% if item.sources %}<div class="history-source-grid">{% for source in item.sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% endif %}</li>{% endfor %}</ol></div></details>
-  <details class="panel disclosure"><summary>回看历次评价</summary><div class="disclosure-content"><div class="section-heading"><h2>评价历史</h2><a class="primary-button" href="{{ assessment_new_url }}">另建一条评价</a></div>
-    {% if assessments %}<ol class="learning-attempt-list">{% for item in assessments %}<li class="attempt-card"><div class="history-heading"><div><h3><a href="{{ item.detail_url }}">评价修订 {{ item.revision.header.revision_no }}</a></h3><p class="muted">此评价对应当时保存的作答内容</p></div><span class="status-badge status-{{ item.state }}">实际审核状态：{{ item.state|ui_label }}</span></div>
-      <ul class="dimension-summary">{% for dimension in item.dimension_labels %}<li><strong>{{ dimension.dimension }}</strong>：{{ dimension.judgment }} · {{ dimension.basis }}</li>{% endfor %}</ul>
-      {% if item.current and item.published %}<p class="muted">当前版本已发布，状态来自实际审核记录。</p>{% endif %}
-      <div class="button-row"><a class="secondary-button" href="{{ item.detail_url }}">查看评价</a><a class="secondary-button" href="{{ item.edit_url }}">追加评价修订</a></div>
-    </li>{% endfor %}</ol>{% else %}<p class="muted">还没有评价。新评价会成为独立记录；编辑时追加版本，并固定所评价的作答版本。</p>{% endif %}
-  </div></details>
+  <div class="workspace-toolbar page-heading">
+    <div><p class="eyebrow">{{ current_labels.attempt_kind }}</p><h1>{{ question_label }}</h1><p class="muted">本次作答版本 {{ current_revision.header.revision_no }}</p></div>
+    <div class="workspace-actions button-row"><a class="secondary-button" href="{{ edit_url }}">补充或更正本次作答</a><a class="secondary-button" href="{{ correction_url }}">更正作者／题目身份</a><a class="primary-button" href="{{ assessment_new_url }}">新增五维评价</a></div>
+  </div>
+
+  {% if independent_success %}<p class="notice success">这次作答有已审核、直接可见的独立成功证据，不代表长期掌握。</p>{% else %}<p class="notice">这次作答的证据不足以确认独立成功。课堂、提示、未知作者、未知日期、看不清或未接受评价不会计为独立成功。</p>{% endif %}
+
+  <div class="workspace-columns">
+    <section class="panel" aria-labelledby="attempt-source-heading">
+      <h2 id="attempt-source-heading">这次作答与原图</h2>
+      <dl class="learning-facts">
+        <dt>题目版本</dt><dd>保存作答时的题目版本</dd>
+        <dt>作答类型</dt><dd>{{ current_labels.attempt_kind }}</dd>
+        <dt>来源类型</dt><dd>{{ current_labels.source_kind }}</dd>
+        <dt>独立性</dt><dd>{{ current_labels.independence }}</dd>
+        <dt>提示情况</dt><dd>{{ current_labels.prompt_status }}{% if current_revision.prompts %}：{{ current_revision.prompts|join:"、" }}{% endif %}</dd>
+        <dt>实际日期</dt><dd>{% if current_revision.actual_date_state.value == "known" and current_revision.actual_date %}{{ current_revision.actual_date }}{% else %}未知{% endif %}</dd>
+        <dt>笔迹可读性</dt><dd>{{ current_labels.legibility }}</dd>
+        <dt>答案记录</dt><dd>{{ current_revision.answer_text|default:"未转写" }}</dd>
+        <dt>作者依据</dt><dd>{{ current_revision.authorship_basis|default:"未记录" }}</dd>
+      </dl>
+      {% if sources %}<h3>来源照片</h3><div class="history-source-grid">{% for source in sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% else %}<p class="notice">这次作答没有可追溯来源证据。</p>{% endif %}
+      {% if attempt.previous_attempt_id %}<p>前次作答：<a href="{% url 'learning:attempt_detail' attempt.previous_attempt_id %}">查看前次作答</a></p>{% endif %}
+      {% if attempt.supersedes_attempt_id %}<p>此作答替代了其他记录：<a href="{% url 'learning:attempt_detail' attempt.supersedes_attempt_id %}">查看被替代的作答</a></p>{% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="attempt-assessments-heading">
+      <div class="section-heading"><h2 id="attempt-assessments-heading">这次作答的历次评价</h2><a class="primary-button" href="{{ assessment_new_url }}">另建一条评价</a></div>
+      <p class="muted">每次评价单独保留，并对应当时保存的作答内容。</p>
+      {% if assessments %}
+        <ol class="history-list">
+          {% for item in assessments %}
+            <li>
+              <h3><a href="{{ item.detail_url }}">评价修订 {{ item.revision.header.revision_no }}</a></h3>
+              <p><span class="status-badge status-{{ item.state }}">{{ item.state_label }}</span>{% if item.current and item.published %} · 当前版本已发布{% endif %}</p>
+              {% if item.dimension_labels %}<ul class="dimension-summary">{% for dimension in item.dimension_labels %}<li><strong>{{ dimension.dimension }}</strong>：{{ dimension.judgment }} · {{ dimension.basis }}</li>{% endfor %}</ul>{% else %}<p class="muted small-text">没有记录评价维度。</p>{% endif %}
+              <div class="workspace-actions"><a class="secondary-button" href="{{ item.detail_url }}">查看评价与引用来源</a><a class="secondary-button" href="{{ item.edit_url }}">追加评价修订</a></div>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}<p class="muted">还没有评价。新评价会成为独立记录；编辑时追加版本，并固定所评价的作答版本。</p>{% endif %}
+    </section>
+  </div>
+
+  <details class="panel disclosure"><summary>回看这次作答的修改历史</summary><div class="disclosure-content"><h2>作答修订历史</h2><ol class="history-list">{% for item in history %}<li><h3>修订 {{ item.revision.header.revision_no }} · {{ item.revision.header.recorded_at }}</h3><p>{{ item.revision.header.change_reason }} · {{ item.labels.state|ui_label }}</p><p>{{ item.labels.attempt_kind }} · {{ item.labels.source_kind }} · {{ item.labels.independence }} · 提示 {{ item.labels.prompt_status }}</p><p>日期：{% if item.revision.actual_date_state.value == "known" and item.revision.actual_date %}{{ item.revision.actual_date }}{% else %}未知{% endif %}；答案：{{ item.revision.answer_text|default:"未转写" }}；作者依据：{{ item.revision.authorship_basis|default:"未记录" }}</p>{% if item.revision.withdrawal_reason %}<p class="notice">撤回原因：{{ item.revision.withdrawal_reason }}{% if item.revision.replacement_attempt_id %}；<a href="{% url 'learning:attempt_detail' item.revision.replacement_attempt_id %}">查看替代记录</a>{% endif %}</p>{% endif %}{% if item.sources %}<div class="history-source-grid">{% for source in item.sources %}{% include "learning/_source_card.html" with source=source %}{% endfor %}</div>{% endif %}</li>{% endfor %}</ol></div></details>
 {% endblock %}
 {% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

@@ -29,32 +29,39 @@ function emptyReading(): PageReadingResponse {
 function mountContent({
   content = emptyContent(),
   reading = emptyReading(),
+  pages = [page],
   onUnauthorized = vi.fn(),
+  onUnsavedChange = vi.fn(),
   postResponse,
+  contentResponse,
 }: {
   content?: MaterialContentResponse
   reading?: PageReadingResponse
+  pages?: MaterialPage[]
   onUnauthorized?: () => void
+  onUnsavedChange?: (dirty: boolean) => void
   postResponse?: (url: URL, init?: RequestInit) => Promise<Response>
+  contentResponse?: (requestNo: number) => Response | Promise<Response>
 } = {}) {
   const calls: Array<{ url: URL; init?: RequestInit; body?: Record<string, unknown> }> = []
+  let contentReads = 0
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), window.location.origin)
     const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : undefined
     calls.push({ url, init, body })
     if (init?.method === 'POST' && postResponse) return postResponse(url, init)
     if (init?.method === 'POST') return Response.json({ schema_version: 'swb.api.v1', question_id: 'question-2', revision_id: 'revision-2' })
-    if (url.pathname === '/api/v1/materials/material-1/content/') return Response.json(content)
-    if (url.pathname === '/api/v1/pages/page-1/reading/') return Response.json(reading)
+    if (url.pathname === '/api/v1/materials/material-1/content/') return contentResponse ? contentResponse(++contentReads) : Response.json(content)
+    if (/^\/api\/v1\/pages\/[^/]+\/reading\/$/.test(url.pathname)) return Response.json(reading)
     throw new Error(`unexpected request: ${url.pathname}`)
   })
   vi.stubGlobal('fetch', fetchMock)
   const onBusyChange = vi.fn()
-  render(<ContentWorkspace materialId='material-1' pages={[page]} csrfToken='csrf-test' canWrite onUnauthorized={onUnauthorized} onBusyChange={onBusyChange} onClose={vi.fn()} />)
-  return { calls, fetchMock, onBusyChange, onUnauthorized }
+  render(<ContentWorkspace materialId='material-1' pages={pages} csrfToken='csrf-test' canWrite onUnauthorized={onUnauthorized} onBusyChange={onBusyChange} onUnsavedChange={onUnsavedChange} onClose={vi.fn()} />)
+  return { calls, fetchMock, onBusyChange, onUnauthorized, onUnsavedChange }
 }
 
-async function addSourceWithDrag(user: ReturnType<typeof userEvent.setup>) {
+async function addSourceWithDrag(user: ReturnType<typeof userEvent.setup>, confirmSelection = true) {
   const image = (await screen.findAllByAltText('资料页 1 原图'))[0]
   Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 100 })
   Object.defineProperty(image, 'naturalHeight', { configurable: true, value: 100 })
@@ -66,11 +73,177 @@ async function addSourceWithDrag(user: ReturnType<typeof userEvent.setup>) {
   fireEvent.pointerDown(overlay, { button: 0, pointerId: 1, clientX: 20, clientY: 30 })
   fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 70, clientY: 80 })
   fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 70, clientY: 80 })
-  await user.click(await screen.findByRole('button', { name: '确认添加这个题目来源' }))
+  const addSelection = await screen.findByRole('button', { name: '确认添加这个题目来源' })
+  if (confirmSelection) await user.click(addSelection)
 }
 
 describe('ContentWorkspace', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+
+  it('keeps question input when a question switch is cancelled and switches after confirmation', async () => {
+    const user = userEvent.setup()
+    const secondQuestion = { ...question, id: 'question-2', revision_id: 'revision-2', number: '4', printed_text: '第二题题面' }
+    mountContent({ content: { ...emptyContent(), questions: [question, secondQuestion] } })
+    const picker = await screen.findByLabelText('正在核对的题目')
+    await user.selectOptions(picker, 'question-1')
+    const printed = screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.clear(printed)
+    await user.type(printed, '尚未保存的题面')
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    await user.selectOptions(picker, 'question-2')
+    expect((picker as HTMLSelectElement).value).toBe('question-1')
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('尚未保存的题面')
+
+    await user.selectOptions(picker, 'question-2')
+    expect((picker as HTMLSelectElement).value).toBe('question-2')
+    expect((await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('第二题题面')
+    expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('confirms source-page changes and refreshes before discarding reading input', async () => {
+    const user = userEvent.setup()
+    const secondPage = { ...page, id: 'page-2', position: 2 }
+    mountContent({ pages: [page, secondPage] })
+    const basis = await screen.findByLabelText('阅读依据（必填）') as HTMLTextAreaElement
+    await user.type(basis, '尚未保存的阅读依据')
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true).mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const sourcePage = screen.getByLabelText('来源页')
+    await user.selectOptions(sourcePage, 'page-2')
+    expect((sourcePage as HTMLSelectElement).value).toBe('page-1')
+    expect((screen.getByLabelText('阅读依据（必填）') as HTMLTextAreaElement).value).toBe('尚未保存的阅读依据')
+
+    await user.selectOptions(sourcePage, 'page-2')
+    expect((sourcePage as HTMLSelectElement).value).toBe('page-2')
+    expect((await screen.findByLabelText('阅读依据（必填）') as HTMLTextAreaElement).value).toBe('')
+
+    await user.selectOptions(screen.getByLabelText('正在核对的题目'), '')
+    await user.type(screen.getByLabelText('图中印刷题面转写（必填）'), '尚未保存的新题面')
+    await user.click(screen.getByRole('button', { name: '刷新核对数据' }))
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('尚未保存的新题面')
+    await user.click(screen.getByRole('button', { name: '刷新核对数据' }))
+    await screen.findByRole('button', { name: '保存待补草稿' })
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('')
+    expect(confirm).toHaveBeenCalledTimes(4)
+  })
+
+  it('confirms source-page changes with a pending question region and keeps the question draft', async () => {
+    const user = userEvent.setup()
+    const onUnsavedChange = vi.fn()
+    const secondPage = { ...page, id: 'page-2', position: 2 }
+    mountContent({ pages: [page, secondPage], onUnsavedChange })
+    const printed = await screen.findByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    await user.type(printed, '保留的题目草稿')
+    await addSourceWithDrag(user, false)
+
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    const sourcePage = screen.getByLabelText('来源页')
+    await user.selectOptions(sourcePage, 'page-2')
+    expect((sourcePage as HTMLSelectElement).value).toBe('page-1')
+    expect(screen.getByRole('button', { name: '确认添加这个题目来源' })).toBeTruthy()
+    expect(printed.value).toBe('保留的题目草稿')
+
+    await user.selectOptions(sourcePage, 'page-2')
+    await waitFor(() => expect((sourcePage as HTMLSelectElement).value).toBe('page-2'))
+    await waitFor(() => expect(screen.queryByRole('button', { name: '确认添加这个题目来源' })).toBeNull())
+    expect(screen.getByLabelText('图中印刷题面转写（必填）')).toBe(printed)
+    expect(printed.value).toBe('保留的题目草稿')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+    expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('clears only the saved form from the aggregate dirty state', async () => {
+    const user = userEvent.setup()
+    const onUnsavedChange = vi.fn()
+    mountContent({ content: { ...emptyContent(), questions: [question] }, onUnsavedChange })
+    await user.selectOptions(await screen.findByLabelText('正在核对的题目'), 'question-1')
+    await user.clear(screen.getByLabelText('图中印刷题面转写（必填）'))
+    await user.type(screen.getByLabelText('图中印刷题面转写（必填）'), '已编辑题面')
+    await user.type(screen.getByLabelText('阅读依据（必填）'), '未保存阅读依据')
+    await user.type(screen.getByLabelText('本次核对原因（必填）'), '对照原图核实')
+    await user.click(screen.getByRole('checkbox', { name: /我已对照原图核对/ }))
+    await user.click(screen.getByRole('button', { name: '确认并保存题目' }))
+    await screen.findByText('内容已核对并保存；历史版本和来源仍保留。')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+
+    await user.click(screen.getByRole('button', { name: '保存本页阅读记录' }))
+    await screen.findByText('本页阅读记录已保存，历史修订仍保留。')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(false)
+  })
+
+  it('preserves reading input and dirty state if content refresh fails after a successful question save', async () => {
+    const user = userEvent.setup()
+    const onUnsavedChange = vi.fn()
+    const existing = { ...emptyContent(), questions: [question] }
+    const savedResponse = async () => Response.json({ schema_version: 'swb.api.v1', question_id: 'question-1', revision_id: 'revision-2' })
+    const contentResponse = (requestNo: number) => requestNo === 2
+      ? Promise.reject(new Error('temporary refresh failure'))
+      : Response.json(existing)
+    mountContent({ content: existing, onUnsavedChange, postResponse: savedResponse, contentResponse })
+    await user.selectOptions(await screen.findByLabelText('正在核对的题目'), 'question-1')
+    await user.clear(screen.getByLabelText('图中印刷题面转写（必填）'))
+    await user.type(screen.getByLabelText('图中印刷题面转写（必填）'), '已成功保存的题面')
+    const readingBasis = screen.getByLabelText('阅读依据（必填）') as HTMLTextAreaElement
+    await user.type(readingBasis, '仍未保存的阅读依据')
+    await user.type(screen.getByLabelText('本次核对原因（必填）'), '对照原图核实')
+    await user.click(screen.getByRole('checkbox', { name: /我已对照原图核对/ }))
+    await user.click(screen.getByRole('button', { name: '确认并保存题目' }))
+
+    await screen.findByText('内容已核对并保存；历史版本和来源仍保留。')
+    expect((await screen.findByRole('alert')).textContent).toContain('当前输入仍保留')
+    expect(screen.getByRole('button', { name: '重试更新' })).toBeTruthy()
+    expect((screen.getByLabelText('阅读依据（必填）') as HTMLTextAreaElement).value).toBe('仍未保存的阅读依据')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+
+    await user.clear(screen.getByLabelText('图中印刷题面转写（必填）'))
+    await user.type(screen.getByLabelText('图中印刷题面转写（必填）'), '失败后继续编辑的题面')
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    await user.click(screen.getByRole('button', { name: '重试更新' }))
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('失败后继续编辑的题面')
+    await user.click(screen.getByRole('button', { name: '重试更新' }))
+    await waitFor(() => expect(screen.queryByText(/无法更新题目和来源/)).toBeNull())
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('原印刷题面')
+    expect((screen.getByLabelText('阅读依据（必填）') as HTMLTextAreaElement).value).toBe('仍未保存的阅读依据')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+    expect(confirm).toHaveBeenCalledTimes(2)
+  })
+
+  it('locks question editing during a deferred post-save refresh while preserving the page-reading draft', async () => {
+    const user = userEvent.setup()
+    const onUnsavedChange = vi.fn()
+    const existing = { ...emptyContent(), questions: [question] }
+    let finishRefresh!: (response: Response) => void
+    const pendingRefresh = new Promise<Response>((resolve) => { finishRefresh = resolve })
+    const contentResponse = (requestNo: number) => requestNo === 2 ? pendingRefresh : Response.json(existing)
+    const savedResponse = async () => Response.json({ schema_version: 'swb.api.v1', question_id: 'question-1', revision_id: 'revision-2' })
+    mountContent({ content: existing, onUnsavedChange, postResponse: savedResponse, contentResponse })
+    await user.selectOptions(await screen.findByLabelText('正在核对的题目'), 'question-1')
+    await user.clear(screen.getByLabelText('图中印刷题面转写（必填）'))
+    await user.type(screen.getByLabelText('图中印刷题面转写（必填）'), '已保存的题面')
+    const readingBasis = screen.getByLabelText('阅读依据（必填）') as HTMLTextAreaElement
+    await user.type(readingBasis, '未保存的整页阅读依据')
+    await user.type(screen.getByLabelText('本次核对原因（必填）'), '对照原图核实')
+    await user.click(screen.getByRole('checkbox', { name: /我已对照原图核对/ }))
+    await user.click(screen.getByRole('button', { name: '确认并保存题目' }))
+
+    await screen.findByText('内容已核对并保存；历史版本和来源仍保留。')
+    expect((screen.getByLabelText('正在核对的题目') as HTMLSelectElement).disabled).toBe(true)
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(readingBasis.disabled).toBe(false)
+    await user.type(readingBasis, '；还在继续核对')
+
+    const updated = {
+      ...existing,
+      context: { source_stamp: 'refreshed-source-stamp' },
+      questions: [{ ...question, revision_id: 'revision-2', printed_text: '已保存的题面' }],
+    }
+    await act(async () => finishRefresh(Response.json(updated)))
+    expect((screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement).value).toBe('已保存的题面')
+    expect(readingBasis.isConnected).toBe(true)
+    expect(readingBasis.value).toBe('未保存的整页阅读依据；还在继续核对')
+    expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
+  })
 
   it('saves a blank, unconfirmed question draft with a selected original-image region', async () => {
     const user = userEvent.setup()
@@ -125,7 +298,7 @@ describe('ContentWorkspace', () => {
     expect((screen.getByLabelText('正在核对的题目') as HTMLSelectElement).disabled).toBe(true)
     expect((screen.getByLabelText('来源页') as HTMLSelectElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '刷新核对数据' }) as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByRole('button', { name: '收起核对面板' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: '返回原图与进度' }) as HTMLButtonElement).disabled).toBe(true)
 
     const saveCall = calls.find(({ init, url }) => init?.method === 'POST' && url.pathname.endsWith('/content/'))
     expect(saveCall?.body).toMatchObject({

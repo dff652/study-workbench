@@ -7,7 +7,7 @@ from reportlab.platypus import Paragraph
 
 from app.exports.contracts import Block, ExportError, resolve_formula_image, resolve_diagram
 from app.exports.renderer import (
-    _MathLine, _formula_image_flowables, _paragraph_styles, _register_fonts,
+    _MathLine, _formula_image_flowables, _paragraph_styles, _pdf_table, _register_fonts,
 )
 from app.exports.rich import pdf_markup
 
@@ -21,6 +21,8 @@ def paginate(blocks, fonts, asset_root):
     def height(block):
         if block.kind == 'space':
             return float(block.content)
+        if block.kind == 'table':
+            return _pdf_table(block.content, styles).wrap(width, capacity)[1] + 6
         if block.kind == 'math':
             flowables = [_MathLine(block.content, registered['math'])]
         elif block.kind in {'formula_image','diagram','companion_image'}:
@@ -51,6 +53,26 @@ def paginate(blocks, fonts, asset_root):
                 pages.append(tuple(page))
                 page, used = [], 0
         required = height(block)
+        if block.kind == 'table' and required > capacity - used:
+            rows, widths = block.content
+            lower, upper = 0, len(rows) - 1
+            while lower < upper:
+                midpoint = (lower + upper + 1) // 2
+                candidate = Block('table', [rows[:midpoint + 1], widths], block.role)
+                if height(candidate) <= capacity - used:
+                    lower = midpoint
+                else:
+                    upper = midpoint - 1
+            if not lower:
+                if page:
+                    pages.append(tuple(page)); page, used = [], 0
+                    queue.insert(0, block)
+                    continue
+                raise ExportError('layout_overflow', 'A table row exceeds one printable page')
+            if lower < len(rows) - 1:
+                queue.insert(0, Block('table', [[rows[0]] + rows[lower + 1:], widths], block.role))
+            block = Block('table', [rows[:lower + 1], widths], block.role)
+            required = height(block)
         if required > capacity:
             if block.kind not in {'p', 'small'}:
                 raise ExportError('layout_overflow', 'A block exceeds one printable page')

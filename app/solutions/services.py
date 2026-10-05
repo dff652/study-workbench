@@ -13,7 +13,8 @@ from app.persistence import services as core
 from app.persistence.models import RevisionRecord
 from app.web import services as materials
 from app.web.models import MaterialSet
-from . import bridge, schema
+from app.web import subjects
+from . import bridge, knowledge_schema, schema
 from .models import SolutionAsset, SolutionConfirmation, SolutionOutput, SolutionOutputEvent, SolutionRevision
 
 
@@ -33,12 +34,12 @@ def inputs(row):
     return pages, revisions, assets
 
 
-def latest(row):
-    return row.solution_revisions.order_by("-version").first()
+def latest(row, mode="solution"):
+    return row.solution_revisions.filter(mode=mode).order_by("-version").first()
 
 
-def version_check(row, expected):
-    current = latest(row)
+def version_check(row, expected, mode="solution"):
+    current = latest(row, mode)
     if type(expected) is not int or expected != (current.version if current else 0):
         raise core.PersistenceError("stale_solution", "解析已在其他页面更新。请保留当前输入，刷新后比较再保存。")
     return current
@@ -46,19 +47,34 @@ def version_check(row, expected):
 
 def stamp(row, content):
     pages, revisions, assets = inputs(row)
-    ids = {question["question_revision_id"] for question in content["questions"] if question["question_revision_id"]}
-    ids.update(link["revision_id"] for question in content["questions"] for link in question["links"])
-    return digest(canonical({"pages": [[str(page.pk), page.position, page.image.sha256] for page in pages.values()],
+    knowledge = content.get("schema_version") == knowledge_schema.SCHEMA
+    entries = content.get("knowledge" if knowledge else "questions", [])
+    field = "knowledge_revision_id" if knowledge else "question_revision_id"
+    ids = {item[field] for item in entries if item[field]}
+    if not knowledge:
+        ids.update(link["revision_id"] for item in entries for link in item["links"])
+    content_schema = knowledge_schema if knowledge else schema
+    data = {"pages": [[str(page.pk), page.position, page.image.sha256] for page in pages.values()],
         "records": [[rid, revisions[rid].content_hash, revisions[rid].entity.head_revision_id,
                      revisions[rid].entity.published_revision_id] for rid in sorted(ids) if rid in revisions],
         "assets": [[str(asset.pk), asset.sha256] for asset in sorted(assets.values(), key=lambda item: str(item.pk)) if any(
-            figure["asset_id"] == str(asset.pk) for question in content["questions"] for figure in schema.figures(question))]}))
+            figure["asset_id"] == str(asset.pk) for item in entries for figure in content_schema.figures(item))]}
+    if "school_subject" in content:
+        data["classification"] = subjects.current(row)
+    return digest(canonical(data))
 
 
 def require_current_links(row, content):
     """Old revisions remain readable; new confirmation/output requires current evidence."""
     from app.web.models import QuestionSource
     _, revisions, _ = inputs(row)
+    if content.get("schema_version") == knowledge_schema.SCHEMA:
+        linked = [item["knowledge_revision_id"] for item in content["knowledge"] if item["knowledge_revision_id"]]
+        for revision_id in linked:
+            revision = revisions.get(revision_id)
+            if revision is None or not (revision.pk == revision.entity.head_revision_id == revision.entity.published_revision_id):
+                raise core.PersistenceError("source_changed", "关联知识已更新、撤回或尚未确认，请核对当前版本。")
+        return
     related = set(QuestionSource.objects.filter(material=row).values_list("revision_id", flat=True))
     for question in content["questions"]:
         rid = question["question_revision_id"]
@@ -72,52 +88,67 @@ def require_current_links(row, content):
 
 
 @transaction.atomic
-def save(actor, material_id, *, content, expected_version, request_key, reason):
+def save(actor, material_id, *, content, expected_version, request_key, reason, mode="solution"):
     row = material(actor, material_id, write=True)
     request_key = materials._text(request_key, 160)
     reason = materials._text(reason, 1000)
+    if mode not in ("solution", "knowledge"):
+        raise core.PersistenceError("invalid_state", "资料模式不支持。")
+    content_schema = knowledge_schema if mode == "knowledge" else schema
+    if mode == "solution" and isinstance(content, dict) and content.get("schema_version") == knowledge_schema.SCHEMA:
+        raise core.PersistenceError("invalid_solution", "请在知识点讲解工作区保存这份内容。")
     fingerprint = digest(canonical({"content": content, "expected": expected_version, "reason": reason, "actor": actor.pk}))
-    previous = row.solution_revisions.filter(request_key=request_key).first()
+    previous = row.solution_revisions.filter(mode=mode, request_key=request_key).first()
     if previous:
         if previous.fingerprint != fingerprint:
             raise core.PersistenceError("request_conflict", "本次保存已对应其他内容，请重试。")
         return previous
-    current = version_check(row, expected_version)
+    current = version_check(row, expected_version, mode)
     pages, revisions, assets = inputs(row)
-    schema.validate(content, pages, revisions, assets)
+    content_schema.validate(content, pages, revisions, assets)
     manifest, mapping = bridge.source_manifest(row, content, pages)
-    return SolutionRevision.objects.create(material=row, version=(current.version if current else 0) + 1,
+    return SolutionRevision.objects.create(material=row, mode=mode, version=(current.version if current else 0) + 1,
         content=content, content_hash=digest(canonical(content)), sources={"manifest": manifest, "page_mapping": mapping},
         source_stamp=stamp(row, content), request_key=request_key, fingerprint=fingerprint,
         author=actor, reason=reason)
 
 
 @transaction.atomic
-def action(actor, material_id, *, action, expected_version, request_key, reason):
+def action(actor, material_id, *, action, expected_version, request_key, reason, mode="solution"):
     row = material(actor, material_id, write=True)
     request_key = materials._text(request_key, 160)
     reason = materials._text(reason, 1000)
     fingerprint = digest(canonical({"material": str(row.pk), "action": action,
-                                    "version": expected_version, "reason": reason}))
+                                    "version": expected_version, "reason": reason, **({"mode": mode} if mode != "solution" else {})}))
     replay = core._replay(row.household, actor, request_key, "web_record", fingerprint)
     if replay:
         return replay
-    revision = version_check(row, expected_version)
-    if not revision or not revision.content["questions"]:
-        raise core.PersistenceError("solution_incomplete", "请先保存至少一道题目的解析草稿。")
+    if mode not in ("solution", "knowledge"):
+        raise core.PersistenceError("invalid_state", "资料模式不支持。")
+    revision = version_check(row, expected_version, mode)
+    if not revision or not revision.content["knowledge" if mode == "knowledge" else "questions"]:
+        raise core.PersistenceError("solution_incomplete", "请先保存至少一个讲解条目。")
     if revision.source_stamp != stamp(row, revision.content):
         raise core.PersistenceError("source_changed", "来源或知识版本已更新，请比较后保存新解析版本。")
     pages, revisions, assets = inputs(row)
-    schema.validate(revision.content, pages, revisions, assets)
+    content_schema = knowledge_schema if mode == "knowledge" else schema
+    content_schema.validate(revision.content, pages, revisions, assets)
     require_current_links(row, revision.content)
     if action == "confirm":
+        if mode == "knowledge":
+            from .knowledge_bridge import companion_content
+            companion_content(revision, assets)
         confirmation = SolutionConfirmation.objects.create(revision=revision, author=actor, reason=reason)
         result = {"revision_id": revision.pk, "confirmation_id": confirmation.pk}
     elif action == "generate":
-        if (not any(revision.content["outputs"].values()) or any(not question["sources"] or not question["parts"]
+        if mode == "knowledge":
+            from .knowledge_bridge import companion_content
+            companion_content(revision, assets)
+        elif (not any(revision.content["outputs"].values()) or any(not question["sources"] or not question["parts"]
                 for question in revision.content["questions"])):
             raise core.PersistenceError("solution_incomplete", "生成前请为每题选择原图、填写小问并选择输出格式；未知答案和区域可以保留。")
-        bridge.companion_content(revision, assets)
+        else:
+            bridge.companion_content(revision, assets)
         output = SolutionOutput.objects.create(revision=revision, requested_by=actor,
             request_key=request_key, fingerprint=fingerprint)
         SolutionOutputEvent.objects.create(output=output, version=1, action="queued", author=actor,

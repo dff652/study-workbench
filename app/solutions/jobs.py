@@ -48,7 +48,7 @@ def action(actor, output_id, *, action, expected_version, request_key, reason, c
             raise core.PersistenceError("source_changed", "来源已更新，请保存新版本后重新生成。")
         row.state, row.error_code, row.started_at = "queued", "", None
     elif action == "check" and row.state in {"output_check", "complete"}:
-        schema.fields(checks, set(queries.CHECK_NAMES))
+        schema.fields(checks, set(queries.check_names(row.revision.mode)))
         for check in checks.values():
             schema.fields(check, {"status", "notes"})
             if check["status"] not in ("pass", "fail", "not_tested"):
@@ -59,7 +59,7 @@ def action(actor, output_id, *, action, expected_version, request_key, reason, c
             for format_name in document["formats"]:
                 rendering.output_file(row, document["id"], "document." + format_name)
         row.result = {**row.result, "checks": checks}
-        row.state = "complete" if all(checks[name]["status"] == "pass" for name in ("content", "math", "pdf_visual")) and not any(
+        row.state = "complete" if all(checks[name]["status"] == "pass" for name in ("content", "subject" if row.revision.mode == "knowledge" else "math", "pdf_visual")) and not any(
             check["status"] == "fail" for check in checks.values()) else "output_check"
     else:
         raise core.PersistenceError("invalid_state", "当前状态不能执行此操作。")

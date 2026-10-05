@@ -33,6 +33,7 @@ def main():
     parser.add_argument("--business-browser", action="store_true", help="Run the knowledge, learning and print browser acceptance")
     parser.add_argument("--fusion-browser", action="store_true", help="Run the built React SOP and evidence browser acceptance")
     parser.add_argument("--pc-browser", action="store_true", help="Run the unified PC workspace and companion acceptance")
+    parser.add_argument("--knowledge-browser", action="store_true", help="Run four anonymous knowledge companions and empty recovery")
     parser.add_argument("--solution-evidence", type=Path, help="Keep only synthetic companion test artifacts in this new local directory")
     parser.add_argument("--skip-tests", action="store_true", help="Browser debugging only; does not constitute full acceptance")
     parser.add_argument("--test-label", action="append", help="Run selected Django test labels; default is tests")
@@ -43,7 +44,7 @@ def main():
     parser.add_argument("--skill-root", type=Path)
     parser.add_argument("--skill-output", type=Path)
     args = parser.parse_args()
-    if args.skip_tests and not (args.browser or args.business_browser or args.fusion_browser or args.pc_browser):
+    if args.skip_tests and not (args.browser or args.business_browser or args.fusion_browser or args.pc_browser or args.knowledge_browser):
         parser.error("--skip-tests is restricted to a browser debugging run")
     if bool(args.legacy_package) != bool(args.data_root):
         parser.error("--legacy-package and --data-root must be supplied together")
@@ -117,6 +118,8 @@ def main():
             run([sys.executable, "scripts/verify_fusion.py", "--owner", owner], env=env)
         if args.pc_browser:
             run([sys.executable, "scripts/verify_pc.py", "--owner", owner], env=env)
+        if args.knowledge_browser:
+            run([sys.executable, "scripts/verify_knowledge.py", "--owner", owner], env=env)
     finally:
         # A failed docker run can still create a container. Verify the random
         # ownership label before removing either its ID or its unique name.

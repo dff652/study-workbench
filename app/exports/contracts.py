@@ -216,8 +216,8 @@ def validate_document(document):
                         if plain_text(value) != value:
                             raise ExportError("invalid_map", "Map labels are literal text")
             elif kind in {"formula_image", "diagram", "companion_image"}:
-                if kind == "companion_image" and document.purpose != "parent_answers":
-                    raise ExportError("companion_purpose", "Companion PNG figures are restricted to parent answers")
+                if kind == "companion_image" and document.purpose not in {"parent_answers", "knowledge_summary"}:
+                    raise ExportError("companion_purpose", "Companion PNG figures require an explanatory document")
                 diagram_fields={"vector_storage_key", "vector_sha256", "conditions", "min_label_points", "independent_safe"} if kind=="diagram" else set()
                 if not isinstance(content, dict) or set(content) != {"storage_key", "sha256", "source_ref", "alt", "width_points"} | diagram_fields:
                     raise ExportError("invalid_fallback", "Formula image needs local bytes, source and alternative text")

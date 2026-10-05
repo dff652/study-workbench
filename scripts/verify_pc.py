@@ -183,7 +183,7 @@ def main():
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', 0)); port = sock.getsockname()[1]
     origin = f'http://127.0.0.1:{port}'
-    checks, matrix, errors, external, leaks = [], [], [], [], []
+    checks, matrix, errors, external, leaks, ux_measurements, theme_contrast, row_measurements = [], [], [], [], [], [], [], []
     server = None
     try:
         with (output / 'server.log').open('w') as log:
@@ -231,6 +231,9 @@ def main():
                             });
                         }));
                         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                        await Promise.allSettled(document.getAnimations()
+                            .filter(animation => animation.effect.getComputedTiming().iterations !== Infinity)
+                            .map(animation => animation.finished));
                     }''')
                 def open_disclosure(label, scope=None):
                     summary = (scope or page).locator('summary').filter(has_text=re.compile('^' + re.escape(label)))
@@ -238,15 +241,46 @@ def main():
                     if not summary.evaluate('(element) => element.parentElement.open'):
                         summary.click()
 
+                def check_business_text(scope, label):
+                    visible = scope.inner_text()
+                    codes = re.findall(r'\b(?:swb\.[a-z0-9.-]+|schema_version|request_key|source_stamp|base_stamp|sha-?256|[a-z][a-z0-9]*_[a-z0-9_]+|[0-9a-f]{64}|[0-9a-f]{8}-[0-9a-f-]{27,})\b', visible, re.I)
+                    assert not codes, (label, codes)
+
+                def check_text_contrast(view, theme):
+                    samples = page.evaluate('''() => {
+                        const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+                        const ctx = canvas.getContext('2d');
+                        const color = value => {
+                            ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = value; ctx.fillRect(0, 0, 1, 1);
+                            return [...ctx.getImageData(0, 0, 1, 1).data].map(v => v / 255);
+                        };
+                        const blend = (top, bottom) => top.slice(0, 3).map((v, i) => v * top[3] + bottom[i] * (1 - top[3]));
+                        const luminance = rgb => rgb.map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+                            .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+                        return [...document.querySelectorAll('#content h1, #content h2, #content p, #content button, #content label, #content th, #content td, nav[aria-label="主导航"] button')]
+                            .filter(el => el.getClientRects().length && el.textContent.trim() && !el.disabled)
+                            .slice(0, 100).map(el => {
+                                const ancestors = []; for (let node = el; node; node = node.parentElement) ancestors.unshift(node);
+                                const background = ancestors.reduce((bg, node) => blend(color(getComputedStyle(node).backgroundColor), bg), [1, 1, 1]);
+                                const style = getComputedStyle(el), foreground = blend(color(style.color), background);
+                                const lights = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+                                const size = parseFloat(style.fontSize), large = size >= 24 || (size >= 18.66 && parseInt(style.fontWeight) >= 700);
+                                return {text: el.textContent.trim().slice(0, 60), ratio: (lights[0] + .05) / (lights[1] + .05), minimum: large ? 3 : 4.5};
+                            });
+                    }''')
+                    assert samples, (view, theme)
+                    failed = [sample for sample in samples if sample['ratio'] + .02 < sample['minimum']]
+                    assert not failed, (view, theme, failed)
+                    theme_contrast.append({'view':view, 'theme':theme, 'samples':samples})
+
                 page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
-                expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
-                assert not page.get_by_role('button', name='记录一次作答', exact=True).is_visible()
+                expect(page.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
+                expect(page.get_by_role('button', name='记录一次作答', exact=True)).to_be_visible()
                 help_button = page.get_by_role('button', name='学习顺序帮助', exact=True)
                 help_button.focus()
                 expect(page.get_by_role('tooltip')).to_be_visible()
                 help_button.press('Escape')
                 expect(page.get_by_role('tooltip')).to_have_count(0)
-                page.get_by_text('家长协助与学习记录', exact=True).click()
                 page.get_by_role('button', name='记录一次作答', exact=True).click()
                 expect(page.locator('.workspace-page h1')).to_contain_text('作答')
                 for action_name, view in [('选题练习', 'knowledge'), ('查看讲解', 'documents'), ('复习安排', 'progress')]:
@@ -260,7 +294,7 @@ def main():
                 phone = touch_context.new_page()
                 phone.on('pageerror', lambda error: errors.append(str(error)))
                 phone.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
-                expect(phone.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                expect(phone.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
                 phone.get_by_role('button', name='学习顺序帮助', exact=True).tap()
                 expect(phone.get_by_role('tooltip')).to_be_visible()
                 bounds = phone.get_by_role('tooltip').bounding_box()
@@ -269,7 +303,7 @@ def main():
                 phone.screenshot(path=str(output / 'student-home-390-tooltip.png'), full_page=True)
                 touch_context.close()
                 page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
-                expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                expect(page.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
                 settle_visuals()
                 page.screenshot(path=str(output / 'student-home-1440.png'), full_page=True)
                 checks.append('student-and-family-start-actions-keyboard-and-touch-help')
@@ -281,10 +315,10 @@ def main():
                     assert target_key(response.json()['page']['url']) == target_key(path), name
                     expect(page.locator('.workspace-page')).to_have_count(1)
                     if name == 'prints':
-                        summary = page.locator('summary').filter(has_text=re.compile('^制作练习与其他文档'))
-                        assert not summary.evaluate('(element) => element.parentElement.open')
+                        expect(page.get_by_role('tab', name='逐题讲解', exact=True)).to_have_attribute('aria-selected', 'true')
+                        expect(page.locator('.workspace-page')).not_to_be_visible()
                         page.screenshot(path=str(output / 'document-home-default.png'), full_page=True)
-                        open_disclosure('制作练习与其他文档')
+                        page.get_by_role('tab', name='五册与练习', exact=True).click()
                     expect(page.locator('.workspace-page')).to_be_visible()
                     expect(page.get_by_role('navigation', name='主导航')).to_be_visible()
                     expect(page.locator('.workspace-page h1'), name).to_have_count(1)
@@ -320,7 +354,6 @@ def main():
                 page.goto(origin + app_url('/knowledge/?household_id=' + house.pk))
                 expect(page.locator('.workspace-page')).to_be_visible()
                 page.evaluate('window.__pcShellMarker = "retained"')
-                open_disclosure('家长协助', page.get_by_role('navigation', name='主导航'))
                 page.get_by_role('navigation', name='主导航').get_by_role('button', name='设置', exact=True).click()
                 expect(page.locator('.workspace-page h1')).to_contain_text('成员')
                 assert page.evaluate('window.__pcShellMarker') == 'retained'
@@ -479,15 +512,35 @@ def main():
                 # and readable formulas before any confirmation writes records.
                 page.goto(origin + app_url(view='materials'))
                 page.get_by_role('button', name=re.compile('合成容器验收 PC 资料')).click()
-                open_disclosure('1. 原图')
+                page.get_by_role('tab', name=re.compile('^原图与进度')).click()
                 expect(page.get_by_label('选择多张原图')).to_be_visible()
-                open_disclosure('4. 整理任务')
-                open_disclosure('当前任务：查看处理阶段、结果和历史操作')
+                page.get_by_role('tab', name=re.compile('^整理任务')).click()
                 expect(page.locator(f'img[src^="/api/v1/workflows/{pending.pk}/assets/"]')).to_be_visible()
                 expect(page.get_by_label(re.compile('^公式 ')).first).to_be_visible()
                 assert page.request.get(origin + f'/api/v1/workflows/{pending.pk}/').json()['job']['state'] == 'needs_review'
                 page.screenshot(path=str(output / 'import-png-review.png'), full_page=True)
                 checks.append('pending-import-teaching-png-visible')
+                import_picker = page.get_by_label('选择导入文件（.json）', exact=True)
+                job_count = db(lambda: type(pending).objects.count())
+                import_picker.set_input_files({'name':'invalid-import.json', 'mimeType':'application/json',
+                    'buffer':b'{"schema_version":"swb.skill-import.v1","schema_version":"swb.skill-import.v1"}'})
+                expect(page.get_by_text(re.compile('导入文件中有重复信息'))).to_be_visible()
+                check_business_text(page.locator('#content'), 'import-rejected-file')
+                preview_proposal = json.loads(json.dumps(proposal))
+                preview_proposal['tool_inputs'] = {'context':'synthetic local preview only'}
+                import_picker.set_input_files({'name':'valid-import.json', 'mimeType':'application/json',
+                    'buffer':json.dumps(preview_proposal).encode()})
+                expect(page.get_by_text('文件已读取', exact=True)).to_be_visible()
+                expect(page.get_by_text('补充信息（待核对）', exact=True)).to_be_visible()
+                expect(page.get_by_text('另有内容待核对，已保留。', exact=True).first).to_be_visible()
+                check_business_text(page.locator('#content'), 'import-preview')
+                assert db(lambda: type(pending).objects.count()) == job_count
+                settle_visuals()
+                page.screenshot(path=str(output / 'import-local-preview.png'), full_page=True)
+                page.get_by_role('button', name='移除此文件', exact=True).click()
+                expect(page.get_by_text('文件已读取', exact=True)).not_to_be_visible()
+                expect(page.get_by_text('私人草稿已保存。', exact=True)).to_be_visible()
+                checks.append('import-local-preview-strict-rejection-unknown-content-and-business-copy')
                 # A dropped response for one item must leave only that item for
                 # retry. Successful uploads and their idempotence keys survive.
                 upload_count = db(lambda: material.pages.count())
@@ -502,6 +555,7 @@ def main():
                 for name, color in [('pc-a.png','red'), ('pc-b.png','blue')]:
                     buf = BytesIO(); Image.new('RGB', (80,60), color).save(buf, format='PNG')
                     files.append({'name':name, 'mimeType':'image/png', 'buffer':buf.getvalue()})
+                page.get_by_role('tab', name=re.compile('^原图与进度')).click()
                 page.get_by_label('选择多张原图').set_input_files(files)
                 page.get_by_role('button', name='上传待处理原图（2）', exact=True).click()
                 expect(page.get_by_text('失败 1 张', exact=True)).to_be_visible()
@@ -512,6 +566,45 @@ def main():
                 assert len(upload_seen) == 3
                 context.unroute(upload_target, interrupt_one)
                 checks.append('multi-upload-single-failure-retry-without-duplicate')
+                page.get_by_role('tab', name=re.compile('^题面核对')).click()
+                printed_input = page.get_by_role('textbox', name='图中印刷题面转写（必填）', exact=True)
+                expect(printed_input).to_be_visible()
+                printed_input.fill('浏览器临时输入：切标签和取消刷新仍应保留')
+                page.get_by_role('tab', name=re.compile('^整理任务')).click()
+                page.get_by_role('tab', name=re.compile('^题面核对')).click()
+                (output / 'content-tab-state.local.json').write_text(json.dumps({
+                    'url': page.url,
+                    'content_inputs': printed_input.count(),
+                    'panels': page.locator('[role=tabpanel]').evaluate_all('(panels) => panels.map(panel => ({id:panel.id, hidden:panel.hidden, children:panel.childElementCount}))'),
+                    'visible_text': page.locator('#content').inner_text(),
+                }, ensure_ascii=False, indent=2) + '\n')
+                page.screenshot(path=str(output / 'content-tab-restoration.png'), full_page=True)
+                expect(printed_input).to_have_value('浏览器临时输入：切标签和取消刷新仍应保留')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                page.get_by_role('button', name='刷新核对数据', exact=True).click()
+                expect(printed_input).to_have_value('浏览器临时输入：切标签和取消刷新仍应保留')
+                page.once('dialog', lambda dialog: dialog.accept())
+                page.get_by_role('button', name='刷新核对数据', exact=True).click()
+                expect(printed_input).to_have_value('')
+                reading_input = page.get_by_role('textbox', name='阅读依据（必填）', exact=True)
+                expect(reading_input).to_be_visible()
+                reading_input.fill('浏览器临时阅读依据：切来源页须确认')
+                source_picker = page.get_by_role('combobox', name='来源页', exact=True)
+                expect(source_picker.locator('option')).to_have_count(upload_count + 2)
+                initial_source = source_picker.input_value()
+                alternate_source = source_picker.locator('option').evaluate_all('(options, current) => options.map(option => option.value).find(value => value !== current)', initial_source)
+                assert alternate_source
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                source_picker.select_option(alternate_source)
+                expect(source_picker).to_have_value(initial_source)
+                expect(reading_input).to_have_value('浏览器临时阅读依据：切来源页须确认')
+                page.once('dialog', lambda dialog: dialog.accept())
+                source_picker.select_option(alternate_source)
+                expect(source_picker).to_have_value(alternate_source)
+                expect(reading_input).not_to_have_value('浏览器临时阅读依据：切来源页须确认')
+                source_picker.select_option(initial_source)
+                expect(reading_input).to_be_visible()
+                checks.append('content-tabs-and-confirmed-refresh-source-page-input-protection')
                 transparent_page = db(lambda: materials.upload_page(actor, material.pk,
                     SimpleUploadedFile('transparent.png', transparent.getvalue(), content_type='image/png'), uuid4().hex))
                 # Automatic recovery is private; only explicit saving appends
@@ -519,9 +612,24 @@ def main():
                 from app.solutions.models import SolutionRevision, SolutionOutput
                 from app.workflows.models import WorkspaceDraft
                 initial_versions = db(lambda: SolutionRevision.objects.filter(material=material).count())
-                open_disclosure('3. 讲解')
-                page.get_by_role('button', name='整理解析', exact=True).click()
-                expect(page.get_by_role('heading', level=1, name=re.compile('逐题解析'))).to_be_visible()
+                page.get_by_role('tab', name='讲解', exact=True).click()
+                navigation_dialogs = []
+                def accept_temporary_input_navigation(dialog):
+                    navigation_dialogs.append(dialog.message)
+                    assert dialog.message == '页面有未保存的更改。确定离开当前页面吗？'
+                    dialog.accept()
+                page.on('dialog', accept_temporary_input_navigation)
+                try:
+                    page.get_by_role('button', name='打开讲解工作区', exact=True).click()
+                    expect(page.get_by_role('heading', level=1, name='逐题讲解')).to_be_visible()
+                finally:
+                    page.remove_listener('dialog', accept_temporary_input_navigation)
+                    (output / 'solution-entry-state.local.json').write_text(json.dumps({
+                        'url':page.url, 'dialogs':navigation_dialogs,
+                        'headings':page.get_by_role('heading').all_text_contents(),
+                        'visible_text':page.locator('#content').inner_text(),
+                    }, ensure_ascii=False, indent=2) + '\n')
+                    page.screenshot(path=str(output / 'solution-entry.png'), full_page=True)
                 page.get_by_label('选择资料页').select_option(transparent_page['page_id'])
                 with page.expect_response(lambda r: '/draft-save/' in r.url and r.request.method == 'POST') as source_saved:
                     page.get_by_role('button', name='加入整页来源（范围未知）', exact=True).click()
@@ -580,12 +688,12 @@ def main():
                 expect(page.get_by_text('私人草稿已清理。', exact=True)).to_be_visible()
                 assert db(lambda: WorkspaceDraft.objects.get(actor=actor, household=house, key=draft_key).payload) == {'cleared': True}
                 checks.append('private-autosave-compare-reload-explicit-version-and-tombstone')
-                page.get_by_role('button', name='历史版本', exact=True).click()
+                page.get_by_role('tab', name=re.compile('^历史版本')).click()
                 page.get_by_role('button', name='打开并对照', exact=True).last.click()
                 expect(page.get_by_text('历史版本对照', exact=True)).to_be_visible()
                 assert not re.search(r'\b[0-9a-f]{8}-[0-9a-f-]{27,}\b', page.locator('main').inner_text())
                 page.get_by_role('button', name='关闭', exact=True).click()
-                page.get_by_role('button', name='编辑讲解', exact=True).click()
+                page.get_by_role('tab', name='编辑讲解', exact=True).click()
                 with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST') as formula_saved:
                     page.get_by_label('第 1 步公式表达式', exact=True).fill('4*2+1/2-1/2')
                     expect(page.get_by_label('第 1 步公式预览', exact=True)).to_be_visible()
@@ -609,7 +717,7 @@ def main():
                 page.screenshot(path=str(output / 'solution-editor-output.png'), full_page=True)
                 checks.append('editor-structured-step-history-real-worker-preview')
                 page.reload()
-                page.get_by_role('button', name='编辑讲解', exact=True).click()
+                page.get_by_role('tab', name='编辑讲解', exact=True).click()
                 open_disclosure('文档设置')
                 expect(page.get_by_label('文档标题', exact=True)).to_have_value('PC 浏览器保存的解析')
                 checks.append('editor-refresh-restores-saved-draft')
@@ -666,8 +774,8 @@ def main():
                 expect(page.locator('.workspace-page')).to_contain_text('已审核')
                 assert db(lambda: EntityRecord.objects.get(pk=new_question.pk).published_revision_id) == new_question.head_revision_id
                 page.goto(origin + app_url(f'/prints/?household={house.pk}'))
-                open_disclosure('制作练习与其他文档')
-                page.locator('#id_household').select_option(str(house.pk))
+                page.get_by_role('tab', name='五册与练习', exact=True).click()
+                expect(page.locator('#id_household')).to_have_value(str(house.pk))
                 page.locator('#id_title').fill('整合验收无提示练习')
                 page.locator('#id_purpose').select_option('independent_practice')
                 page.locator(f'input[name=questions][value="{new_question.head_revision_id}"]').check()
@@ -732,61 +840,147 @@ def main():
                 settle_visuals()
                 page.screenshot(path=str(output / 'retest-plan-report.png'), full_page=True)
                 checks.append('new-retest-plan-bind-real-attempt-and-report-preserve-history')
+                # An unfinished plan remains private browser input. Exercise
+                # both retained views and App's real module/learner guards.
+                page.goto(origin + app_url(view='progress') + '&learner=' + f['learner'])
+                page.get_by_role('button', name='新增复测计划', exact=True).click()
+                plan_goal = page.get_by_role('textbox', name='复测目标（必填）', exact=True)
+                expect(plan_goal).to_be_visible()
+                plan_goal.fill('浏览器未保存计划：取消离开后继续编辑')
+                page.get_by_role('tab', name='学习证据', exact=True).click()
+                page.get_by_role('tab', name='复测计划', exact=True).click()
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.get_by_role('button', name=re.compile('^完成')).click()
+                page.get_by_role('button', name=re.compile('^待复测')).click()
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                page.get_by_role('navigation', name='主导航').get_by_role('button', name='资料整理', exact=True).click()
+                assert dict(parse_qsl(urlsplit(page.url).query))['view'] == 'progress'
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                page.get_by_role('combobox', name='学习者', exact=True).select_option(second_learner)
+                expect(page.get_by_role('combobox', name='学习者', exact=True)).to_have_value(f['learner'])
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                page.get_by_role('button', name='刷新全部', exact=True).click()
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.once('dialog', lambda dialog: dialog.dismiss())
+                page.get_by_role('button', name='收起新计划', exact=True).click()
+                expect(plan_goal).to_have_value('浏览器未保存计划：取消离开后继续编辑')
+                page.once('dialog', lambda dialog: dialog.accept())
+                page.get_by_role('button', name='收起新计划', exact=True).click()
+                expect(plan_goal).not_to_be_visible()
+                checks.append('unfinished-plan-tabs-filters-module-learner-and-discard-protection')
                 # Capture the seven normal entry pages at both widths, with
                 # secondary areas left closed as an actual user first sees them.
-                for width in (1440, 390):
-                    page.set_viewport_size({'width': width, 'height': 1000 if width == 1440 else 844})
+                for width in (1280, 1920, 2560, 390):
+                    page.set_viewport_size({'width': width, 'height': {1280: 800, 1920: 1080, 2560: 1440, 390: 844}[width]})
                     for view in ('overview', 'materials', 'knowledge', 'learning', 'progress', 'documents', 'settings'):
                         page.goto(origin + app_url(view=view) + '&learner=' + f['learner'])
                         if view == 'overview':
-                            expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                            expect(page.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
+                            expect(page.get_by_role('heading', name='当前筛选结果', exact=True)).to_be_visible()
+                            expect(page.get_by_text('正在整理学习证据…', exact=True)).not_to_be_visible()
                         elif view == 'materials':
                             expect(page.get_by_role('button', name=re.compile('合成容器验收 PC 资料'))).to_be_visible()
-                            expect(page.get_by_text('正在读取当前家庭的资料…', exact=True)).not_to_be_visible()
+                            expect(page.get_by_text('正在读取资料列表…', exact=True)).not_to_be_visible()
+                            expect(page.get_by_role('tab', name=re.compile('^原图与进度'))).to_have_attribute('aria-selected', 'true')
                         elif view == 'progress':
                             expect(page.get_by_role('heading', name='复测计划', exact=True)).to_be_visible()
-                            previous_plans = page.locator('details').filter(has=page.locator('summary', has_text='已完成与取消的计划'))
-                            expect(previous_plans).not_to_have_attribute('open', '')
-                            expect(page.get_by_text('合成复测：检查乘法与单位', exact=False)).not_to_be_visible()
-                            open_disclosure('已完成与取消的计划')
-                            expect(page.get_by_text('复测目标：合成复测：检查乘法与单位', exact=True)).to_be_visible()
-                            previous_plans.locator('summary').first.click()
+                            expect(page.get_by_role('tab', name='复测计划', exact=True)).to_have_attribute('aria-selected', 'true')
+                            expect(page.get_by_role('button', name=re.compile('^待复测'))).to_have_attribute('aria-pressed', 'true')
+                            expect(page.get_by_text('合成复测：检查乘法与单位', exact=True)).not_to_be_visible()
+                            page.get_by_role('button', name=re.compile('^完成')).click()
+                            expect(page.get_by_text('合成复测：检查乘法与单位', exact=True)).to_be_visible()
+                            page.get_by_role('button', name=re.compile('^待复测')).click()
                         elif view == 'documents':
                             expect(page.get_by_role('button', name='查看讲解文档', exact=True)).to_be_visible()
+                            expect(page.get_by_role('combobox', name=re.compile('^选择资料'))).to_have_value(str(material.pk))
                         else:
                             expect(page.locator('.workspace-page h1')).to_be_visible()
                             if view == 'settings':
-                                create_account = page.locator('.workspace-page details').filter(has=page.locator('summary', has_text='创建家庭成员登录账号'))
-                                expect(create_account).not_to_have_attribute('open', '')
+                                expect(page.get_by_role('tab', name='现有成员', exact=True)).to_have_attribute('aria-selected', 'true')
+                                expect(page.locator('#id_create_username')).not_to_be_visible()
                         settle_visuals()
+                        assert page.get_by_role('combobox', name='家庭', exact=True).count() == 1, (view, width, 'duplicated household selector')
+                        assert page.get_by_role('combobox', name='学习者', exact=True).count() <= 1, (view, width, 'duplicated learner selector')
+                        check_business_text(page.locator('#content'), f'entry-{view}-{width}')
                         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), (view, width)
                         page.screenshot(path=str(output / f'entry-{view}-{width}.png'), full_page=True)
+                        if width == 1920:
+                            check_text_contrast(view, 'light')
+                            page.evaluate("document.documentElement.classList.add('dark')")
+                            settle_visuals()
+                            check_text_contrast(view, 'dark')
+                            page.screenshot(path=str(output / f'entry-{view}-1920-dark.png'), full_page=True)
+                            page.evaluate("document.documentElement.classList.remove('dark')")
+                        if width >= 1280:
+                            measured = page.locator('#content').evaluate('''main => {
+                                const rect = main.getBoundingClientRect();
+                                const actions = [...main.querySelectorAll('button, a, input:not([type=hidden]), select')]
+                                    .filter(el => el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
+                                const first = actions[0]?.getBoundingClientRect();
+                                const workspace = [...main.children].reverse().find(el => el.getClientRects().length && !['H1', 'NAV'].includes(el.tagName));
+                                return {main_width: rect.width, available_width: innerWidth - rect.x,
+                                    workspace_width: workspace?.getBoundingClientRect().width,
+                                    first_action_top: first?.top, first_action: actions[0]?.textContent.trim() || actions[0]?.name};
+                            }''')
+                            assert measured['main_width'] >= measured['available_width'] * .85, (view, width, measured)
+                            assert measured['workspace_width'] >= measured['available_width'] * .85, (view, width, measured)
+                            assert measured['first_action_top'] is not None and measured['first_action_top'] <= 220, (view, width, measured)
+                            assert page.get_by_role('navigation', name='主导航').get_by_role('button').count() == 7
+                            ux_measurements.append({'view':view, 'width':width, **measured})
+                        if width >= 1920 and view in ('materials', 'progress'):
+                            rows = (page.get_by_role('region', name='资料列表', exact=True).locator('button[aria-pressed]')
+                                if view == 'materials' else page.locator('#progress-workspace-plans-panel tbody tr'))
+                            heights = rows.evaluate_all('''rows => rows.filter(row => row.getClientRects().length && !row.querySelector('td[colspan]'))
+                                .map(row => row.getBoundingClientRect().height)''')
+                            assert heights and all(40 <= height <= 48.5 for height in heights), (view, width, heights)
+                            row_measurements.append({'view':view, 'width':width, 'heights':heights})
                         if view == 'documents':
-                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
+                            page.get_by_role('combobox', name='选择资料', exact=True).select_option(str(material.pk))
                             page.get_by_role('button', name='查看讲解文档', exact=True).click()
-                            expect(page.get_by_role('button', name='生成文件', exact=True)).to_have_attribute('aria-pressed', 'true')
+                            expect(page.get_by_role('tab', name=re.compile('^生成文件'))).to_have_attribute('aria-selected', 'true')
                             expect(page.locator('#solution-editor-panel')).not_to_be_visible()
                             expect(page.locator('#solution-outputs-panel article').first).to_be_visible()
                             settle_visuals()
                             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), ('solution-outputs', width)
                             page.screenshot(path=str(output / f'solution-viewing-{width}.png'), full_page=True)
                             page.goto(origin + app_url(view='documents'))
-                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
-                            open_disclosure('家长制作配套练习')
+                            page.get_by_role('combobox', name='选择资料', exact=True).select_option(str(material.pk))
                             page.get_by_role('button', name='制作五册资料', exact=True).click()
                             expect(page.locator('.workspace-page h1')).to_contain_text('五册')
                             assert dict(parse_qsl(urlsplit(page.url).query))['screen'].startswith(f'/prints/materials/{material.pk}/five-books/')
                     if width == 390:
                         page.goto(origin + app_url('/__app__/solutions/' + str(material.pk) + '/', view='documents'))
-                        page.get_by_role('button', name='编辑讲解', exact=True).click()
+                        page.get_by_role('tab', name='编辑讲解', exact=True).click()
                         expect(page.get_by_label('题目标题', exact=True)).to_be_visible()
                         settle_visuals()
                         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
                         page.screenshot(path=str(output / 'solution-editor-390.png'), full_page=True)
                 page.set_viewport_size({'width': 1440, 'height': 1000})
-                checks.append('seven-entry-pages-and-document-viewing-1440-and-390')
+                checks.append('seven-entry-pages-and-document-viewing-1280-1920-2560-and-390')
+                checks.append('seven-entry-light-and-dark-text-contrast')
+                checks.append('ordinary-material-and-plan-row-density')
+                page.goto(origin + app_url('/knowledge/?household_id=' + house.pk))
+                knowledge_tab = page.get_by_role('tab', name='知识点', exact=True)
+                knowledge_tab.click()
+                knowledge_tab.press('ArrowRight')
+                expect(page.get_by_role('tab', name='方法', exact=True)).to_be_focused()
+                expect(knowledge_tab).to_have_attribute('aria-selected', 'true')
+                page.get_by_role('tab', name='方法', exact=True).press('Enter')
+                assert dict(parse_qsl(urlsplit(page.url).query))['tab'] == 'methods'
+                page.reload()
+                expect(page.get_by_role('tab', name='方法', exact=True)).to_have_attribute('aria-selected', 'true')
+                page.get_by_role('tab', name='题目', exact=True).click()
+                page.locator('#id_number').fill('待筛选题号')
+                page.get_by_role('tab', name='知识点', exact=True).click()
+                page.get_by_role('tab', name='题目', exact=True).click()
+                expect(page.locator('#id_number')).to_have_value('待筛选题号')
+                page.locator('#id_number').fill('')
+                checks.append('native-tabs-keyboard-url-refresh-and-filter-input-preserved')
                 page.goto(origin + app_url(view='settings'))
-                open_disclosure('创建家庭成员登录账号')
+                page.get_by_role('tab', name='创建账号', exact=True).click()
                 page.locator('#id_create_username').fill(actor.username)
                 page.locator('#id_create_password1').fill('synthetic-validation-only-123!')
                 page.locator('#id_create_password2').fill('synthetic-validation-only-123!')
@@ -816,7 +1010,6 @@ def main():
                 assert denied_post.status == 404  # Permission denials do not reveal private records.
                 checks.append('viewer-read-only-mutation-denied')
                 context.clear_cookies()
-                open_disclosure('家长协助', page.get_by_role('navigation', name='主导航'))
                 page.get_by_role('navigation', name='主导航').get_by_role('button', name='设置', exact=True).click()
                 expect(page.get_by_role('link', name='前往登录', exact=True)).to_be_visible()
                 page.get_by_role('link', name='前往登录', exact=True).click()
@@ -834,7 +1027,8 @@ def main():
             except subprocess.TimeoutExpired: server.kill(); server.wait()
         pool.shutdown(wait=True)
         report = {'checks':checks, 'matrix':matrix, 'template_coverage':sorted(expected_templates),
-                  'errors':errors, 'external':external, 'leaks':leaks}
+                  'errors':errors, 'external':external, 'leaks':leaks, 'ux_measurements':ux_measurements,
+                  'theme_contrast':theme_contrast, 'row_measurements':row_measurements}
         (output / 'verification.local.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
         for path in output.rglob('*'): path.chmod(0o700 if path.is_dir() else 0o600)
     print(json.dumps({'checks':len(checks), 'pages':len(matrix), 'report':str(output / 'verification.local.json')}, ensure_ascii=False))

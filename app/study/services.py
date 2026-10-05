@@ -1,7 +1,7 @@
 """Household-scoped study plans, evidence reports and generated variants."""
 from dataclasses import replace
 from datetime import date
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from django.db import transaction
 from django.utils import timezone
@@ -534,6 +534,7 @@ def _assessment_rows(actor, household_id, bundle, attempt_info, attempt, current
             and revision.attempt_revision_id == current_attempt_revision_id)
         assessment = {"assessment_id": item["assessment"].assessment_id,
             "assessment_revision_id": revision.header.revision_id,
+            "revision_no": revision.header.revision_no,
             "attempt_revision_id": revision.attempt_revision_id,
             "review_state": item["state"], "current": bool(item["current"]),
             "review_state_label": learning_label(REVIEW_STATE_LABELS, item["state"]),
@@ -556,7 +557,7 @@ def _assessment_rows(actor, household_id, bundle, attempt_info, attempt, current
 
 
 @transaction.atomic
-def evidence_report(actor, learner_entity_pk):
+def evidence_report(actor, learner_entity_pk, *, material_id=None):
     learner_entity = _entity(actor, learner_entity_pk, "learner")
     profile_data = learning.profile_detail(actor, learner_entity.stable_id)
     bundle = core.read_snapshot_bundle(actor, learner_entity.household_id)
@@ -564,6 +565,16 @@ def evidence_report(actor, learner_entity_pk):
     question_revisions = {revision.header.revision_id: (question, revision)
         for question in bundle.questions for revision in question.revisions}
     attempts_by_id = {item.attempt_id: item for item in bundle.attempts}
+    selected_questions = None
+    selected_material = None
+    if material_id is not None:
+        from app.web.models import MaterialSet, QuestionSource
+        try:
+            selected_id = UUID(str(material_id))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise core.PersistenceError("invalid_input", "请选择可访问的资料。") from exc
+        selected_material = MaterialSet.objects.get(pk=selected_id, household_id=learner_entity.household_id)
+        selected_questions = set(QuestionSource.objects.filter(material=selected_material).values_list('revision__entity__stable_id', flat=True))
     output_attempts = []
     insufficient = []
     observed_methods = []
@@ -572,6 +583,8 @@ def evidence_report(actor, learner_entity_pk):
 
     for info in profile_data["attempts"]:
         attempt = info["attempt"]
+        if selected_questions is not None and attempt.question_id not in selected_questions:
+            continue
         revision = info["revision"]
         attempt_row = {"attempt_id": attempt.attempt_id,
             "previous_attempt_id": attempt.previous_attempt_id,
@@ -707,5 +720,8 @@ def evidence_report(actor, learner_entity_pk):
     return {"learner": {"learner_id": profile.learner_id, "display_name": profile.display_name,
                         "grade": profile.grade},
         "generated_at": timezone.now().isoformat(), "attempts": output_attempts,
+        "evidence_scope": "material_questions" if selected_material else "selected_learner_history",
+        "material_id": str(selected_material.pk) if selected_material else None,
+        "material_title": selected_material.title if selected_material else None,
         "observed_correct_methods": observed_methods, "insufficient_evidence": insufficient,
         "repeated_errors": error_groups, "known_actual_date_intervals": interval_days}

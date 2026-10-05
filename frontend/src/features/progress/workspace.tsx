@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { api } from '../../api'
 import { errorText, isUnauthorized, type Remote } from '../../components/shared'
 import { Button } from '../../components/ui/button'
+import { Disclosure } from '../../components/disclosure'
 import { Card, CardContent } from '../../components/ui/card'
 import type { Learner, LearnerProgressResponse, ProgressResponse, SchedulesResponse } from '../../types'
 import { LearnerProgress } from './learner-progress'
@@ -77,14 +78,12 @@ export function ProgressWorkspace({
         <CardContent className='flex flex-wrap items-center justify-between gap-3 px-5 py-4'>
           <div>
             <p className='text-sm font-semibold'>当前学习者：{learner.display_name}</p>
-            <p className='mt-1 text-xs text-muted-foreground'>页面数据按所选家庭和学习者读取，切换范围会取消旧请求。</p>
+            <p className='mt-1 text-sm text-muted-foreground'>先看复习安排，再按需要回看记录。</p>
           </div>
           <Button type='button' variant='outline' size='sm' onClick={refreshAll}><RefreshCw aria-hidden='true' />刷新全部</Button>
         </CardContent>
       </Card>
 
-      <MaterialProgress remote={progress} onRetry={refreshAll} />
-      <LearnerProgress remote={learnerProgress} onRetry={refreshAll} />
       <Schedules
         remote={schedules}
         householdId={householdId}
@@ -95,6 +94,12 @@ export function ProgressWorkspace({
         onUnauthorized={onUnauthorized}
         onRefresh={refreshAll}
       />
+      <Disclosure title='回看学习证据' description='查看题目、知识与方法的实际记录。'>
+        <LearnerProgress remote={learnerProgress} onRetry={refreshAll} />
+      </Disclosure>
+      <Disclosure title='家长查看资料整理进度' description='检查原图、内容核对与文档准备情况。'>
+        <MaterialProgress remote={progress} onRetry={refreshAll} />
+      </Disclosure>
     </div>
   )
 }

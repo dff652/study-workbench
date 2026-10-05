@@ -11,9 +11,9 @@
     <section class="panel"><h2>复习计划</h2>
       {% if schedules %}<ul class="study-plan-list">{% for row in schedules %}<li><a href="{{ row.detail_url }}"><strong>{{ row.learner.display_name|default:"学习者档案不可用" }} · {{ row.target_question.printed_text|default:row.target_question.working_text|default:"题干待补"|truncatechars:90 }}</strong></a><span>计划日期：{{ row.latest.due_date }} · {{ row.latest.action|ui_label }}</span><span>目标：{{ row.latest.goal }}</span>{% if row.target_stale %}<p class="study-stale">计划保留原题目版本；当前发布版本已变化。</p>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="muted">当前没有复习计划。</p>{% endif %}
     </section>
-    <section class="panel"><h2>已生成的变式</h2><p class="muted">变式以 AI 草稿显示。父题原图只代表生成依据，不表示新题出现在原图中；审核状态读取实际审核投影。</p>
+    <details class="panel disclosure"><summary>查看补充练习与变式</summary><div class="disclosure-content"><h2>已生成的变式</h2><p class="muted">变式以 AI 草稿显示。父题原图只代表生成依据，不表示新题出现在原图中；审核状态读取实际审核投影。</p>
       {% if variants %}<ul class="study-variant-list">{% for row in variants %}<li><a href="{{ row.question_url }}"><strong>{{ row.generated_text }}</strong></a><span>来源题目：{{ row.parent_text }}</span><span>目标方法：{{ row.method_name }}</span><span>审核：{{ row.review_state|ui_label }}{% if row.current %} · 当前已发布{% else %} · 尚未发布为当前版本{% endif %}</span></li>{% endfor %}</ul>{% else %}<p class="muted">暂无已生成变式。</p>{% endif %}
-    </section>
+    </div></details>
   {% endif %}
 {% endblock %}
 {% block scripts %}<link rel="stylesheet" href="{% static 'study/study.css' %}">{% endblock %}

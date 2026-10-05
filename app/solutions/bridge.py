@@ -2,6 +2,7 @@
 from html import escape
 import json
 from pathlib import Path
+from PIL import Image
 
 from app.domain.arithmetic import formula_ast
 from app.exports.contracts import SCHEMA_VERSION, canonical, digest, document_from_dict
@@ -9,6 +10,8 @@ from app.persistence import services as core
 from app.persistence.models import RevisionRecord
 from . import schema
 from .vendor import model, sources as source_contract
+from .vendor.common import resolve_under
+from .vendor.contracts import resolve_formula_image
 
 
 def verify_vendor():
@@ -46,6 +49,25 @@ def _text_block(value, role="method", kind="p"):
     return {"kind": kind, "content": escape(value).replace("\n", "<br/>"), "role": role}
 
 
+def verify_assets(content, manifest, root):
+    """Match the upload service's RGBA source contract without altering pinned vendor code."""
+    model.validate_content(content, manifest)
+    source_contract.verify_sources(manifest, root)
+    sources = {item["source_id"]: item for item in manifest["sources"]}
+    for asset in content["assets"]:
+        path = resolve_formula_image({"storage_key": asset["storage_key"], "sha256": asset["sha256"]}, root)
+        if asset["kind"] == "auxiliary":
+            continue
+        original = resolve_under(root, sources[asset["source_id"]]["storage_key"])
+        with Image.open(original) as image, Image.open(path) as derived:
+            expected = image.convert("RGBA")
+            if asset["region"] is not None:
+                expected = expected.crop(asset["region"])
+            pixels = derived.convert("RGBA")
+            if pixels.size != expected.size or pixels.tobytes() != expected.tobytes():
+                raise core.PersistenceError("stale_asset", "来源图示与原图像素不一致，请核对后重新生成。")
+
+
 def companion_content(revision, assets):
     verify_vendor()
     content, snapshot = revision.content, revision.sources
@@ -63,6 +85,7 @@ def companion_content(revision, assets):
     for question in content["questions"]:
         title = question["title"] or f"第 {question['number'] or len(result['questions']) + 1} 题"
         blocks = [_text_block(title, "title", "title")]
+        pages = [blocks]
         statement = question["statement"]["text"] or None
         blocks.append(_text_block(statement or "题干待补，请对照原图核实。", "question"))
         parts = []
@@ -73,12 +96,49 @@ def companion_content(revision, assets):
                 "statement": part["statement"] or None, "answer": part["answer"] or None, "unit": part["unit"] or None})
             if part["statement"]:
                 blocks.append(_text_block(part["label"] + " " + part["statement"], "question"))
-        for label, field in (("先想什么", "thinking"), ("本讲解法", "lecture_method"), ("其他解法", "alternative_method")):
-            if question[field] or field == "lecture_method":
-                blocks.extend([_text_block(label, "method", "h"), _text_block(question[field] or "解法待补。")])
-        for index, step in enumerate(question["steps"], 1):
-            if step.strip():
-                blocks.append(_text_block(f"{index}. {step}"))
+        def add_figure(figure):
+            asset = assets[figure["asset_id"]]
+            source_id = mapping[asset.source["page_id"]] if asset.source else None
+            if str(asset.pk) not in used_assets:
+                result["assets"].append({"storage_key": asset.storage_key, "sha256": asset.sha256,
+                    "kind": asset.kind, "source_id": source_id,
+                    "region": asset.source["region"] if asset.source else None, "basis": asset.basis})
+                used_assets.add(str(asset.pk))
+            blocks.append({"kind": "diagram", "role": figure["role"], "content": {
+                "storage_key": asset.storage_key, "sha256": asset.sha256,
+                "source_ref": asset.label + "；依据：" + asset.basis,
+                "alt": figure["caption"] or asset.label, "width_mm": figure["width_mm"], "no_hint_confirmed": False}})
+
+        def add_steps(steps):
+            nonlocal blocks
+            for index, step in enumerate(steps, 1):
+                if step["new_page"] and blocks:
+                    blocks = []
+                    pages.append(blocks)
+                if step["text"].strip():
+                    blocks.append(_text_block(f"{index}. {step['text']}"))
+                if step["formula"]:
+                    blocks.append({"kind": "math", "content": formula_ast(step["formula"]), "role": "method"})
+                if step["figure"] is not None:
+                    add_figure(step["figure"])
+
+        if content["schema_version"] == schema.STRUCTURED_SCHEMA:
+            for label, field in (("先想什么", "thinking"), ("本讲解法", "lecture_method")):
+                if question[field] or field == "lecture_method":
+                    blocks.extend([_text_block(label, "method", "h"), _text_block(question[field] or "解法待补。")])
+            add_steps(question["steps"])
+            if question["alternative_method"] or question["alternative_steps"]:
+                blocks.append(_text_block("其他解法", "method", "h"))
+                if question["alternative_method"]:
+                    blocks.append(_text_block(question["alternative_method"]))
+                add_steps(question["alternative_steps"])
+        else:
+            for label, field in (("先想什么", "thinking"), ("本讲解法", "lecture_method"), ("其他解法", "alternative_method")):
+                if question[field] or field == "lecture_method":
+                    blocks.extend([_text_block(label, "method", "h"), _text_block(question[field] or "解法待补。")])
+            for index, step in enumerate(question["steps"], 1):
+                if step.strip():
+                    blocks.append(_text_block(f"{index}. {step}"))
         for link in question["links"]:
             payload = linked[link["revision_id"]].payload
             label = payload.get("name") or payload.get("definition") or "未命名条目"
@@ -102,23 +162,13 @@ def companion_content(revision, assets):
         for note in unknowns:
             blocks.append(_text_block("待补：" + note, "method", "small"))
         for figure in question["figures"]:
-            asset = assets[figure["asset_id"]]
-            source_id = mapping[asset.source["page_id"]] if asset.source else None
-            if str(asset.pk) not in used_assets:
-                result["assets"].append({"storage_key": asset.storage_key, "sha256": asset.sha256,
-                    "kind": asset.kind, "source_id": source_id,
-                    "region": asset.source["region"] if asset.source else None, "basis": asset.basis})
-                used_assets.add(str(asset.pk))
-            blocks.append({"kind": "diagram", "role": figure["role"], "content": {
-                "storage_key": asset.storage_key, "sha256": asset.sha256,
-                "source_ref": asset.label + "；依据：" + asset.basis,
-                "alt": figure["caption"] or asset.label, "width_mm": figure["width_mm"], "no_hint_confirmed": False}})
+            add_figure(figure)
         result["questions"].append({"question_id": question["id"], "lecture_id": question["lecture_id"],
             "display_number": question["number"] or str(len(result["questions"]) + 1), "title": title,
             "statement": {"text": statement, "status": question["statement"]["status"] if statement else "unknown"},
             "source_refs": [{"source_id": mapping[ref["page_id"]], "sequence": index, "region": ref["region"]}
                             for index, ref in enumerate(question["sources"], 1)],
-            "parts": parts, "pages": [blocks], "unknowns": unknowns, "corrections": question["corrections"]})
+            "parts": parts, "pages": [page for page in pages if page], "unknowns": unknowns, "corrections": question["corrections"]})
     model.validate_content(result, manifest)
     return result
 

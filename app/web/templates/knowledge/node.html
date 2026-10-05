@@ -38,7 +38,7 @@
       </form>{% endif %}
     </li>{% endfor %}</ul>{% else %}<p class="muted">还没有题目关联。</p>{% endif %}
   </section>
-  <section class="panel"><h2>关联题目</h2><p class="muted">待审核关联可以先保存；审核通过时系统会要求题目版本与此节点版本均已实际发布。</p>
+  <details class="panel disclosure" {% if link_form.errors %}open{% endif %}><summary>家长整理题目关联</summary><div class="disclosure-content"><h2>关联题目</h2><p class="muted">待审核关联可以先保存；审核通过时系统会要求题目版本与此节点版本均已实际发布。</p>
     <form method="post" action="{{ link_url }}" class="link-editor">{% csrf_token %}
       {{ link_form.request_key }}{{ link_form.household_id }}{{ link_form.kind }}
       <div class="field"><label for="id_node_revision_id">条目版本</label>{{ link_form.node_revision_id }}{{ link_form.node_revision_id.errors }}</div>
@@ -47,8 +47,8 @@
       <div class="field"><label for="id_reason">关联说明</label>{{ link_form.reason }}{{ link_form.reason.errors }}</div>
       <button type="submit" class="primary-button">保存为待审核关联</button>
     </form>
-  </section>
-  <section class="panel"><h2>条目修订与审核记录</h2>
+  </div></details>
+  <details class="panel disclosure"><summary>查看条目历史与人工审核</summary><div class="disclosure-content"><h2>条目修订与审核记录</h2>
     {% for row in history %}<article id="revision-{{ row.pk }}" class="revision-card"><div class="section-heading"><h3>r{{ row.revision_no }}</h3><span class="status-badge">{{ row.web_review_state_label }}</span></div>
       {% if row.pk == entity.published_revision_id %}<p class="published-note">当前正式发布版本</p>{% endif %}
       <p class="muted">{{ row.payload.header.change_reason }} · {{ row.payload.header.recorded_at }} · 依赖状态 {{ row.web_review_context.state|ui_label }}</p>
@@ -64,5 +64,5 @@
       </form>{% endif %}
       {% if row.web_sources %}<details><summary>查看该修订来源</summary>{% include "knowledge/_sources.html" with cards=row.web_sources only %}</details>{% endif %}
     </article>{% endfor %}
-  </section>
+  </div></details>
 {% endblock %}

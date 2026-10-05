@@ -4,9 +4,23 @@
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
   <nav class="breadcrumbs"><span>知识库与题目地图</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">人工整理</p><h1>知识库与题目地图</h1><p class="muted">按家庭查看知识点、方法、题型和题目。当前地图只显示两端已核对的版本，其他关联列为历史或待审核。</p></div></div>
+  <div class="page-heading"><div><p class="eyebrow">人工整理</p><h1>知识库与题目地图</h1><p class="muted">先选一道题自己试试；需要时再查找相关知识和方法。</p></div></div>
 
   {% if not has_households %}<section class="panel"><p>当前账号尚未加入家庭，无法查看或维护知识条目。</p></section>{% else %}
+    {% if home %}
+      <section class="panel" id="question-index"><div class="section-heading"><div><h2>题目索引</h2><p class="muted">{{ home.questions|length }} 条；旧导入索引仍为待补草稿，题干或区域缺失会直接标明。</p></div></div>
+        {% if home.questions %}<div class="table-scroll"><table class="knowledge-table"><thead><tr><th>题号</th><th>题目</th><th>审核</th><th>内容与来源</th><th>版本</th></tr></thead><tbody>
+          {% for item in home.questions %}<tr>
+            <td>{{ item.number }}{% if item.legacy %}<span class="status-badge warning">旧索引</span>{% endif %}</td>
+            <td><a href="{% url 'knowledge:question_detail' entity_id=item.entity.pk %}">{{ item.title|truncatechars:100 }}</a></td>
+            <td><span class="status-badge">{{ item.state|ui_label }}</span></td>
+            <td>{% if item.missing %}<span class="status-badge warning">题干或框待补</span>{% else %}题干与区域已录入{% endif %}</td>
+            <td>第 {{ item.revision.revision_no }} 版</td>
+          </tr>{% endfor %}
+        </tbody></table></div>{% else %}<p class="muted">没有符合筛选条件的题目。</p>{% endif %}
+      </section>
+    {% endif %}
+    <details class="disclosure" {% if not home or form.errors %}open{% endif %}><summary>筛选要练习的题目</summary>
     <form method="post" class="panel knowledge-filters">
       {% csrf_token %}
       <div class="filter-grid">
@@ -23,13 +37,14 @@
       </div>
       <div class="form-actions"><button class="primary-button" type="submit">查看</button></div>
     </form>
+    </details>
     {% if home %}
-      {% if home.can_write %}<section class="panel"><div class="section-heading"><div><h2>管理条目</h2><p class="muted">草稿可先手工建立；未提供原资料来源时会明确标为来源不足。</p></div></div>
+      {% if home.can_write %}<details class="panel disclosure"><summary>家长整理知识与方法</summary><div><div class="section-heading"><div><h2>管理条目</h2><p class="muted">草稿可先手工建立；未提供原资料来源时会明确标为来源不足。</p></div></div>
         <div class="manage-grid">
           {% for kind,label in kind_links %}<a class="primary-button link-button" href="{% url 'knowledge:node_new' kind=kind %}?household_id={{ home.household.pk }}">新建{{ label }}</a>{% endfor %}
         </div>
-      </section>{% else %}<section class="panel"><p>当前账号可查看知识与题目，新增或修改需由有编辑权限的成员完成。</p></section>{% endif %}
-      <div class="knowledge-columns">
+      </div></details>{% else %}<section class="panel"><p>当前账号可查看知识与题目，新增或修改需由有编辑权限的成员完成。</p></section>{% endif %}
+      <details class="disclosure"><summary>查阅知识、方法与题型</summary><div class="knowledge-columns">
         <section class="panel"><h2>方法分类树</h2>
           {% if home.method_tree %}<ul class="method-tree">{% include "knowledge/_method_tree.html" with tree=home.method_tree only %}</ul>
           {% else %}<p class="muted">还没有方法条目。</p>{% endif %}
@@ -41,18 +56,8 @@
         <section class="panel"><h2>题型</h2>
           {% if home.nodes.question_type %}<ul class="simple-list">{% for node in home.nodes.question_type %}<li><a href="{% url 'knowledge:node_detail' entity_id=node.entity.pk %}">{{ node.name }}</a><span class="status-badge">{{ node.state|ui_label }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">还没有题型。</p>{% endif %}
         </section>
-      </div>
-      <section class="panel"><div class="section-heading"><div><h2>题目索引</h2><p class="muted">{{ home.questions|length }} 条；旧导入索引仍为待补草稿，题干或区域缺失会直接标明。</p></div></div>
-        {% if home.questions %}<div class="table-scroll"><table class="knowledge-table"><thead><tr><th>题号</th><th>题目</th><th>审核</th><th>内容与来源</th><th>版本</th></tr></thead><tbody>
-          {% for item in home.questions %}<tr>
-            <td>{{ item.number }}{% if item.legacy %}<span class="status-badge warning">旧索引</span>{% endif %}</td>
-            <td><a href="{% url 'knowledge:question_detail' entity_id=item.entity.pk %}">{{ item.title|truncatechars:100 }}</a></td>
-            <td><span class="status-badge">{{ item.state|ui_label }}</span></td>
-            <td>{% if item.missing %}<span class="status-badge warning">题干或框待补</span>{% else %}题干与区域已录入{% endif %}</td>
-            <td>r{{ item.revision.revision_no }}</td>
-          </tr>{% endfor %}
-        </tbody></table></div>{% else %}<p class="muted">没有符合筛选条件的题目。</p>{% endif %}
-      </section>
+      </div></details>
+
     {% else %}<section class="panel"><p>请选择当前账号有权访问的家庭。</p></section>{% endif %}
   {% endif %}
 {% endblock %}

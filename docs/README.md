@@ -4,10 +4,15 @@
 
 ## 使用与当前交付
 
+- [Web 第一期范围与交付门槛](web-phase1-release-20261005.md)：第一期完整 Web 产品、第二期手机端，以及工程／运行／真实试用的完成条件。
+- [本轮整合源码交付 review](reviews/web-handoff-20261005.md)：提交范围、输入一致性、阶段文档及 push／PR 门槛。
 - [PC 使用说明](pc-usage.md)：从照片、原图对照解析到真实作答／复测与下载。
+- [两套 PC 整合契约](pc-integration-contract-20261005.md)：私人草稿、结构化步骤、检索／报告与学生／家长体验；当前本地状态另见 DEV_STATE。
+- [学生体验与渐进披露](pc-student-experience-20261005.md)：七个入口的信息组织、操作层级及参考取舍。
+- [整合与体验验收](reviews/pc-integration-20261005.md)：当前整合工作树的实际验证与独立审查。
 - [本机容器启动与恢复](container-deployment.md)：私有配置、账号／家庭、Web／worker 和联合恢复。
 - [PC 后续任务清单](pc-follow-up-20261005.md)：本轮本地提交与人工、发布后续条件。
-- [完整未 push review](reviews/pc-handoff-20261005.md)：当前工作树相对远端基线的审查与交付回执。
+- [前轮 PC 交付 review](reviews/pc-handoff-20261005.md)：整合前主线的提交审查与历史交付回执。
 - [PC 逐页验收](pc-acceptance-20261005.md) · [独立源码复核](reviews/pc-unification-20261005.md) · [解析契约](pc-companion-contract.md)。
 
 ## 完整原入口

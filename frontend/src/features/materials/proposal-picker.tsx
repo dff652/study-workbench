@@ -88,7 +88,10 @@ export function ProposalPicker({
               <span className='text-sm font-medium'>{value.records.length} 条内容记录</span>
               <span className='text-sm text-muted-foreground'>{value.sources.length} 个原图来源</span>
             </div>
-            <p className='mt-2 text-xs leading-5 text-muted-foreground'>每个来源均已按包内指定的资料页 ID 与 SHA-256 精确匹配；不会按图片哈希自动选择页面。</p>
+            <details className='mt-2 text-xs text-muted-foreground'>
+              <summary className='cursor-pointer'>高级校验信息</summary>
+              <p className='mt-1 leading-5'>每个来源均已按包内指定的资料页 ID 与 SHA-256 精确匹配；不会按图片哈希自动选择页面。</p>
+            </details>
             <div className='mt-4 max-h-[34rem] space-y-3 overflow-y-auto pr-1'>
               {value.records.length === 0 ? <p className='text-sm text-muted-foreground'>包内没有待确认的内容记录。</p> : null}
               {value.records.map((record) => {
@@ -100,23 +103,27 @@ export function ProposalPicker({
                       <h3 className='font-semibold'>{preview.title}</h3>
                     </div>
                     <p className='mt-2 whitespace-pre-wrap break-words text-sm leading-6'>{preview.text}</p>
-                    {preview.sources.length ? (
-                      <ul className='mt-3 space-y-1.5 border-t pt-3 text-xs text-muted-foreground'>
+                    {preview.sources.length ? <details className='mt-3 border-t pt-3 text-xs text-muted-foreground'>
+                      <summary className='cursor-pointer'>来源与原图区域</summary>
+                      <ul className='mt-2 space-y-1.5'>
                         {preview.sources.map((source, index) => (
                           <li key={`${source.pagePosition}-${index}`}>资料页 {source.pagePosition} · 原图区域 {source.bbox.join(', ')} px</li>
                         ))}
                       </ul>
-                    ) : null}
+                    </details> : null}
                   </article>
                 )
               })}
             </div>
-            <div className='mt-4 flex flex-wrap gap-2 border-t pt-3 text-xs text-muted-foreground'>
+            <details className='mt-4 border-t pt-3 text-xs text-muted-foreground'>
+              <summary className='cursor-pointer'>交换包中的可选数据</summary>
+              <div className='mt-2 flex flex-wrap gap-2'>
               {value.packet !== undefined ? <Badge variant='outline'>含打印包</Badge> : null}
               {value.ledger !== undefined ? <Badge variant='outline'>含账本</Badge> : null}
               {value.catalog !== undefined ? <Badge variant='outline'>含目录</Badge> : null}
               {value.tool_inputs !== undefined ? <Badge variant='outline'>含工具输入元数据：{Object.keys(value.tool_inputs).join('、') || '空对象'}</Badge> : null}
-            </div>
+              </div>
+            </details>
           </div>
         ) : null}
       </CardContent>

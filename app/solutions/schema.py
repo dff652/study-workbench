@@ -7,6 +7,7 @@ from app.persistence import services as core
 
 
 SCHEMA = "swb.solution.v1"
+STRUCTURED_SCHEMA = "swb.solution.v2"
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 RELATIONS = {"knowledge": "knowledge", "primary_method": "method",
              "secondary_method": "method", "question_type": "question_type"}
@@ -58,9 +59,31 @@ def source(ref, pages):
             fail("选区超出原图，请重新框选；整图来源请保留区域未知。")
 
 
+def validate_figure(figure, question, assets):
+    fields(figure, {"asset_id", "role", "caption", "width_mm"})
+    if type(figure["asset_id"]) is not str or figure["asset_id"] not in assets:
+        fail("图示必须从当前资料已上传的图片中选择。")
+    if figure["role"] not in ("question", "method", "answer"):
+        fail("请指定图示用于题干、解法或答案。")
+    text(figure["caption"], 2000)
+    if type(figure["width_mm"]) not in (int, float) or not 10 <= figure["width_mm"] <= 172:
+        fail("图示宽度须在 10～172 毫米之间。")
+    asset = assets[figure["asset_id"]]
+    if asset.source is not None and asset.source not in question["sources"]:
+        fail("原图或裁切图须与该题的来源区域一致。")
+
+
+def figures(question):
+    yield from question["figures"]
+    for group in ("steps", "alternative_steps"):
+        for step in question.get(group, []):
+            if isinstance(step, dict) and step.get("figure") is not None:
+                yield step["figure"]
+
+
 def validate(content, pages, revisions, assets):
     fields(content, {"schema_version", "title", "lectures", "questions", "outputs"})
-    if content["schema_version"] != SCHEMA or len(canonical(content)) > 1024 * 1024:
+    if content["schema_version"] not in (SCHEMA, STRUCTURED_SCHEMA) or len(canonical(content)) > 1024 * 1024:
         fail("解析草稿版本不支持或内容超过 1 MiB。")
     text(content["title"], 160)
     array(content["lectures"])
@@ -73,9 +96,10 @@ def validate(content, pages, revisions, assets):
             fail("讲次不能重复。")
         lectures.add(lecture["id"])
     array(content["questions"])
-    question_ids, part_ids, numbers = set(), set(), set()
+    question_ids, part_ids, numbers, step_ids = set(), set(), set(), set()
+    structured = content["schema_version"] == STRUCTURED_SCHEMA
     for question in content["questions"]:
-        fields(question, QUESTION_KEYS)
+        fields(question, QUESTION_KEYS | ({"alternative_steps"} if structured else set()))
         identifier(question["id"])
         if question["id"] in question_ids or type(question["lecture_id"]) is not str or question["lecture_id"] not in lectures:
             fail("题目重复或讲次不存在。")
@@ -121,7 +145,7 @@ def validate(content, pages, revisions, assets):
                 fail("上级小问用于组织内容，答案请填写在末级小问。")
         for name in ("thinking", "lecture_method", "alternative_method"):
             text(question[name])
-        for name in ("steps", "pitfalls", "unknowns", "formulas"):
+        for name in (("pitfalls", "unknowns", "formulas") if structured else ("steps", "pitfalls", "unknowns", "formulas")):
             array(question[name])
             for value in question[name]:
                 text(value, 512 if name == "formulas" else 20000)
@@ -149,18 +173,26 @@ def validate(content, pages, revisions, assets):
         if primary_count > 1:
             fail("每道题只能指定一种主要方法。")
         array(question["figures"], 30)
-        for figure in question["figures"]:
-            fields(figure, {"asset_id", "role", "caption", "width_mm"})
-            if type(figure["asset_id"]) is not str or figure["asset_id"] not in assets:
-                fail("图示必须从当前资料已上传的图片中选择。")
-            if figure["role"] not in ("question", "method", "answer"):
-                fail("请指定图示用于题干、解法或答案。")
-            text(figure["caption"], 2000)
-            if type(figure["width_mm"]) not in (int, float) or not 10 <= figure["width_mm"] <= 172:
-                fail("图示宽度须在 10～172 毫米之间。")
-            asset = assets[figure["asset_id"]]
-            if asset.source is not None and asset.source not in question["sources"]:
-                fail("原图或裁切图须与该题的来源区域一致。")
+        if structured:
+            for group in ("steps", "alternative_steps"):
+                array(question[group])
+                for step in question[group]:
+                    fields(step, {"id", "text", "formula", "figure", "new_page"})
+                    identifier(step["id"])
+                    if step["id"] in step_ids:
+                        fail("步骤重复，请重新添加该步骤。")
+                    step_ids.add(step["id"])
+                    text(step["text"])
+                    text(step["formula"], 512, nullable=True)
+                    if step["formula"]:
+                        try:
+                            formula_ast(step["formula"])
+                        except ArithmeticError as exc:
+                            fail(f"公式暂不支持：{exc}")
+                    if type(step["new_page"]) is not bool:
+                        fail("请明确是否在步骤前分页。")
+        for figure in figures(question):
+            validate_figure(figure, question, assets)
         array(question["corrections"])
         for correction in question["corrections"]:
             fields(correction, {"kind", "original", "replacement", "basis"})

@@ -1,6 +1,7 @@
 import { Check, CircleAlert, FileImage, FileText, ListChecks } from 'lucide-react'
 import type { MaterialDetailResponse, WorkflowJob } from '../../types'
 import { ApiLink } from '../../components/shared'
+import { Disclosure } from '../../components/disclosure'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -101,12 +102,8 @@ export function MaterialReadiness({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className='border-b pb-4'>
-          <CardTitle className='text-base'>资料任务历史</CardTitle>
-          <CardDescription>只显示最近任务；选择一项可查看阶段、事件和当前操作。</CardDescription>
-        </CardHeader>
-        <CardContent className='pt-4'>
+      <Disclosure title='资料任务历史' description='只显示最近任务；选择一项可查看阶段、事件和当前操作。'>
+        <div>
           {jobs.length === 0 ? <p className='text-sm text-muted-foreground'>尚未为此资料创建任务。</p> : (
             <ul className='space-y-2'>
               {jobs.map((job: WorkflowJob) => (
@@ -122,8 +119,8 @@ export function MaterialReadiness({
               ))}
             </ul>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </Disclosure>
     </div>
   )
 }

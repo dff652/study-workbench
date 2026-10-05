@@ -53,7 +53,7 @@ def _verify_word(path, document):
 def _paginate_questions(content, fonts, root):
     for question in content["questions"]:
         native = bridge.native_document(model._question_document(content, question))
-        pages = paginate([block for page in native.pages for block in page], fonts, root)
+        pages = tuple(measured for page in native.pages for measured in paginate(list(page), fonts, root))
         value = json.loads(canonical(document_dict(replace(native, pages=pages))))
         # Return measured question pages to the fixed compiler. All three
         # organizations then reuse these exact bodies in the same order.
@@ -72,7 +72,7 @@ def render(output, assets):
     assert_no_symlinks(root)
     content = bridge.companion_content(output.revision, assets)
     manifest = output.revision.sources["manifest"]
-    model.asset_records(content, manifest, root, root)
+    bridge.verify_assets(content, manifest, root)
     plans = model.compile_documents(content)
     documents = [bridge.native_document(plan["document"], content["lectures"]) for plan in plans]
     destination = root / "solutions" / "outputs" / output.pk.hex / f"version-{output.version}"

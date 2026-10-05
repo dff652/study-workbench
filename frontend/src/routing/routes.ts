@@ -12,7 +12,7 @@ export type AppRoute = {
 export type LearnerRouteTarget = { id: string; report_url: string }
 
 export const DEFAULT_ROUTE: AppRoute = {
-  view: 'materials',
+  view: 'overview',
   household: '',
   learner: '',
   screen: '',
@@ -166,7 +166,7 @@ export function solutionScreen(materialId: string) {
 }
 
 export function solutionMaterialId(screen: string) {
-  const match = screen.match(/^\/__app__\/solutions\/([^/?#]+)\/$/)
+  const match = screen.split(/[?#]/, 1)[0].match(/^\/__app__\/solutions\/([^/?#]+)\/$/)
   if (!match) return null
   try {
     const materialId = decodeURIComponent(match[1])

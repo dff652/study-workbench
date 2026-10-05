@@ -11,7 +11,7 @@
       </form>
     </section>
     {% if writable %}
-      <section class="panel">
+      <details class="panel disclosure" {% if form.errors %}open{% endif %}><summary>家长新建学习者档案</summary><div class="disclosure-content">
         <h2>新建学习者档案</h2>
         <form method="post" action="{% url 'learning:profile_new' %}" class="stack-form">
           {% csrf_token %}{{ form.request_key }}{{ form.household_id }}
@@ -20,7 +20,7 @@
           {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
           <button class="primary-button" type="submit">创建档案</button>
         </form>
-      </section>
+      </div></details>
     {% else %}<p class="notice">当前家庭为只读成员，不能新建或修改学习记录。</p>{% endif %}
   {% else %}<section class="panel"><p>当前账号尚未加入可访问的家庭。</p></section>{% endif %}
   <section class="panel">
@@ -28,9 +28,9 @@
     {% if profiles %}<ul class="material-list">{% for profile in profiles %}<li><a href="{% url 'learning:profile_detail' profile.learner_id %}"><strong>{{ profile.display_name }}</strong></a><span class="muted">{{ profile.grade|default:"年级未填写" }}</span></li>{% endfor %}</ul>
     {% else %}<p class="muted">此家庭还没有学习者档案。</p>{% endif %}
   </section>
-  <section class="panel">
+  <details class="panel disclosure"><summary>查看来源观察</summary><div class="disclosure-content">
     <h2>来源观察</h2>
     {% if observations %}<ul class="history-list">{% for observation in observations %}<li><a href="{% url 'learning:observation_detail' observation.observation_id %}">来源观察 {{ forloop.counter }}</a><span class="muted">{{ observation.revisions.0.actual_date|default:"发生日期未知" }} · {{ observation.revisions.0.legibility.value|ui_label }} · {{ observation.revisions.0.notes|truncatechars:100 }}</span></li>{% endfor %}</ul>
     {% else %}<p class="muted">还没有来源观察。看不清、空白或作者不明的笔迹可以先单独记录。</p>{% endif %}
-  </section>
+  </div></details>
 {% endblock %}

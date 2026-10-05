@@ -507,7 +507,7 @@ def verify_container():
         business = exec_python(main_project, primary_env,
             (ROOT / 'scripts/container_business_fixture.py').read_text(),
             input_text=json.dumps({'username': username, 'page_id': page_path.split('/')[2]}))
-        if business['attempts'] != 3 or len(business['exports']) != 3 or not business['model_disabled']:
+        if business['attempts'] != 3 or len(business['exports']) != 3 or not business['model_disabled'] or not business.get('private_draft_preserved'):
             raise RuntimeError('Synthetic business fixture was incomplete')
         for route in ('/knowledge/', '/learning/', '/catalogue/', '/study/', '/ai/', '/prints/', '/operations/'):
             browser.html(route)

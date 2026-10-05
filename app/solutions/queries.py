@@ -69,12 +69,13 @@ def _nodes(revisions, history):
     for item in revisions.values():
         if item.entity.kind not in ("knowledge", "method", "question_type"):
             continue
-        historical = item.entity.published_revision_id != item.pk
+        historical = not (item.pk == item.entity.head_revision_id == item.entity.published_revision_id)
         if historical and item.pk not in referenced:
             continue
         result.append({"revision_id": item.pk, "kind": item.entity.kind,
             "label": (item.payload.get("name") or item.payload.get("definition") or "未命名条目")[:130] +
                 f" · 第 {item.revision_no} 版" + ("（历史版本）" if historical else ""),
+            "selectable": not historical,
             "detail_url": reverse("knowledge:node_detail", args=[item.entity_id]) + "#revision-" + quote(item.pk, safe="")})
     return result
 
@@ -126,7 +127,7 @@ def workspace(actor, material_id):
     questions = []
     for source in question_sources:
         question = source.revision
-        if question.entity.published_revision_id != question.pk:
+        if not (question.pk == question.entity.head_revision_id == question.entity.published_revision_id):
             continue
         refs = []
         for ref in source.sources:
@@ -139,7 +140,8 @@ def workspace(actor, material_id):
     nodes = _nodes(revisions, history)
     return {"material": {"id": str(row.pk), "title": row.title}, "writable": writable,
         "revision": revision_row(current) if current else None,
-        "initial_content": {"schema_version": schema.SCHEMA, "title": row.title + " · 逐题解析",
+        "source_stamp": services.stamp(row, current.content if current else {"questions": []}),
+        "initial_content": {"schema_version": schema.STRUCTURED_SCHEMA, "title": row.title + " · 逐题解析",
             "lectures": [{"id": "lecture-1", "title": "第 1 讲"}], "questions": [],
             "outputs": {"per_question": ["pdf", "docx"], "per_lecture": [], "combined": ["pdf", "docx"]}},
         "history": [revision_row(item, include_content=False) for item in history],

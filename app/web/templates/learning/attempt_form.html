@@ -8,9 +8,11 @@
   <form method="post" class="panel stack-form">
     {% csrf_token %}{{ form.request_key }}{{ form.learner_id }}{{ form.context_token }}
     {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    <fieldset><legend>1. 选择题目与这次作答</legend>
     {% if allow_identity %}<div class="field"><label for="id_learner_id">更正后的学习者</label>{{ form.learner_id }}{{ form.learner_id.errors }}</div>{% endif %}
     <div class="field"><label for="id_question_id">题目</label>{{ form.question_id }}{{ form.question_id.errors }}<span class="help-text">题目选择只显示实际已审核发布的题目。</span></div>
     <div class="field"><label for="id_attempt_kind">本次类型</label>{{ form.attempt_kind }}{{ form.attempt_kind.errors }}</div>
+    </fieldset><fieldset><legend>2. 如实记录完成条件</legend>
     <div class="field"><label for="id_source_kind">来源类型</label>{{ form.source_kind }}{{ form.source_kind.errors }}</div>
     <div class="field"><label for="id_independence">独立性</label>{{ form.independence }}{{ form.independence.errors }}<span class="help-text">来源类型不会自动决定是否独立。</span></div>
     <div class="field"><label for="id_prompt_status">提示情况</label>{{ form.prompt_status }}{{ form.prompt_status.errors }}</div>
@@ -18,11 +20,13 @@
     <div class="field"><label for="id_actual_date_state">实际作答日期</label>{{ form.actual_date_state }}{{ form.actual_date_state.errors }}</div>
     <div class="field"><label for="id_actual_date">已确认日期</label>{{ form.actual_date }}{{ form.actual_date.errors }}<span class="help-text">不确定时选择“日期未知”，不要按照片上传时间补填。</span></div>
     <div class="field"><label for="id_legibility">笔迹可读性</label>{{ form.legibility }}{{ form.legibility.errors }}</div>
+    </fieldset><fieldset><legend>3. 对照原图记录答案与依据</legend>
     <div class="field"><label for="id_answer_text">答案转写</label>{{ form.answer_text }}{{ form.answer_text.errors }}<span class="help-text">空白或看不清时保留空答案。</span></div>
     <div class="field"><label for="id_authorship_basis">作者确认依据</label>{{ form.authorship_basis }}{{ form.authorship_basis.errors }}</div>
     <div class="field"><label>关联来源观察</label>{{ form.observation_values }}{{ form.observation_values.errors }}<span class="help-text">仅列出当前版本已人工确认作者、且有来源区域的观察。作答会固定引用当时观察版本。</span></div>
     <div class="field"><label for="id_previous_attempt_id">前次作答</label>{{ form.previous_attempt_id }}{{ form.previous_attempt_id.errors }}</div>
     {% if form.reason %}<div class="field"><label for="id_reason">修订说明</label>{{ form.reason }}{{ form.reason.errors }}</div>{% endif %}
+    </fieldset>
     {% if not questions %}<p class="notice">当前家庭还没有已审核发布的题目，暂时无法建立作答。请先完成题目整理与审核。</p>{% endif %}
     <div class="form-actions"><button class="primary-button" type="submit">{{ submit_label }}</button>{% if profile_url %}<a class="secondary-button link-button" href="{{ profile_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'learning:index' %}">取消</a>{% endif %}</div>
   </form>

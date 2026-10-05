@@ -232,12 +232,59 @@ def main():
                         }));
                         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
                     }''')
+                def open_disclosure(label, scope=None):
+                    summary = (scope or page).locator('summary').filter(has_text=re.compile('^' + re.escape(label)))
+                    expect(summary).to_have_count(1)
+                    if not summary.evaluate('(element) => element.parentElement.open'):
+                        summary.click()
+
+                page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
+                expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                assert not page.get_by_role('button', name='记录一次作答', exact=True).is_visible()
+                help_button = page.get_by_role('button', name='学习顺序帮助', exact=True)
+                help_button.focus()
+                expect(page.get_by_role('tooltip')).to_be_visible()
+                help_button.press('Escape')
+                expect(page.get_by_role('tooltip')).to_have_count(0)
+                page.get_by_text('家长协助与学习记录', exact=True).click()
+                page.get_by_role('button', name='记录一次作答', exact=True).click()
+                expect(page.locator('.workspace-page h1')).to_contain_text('作答')
+                for action_name, view in [('选题练习', 'knowledge'), ('查看讲解', 'documents'), ('复习安排', 'progress')]:
+                    page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
+                    page.get_by_role('button', name=action_name, exact=True).click()
+                    page.wait_for_url(lambda url: dict(parse_qsl(urlsplit(url).query)).get('view') == view)
+                    if action_name == '选题练习':
+                        expect(page.locator('#question-index')).to_be_in_viewport()
+                touch_context = browser.new_context(viewport={'width':390, 'height':844}, has_touch=True, storage_state=context.storage_state())
+                touch_context.route('**/*', restrict)
+                phone = touch_context.new_page()
+                phone.on('pageerror', lambda error: errors.append(str(error)))
+                phone.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
+                expect(phone.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                phone.get_by_role('button', name='学习顺序帮助', exact=True).tap()
+                expect(phone.get_by_role('tooltip')).to_be_visible()
+                bounds = phone.get_by_role('tooltip').bounding_box()
+                assert bounds and 0 <= bounds['x'] and bounds['x'] + bounds['width'] <= 390
+                assert phone.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
+                phone.screenshot(path=str(output / 'student-home-390-tooltip.png'), full_page=True)
+                touch_context.close()
+                page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
+                expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                settle_visuals()
+                page.screenshot(path=str(output / 'student-home-1440.png'), full_page=True)
+                checks.append('student-and-family-start-actions-keyboard-and-touch-help')
                 for name, path in paths:
                     with page.expect_response(lambda r: '/api/v1/workspace/page/' in r.url) as fetched:
                         page.goto(origin + app_url(path))
                     response = fetched.value
                     assert response.status == 200, (name, response.status, response.text()[:300])
                     assert target_key(response.json()['page']['url']) == target_key(path), name
+                    expect(page.locator('.workspace-page')).to_have_count(1)
+                    if name == 'prints':
+                        summary = page.locator('summary').filter(has_text=re.compile('^制作练习与其他文档'))
+                        assert not summary.evaluate('(element) => element.parentElement.open')
+                        page.screenshot(path=str(output / 'document-home-default.png'), full_page=True)
+                        open_disclosure('制作练习与其他文档')
                     expect(page.locator('.workspace-page')).to_be_visible()
                     expect(page.get_by_role('navigation', name='主导航')).to_be_visible()
                     expect(page.locator('.workspace-page h1'), name).to_have_count(1)
@@ -273,6 +320,7 @@ def main():
                 page.goto(origin + app_url('/knowledge/?household_id=' + house.pk))
                 expect(page.locator('.workspace-page')).to_be_visible()
                 page.evaluate('window.__pcShellMarker = "retained"')
+                open_disclosure('家长协助', page.get_by_role('navigation', name='主导航'))
                 page.get_by_role('navigation', name='主导航').get_by_role('button', name='设置', exact=True).click()
                 expect(page.locator('.workspace-page h1')).to_contain_text('成员')
                 assert page.evaluate('window.__pcShellMarker') == 'retained'
@@ -403,20 +451,38 @@ def main():
                 attempt_entity = db(lambda: EntityRecord.objects.get(kind='attempt', stable_id=f['attempt']))
                 original_head = attempt_entity.head_revision_id
                 attempt_count = db(lambda: EntityRecord.objects.filter(household_id=house.pk, kind='attempt').count())
-                page.goto(origin + app_url(f'/learning/attempt/{f["attempt"]}/edit/'))
-                page.locator('#id_answer_text').fill('8 · 合成修订')
+                page.goto(origin + app_url(f'/learning/attempt/{f["attempt"]}/edit/', household=second_house.pk) + '&learner=' + second_learner)
+                expect(page.get_by_label('家庭', exact=True)).to_have_value(house.pk)
+                expect(page.get_by_label('学习者', exact=True)).to_have_value(f['learner'])
+                with page.expect_response(lambda r: '/draft-save/' in r.url and r.request.method == 'POST') as form_draft:
+                    page.locator('#id_answer_text').fill('8 · 合成修订')
+                assert form_draft.value.status == 200
+                assert db(lambda: EntityRecord.objects.get(pk=attempt_entity.pk).head_revision_id) == original_head
+                draft_fields = [field for form in form_draft.value.json()['draft']['payload']['forms'] for field in form['fields']]
+                assert not any(field['kind'] in ('hidden', 'password', 'file') for field in draft_fields)
+                assert dict(parse_qsl(urlsplit(form_draft.value.url).query))['household'] == str(house.pk)
+                page.reload()
+                expect(page.get_by_text('发现一份未完成的表单草稿', exact=True)).to_be_visible()
+                assert page.locator('#id_answer_text').input_value() != '8 · 合成修订'
+                assert not re.search(r'\b[0-9a-f]{8}-[0-9a-f-]{27,}\b', page.get_by_role('region', name='私人草稿', exact=True).inner_text())
+                page.screenshot(path=str(output / 'form-draft-recovery.png'), full_page=True)
+                page.get_by_role('button', name='恢复这份草稿', exact=True).click()
+                expect(page.locator('#id_answer_text')).to_have_value('8 · 合成修订')
                 page.locator('#id_reason').fill('PC 同框追加修订验收')
                 page.locator('.workspace-page form button[type=submit]').click()
                 expect(page.locator('.workspace-page h1')).to_contain_text('4 × 2')
                 expect(page.locator('.workspace-page')).to_contain_text('8 · 合成修订')
                 assert db(lambda: EntityRecord.objects.filter(household_id=house.pk, kind='attempt').count()) == attempt_count
                 assert db(lambda: EntityRecord.objects.get(pk=attempt_entity.pk).head_revision_id) != original_head
-                checks.append('attempt-edit-appends-history')
+                checks.append('private-form-recovery-authoritative-family-and-explicit-append-history')
                 # The import review must display the exact pending teaching PNG
                 # and readable formulas before any confirmation writes records.
                 page.goto(origin + app_url(view='materials'))
                 page.get_by_role('button', name=re.compile('合成容器验收 PC 资料')).click()
+                open_disclosure('1. 原图')
                 expect(page.get_by_label('选择多张原图')).to_be_visible()
+                open_disclosure('4. 整理任务')
+                open_disclosure('当前任务：查看处理阶段、结果和历史操作')
                 expect(page.locator(f'img[src^="/api/v1/workflows/{pending.pk}/assets/"]')).to_be_visible()
                 expect(page.get_by_label(re.compile('^公式 ')).first).to_be_visible()
                 assert page.request.get(origin + f'/api/v1/workflows/{pending.pk}/').json()['job']['state'] == 'needs_review'
@@ -448,16 +514,22 @@ def main():
                 checks.append('multi-upload-single-failure-retry-without-duplicate')
                 transparent_page = db(lambda: materials.upload_page(actor, material.pk,
                     SimpleUploadedFile('transparent.png', transparent.getvalue(), content_type='image/png'), uuid4().hex))
-                # The native editor saves automatically, compares immutable
-                # history, and queues a real deterministic worker with AI off.
+                # Automatic recovery is private; only explicit saving appends
+                # formal history. Queue a real deterministic worker with AI off.
+                from app.solutions.models import SolutionRevision, SolutionOutput
+                from app.workflows.models import WorkspaceDraft
+                initial_versions = db(lambda: SolutionRevision.objects.filter(material=material).count())
+                open_disclosure('3. 讲解')
                 page.get_by_role('button', name='整理解析', exact=True).click()
                 expect(page.get_by_role('heading', level=1, name=re.compile('逐题解析'))).to_be_visible()
                 page.get_by_label('选择资料页').select_option(transparent_page['page_id'])
-                with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST') as source_saved:
+                with page.expect_response(lambda r: '/draft-save/' in r.url and r.request.method == 'POST') as source_saved:
                     page.get_by_role('button', name='加入整页来源（范围未知）', exact=True).click()
-                expect(page.get_by_role('status').filter(has_text='已保存为版本')).to_have_text(f'已保存为版本 {source_saved.value.json()["revision"]["version"]}。')
+                assert source_saved.value.status == 200
+                assert db(lambda: SolutionRevision.objects.filter(material=material).count()) == initial_versions
+                page.get_by_text('知识关联、题面图示、订正与素材', exact=True).click()
                 page.get_by_label('图片类型').select_option('source_image')
-                page.get_by_label('对应原图来源').select_option('1')
+                page.get_by_label('对应原图来源').select_option(json.dumps([transparent_page['page_id'], None], separators=(',', ':')))
                 page.get_by_label('图示名称', exact=True).fill('透明原图来源')
                 page.get_by_label('依据', exact=True).fill('按合成透明原图取出，验证丢响应重试')
                 asset_count = db(lambda: material.solution_assets.count())
@@ -476,7 +548,7 @@ def main():
                 expect(page.get_by_role('alert')).to_be_visible()
                 assert db(lambda: material.solution_assets.count()) == asset_count + 1
                 page.get_by_role('button', name='上传素材', exact=True).click()
-                expect(page.get_by_text('图示已收存，可在图示列表中选择。', exact=True)).to_be_visible()
+                expect(page.get_by_text('素材已加入本资料素材库；它没有自动关联步骤，请在需要的位置选择。', exact=True)).to_be_visible()
                 assert source_keys[0] == source_keys[1]
                 assert db(lambda: material.solution_assets.count()) == asset_count + 1
                 context.unroute(derive_target, lose_asset_response)
@@ -485,17 +557,39 @@ def main():
                 with Image.open(materials.asset_path(derived.storage_key, derived.sha256)) as image:
                     assert image.convert('RGBA').getpixel((0, 0)) == (30, 60, 120, 128)
                 checks.append('transparent-source-asset-lost-response-retry-without-duplicate')
-                with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST') as saved:
+                open_disclosure('文档设置')
+                with page.expect_response(lambda r: '/draft-save/' in r.url and r.request.method == 'POST') as saved:
                     page.get_by_label('文档标题', exact=True).fill('PC 浏览器保存的解析')
                 assert saved.value.status == 200
-                expect(page.get_by_role('status').filter(has_text='已保存为版本')).to_have_text(f'已保存为版本 {saved.value.json()["revision"]["version"]}。')
+                assert db(lambda: SolutionRevision.objects.filter(material=material).count()) == initial_versions
+                draft_key = saved.value.json()['draft']['key']
+                page.reload()
+                expect(page.get_by_text('发现未处理的私人草稿', exact=True)).to_be_visible()
+                page.get_by_role('button', name='比较内容', exact=True).click()
+                expect(page.get_by_text('私人草稿比较', exact=True)).to_be_visible()
+                assert not re.search(r'\b[0-9a-f]{8}-[0-9a-f-]{27,}\b', page.locator('main').inner_text())
+                page.get_by_role('button', name='关闭比较', exact=True).click()
+                page.get_by_role('button', name='恢复私人草稿', exact=True).click()
+                open_disclosure('文档设置')
+                expect(page.get_by_label('文档标题', exact=True)).to_have_value('PC 浏览器保存的解析')
+                with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST') as formal_saved:
+                    page.get_by_role('button', name='保存为新版本', exact=True).click()
+                assert formal_saved.value.status == 200
+                expect(page.get_by_role('status').filter(has_text='已保存为版本')).to_contain_text(f'已保存为版本 {formal_saved.value.json()["revision"]["version"]}。')
+                assert db(lambda: SolutionRevision.objects.filter(material=material).count()) == initial_versions + 1
+                expect(page.get_by_text('私人草稿已清理。', exact=True)).to_be_visible()
+                assert db(lambda: WorkspaceDraft.objects.get(actor=actor, household=house, key=draft_key).payload) == {'cleared': True}
+                checks.append('private-autosave-compare-reload-explicit-version-and-tombstone')
+                page.get_by_role('button', name='历史版本', exact=True).click()
                 page.get_by_role('button', name='打开并对照', exact=True).last.click()
                 expect(page.get_by_text('历史版本对照', exact=True)).to_be_visible()
                 assert not re.search(r'\b[0-9a-f]{8}-[0-9a-f-]{27,}\b', page.locator('main').inner_text())
                 page.get_by_role('button', name='关闭', exact=True).click()
+                page.get_by_role('button', name='编辑讲解', exact=True).click()
                 with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST') as formula_saved:
-                    page.get_by_label('公式 1', exact=True).fill('4*2+1/2-1/2')
-                    expect(page.get_by_label('公式 1 预览', exact=True)).to_be_visible()
+                    page.get_by_label('第 1 步公式表达式', exact=True).fill('4*2+1/2-1/2')
+                    expect(page.get_by_label('第 1 步公式预览', exact=True)).to_be_visible()
+                    page.get_by_role('button', name='保存为新版本', exact=True).click()
                 assert formula_saved.value.status == 200
                 generated_version = formula_saved.value.json()['revision']['version']
                 expect(page.get_by_role('status').filter(has_text='已保存为版本')).to_have_text(f'已保存为版本 {generated_version}。')
@@ -506,20 +600,26 @@ def main():
                 assert rendered is not None and rendered.state == 'output_check', getattr(rendered, 'error_code', '')
                 ready_output = page.locator('article').filter(has=page.get_by_role('heading', name=f'可预览，待检查 · 版本 {generated_version}', exact=True))
                 expect(ready_output).to_be_visible(timeout=20000)
-                ready_output.get_by_role('button', name='查看输出', exact=True).click()
-                expect(page.locator('iframe[title$="PDF 预览"]')).to_have_count(6, timeout=20000)
+                if ready_output.get_by_role('button', name='查看输出', exact=True).count():
+                    ready_output.get_by_role('button', name='查看输出', exact=True).click()
+                expect(ready_output.locator('iframe[title$="PDF 预览"]')).to_have_count(3, timeout=20000)
+                assert db(lambda: SolutionOutput.objects.filter(revision__material=material).count()) == 3
                 # Existing output and newly generated output are both retained.
                 settle_visuals()
                 page.screenshot(path=str(output / 'solution-editor-output.png'), full_page=True)
-                checks.append('editor-autosave-history-real-worker-preview')
+                checks.append('editor-structured-step-history-real-worker-preview')
                 page.reload()
+                page.get_by_role('button', name='编辑讲解', exact=True).click()
+                open_disclosure('文档设置')
                 expect(page.get_by_label('文档标题', exact=True)).to_have_value('PC 浏览器保存的解析')
                 checks.append('editor-refresh-restores-saved-draft')
+                open_disclosure('文档设置')
                 word_only = {'per_question': ['docx'], 'per_lecture': ['docx'], 'combined': ['docx']}
                 with page.expect_response(lambda r: '/solutions/draft/' in r.url and r.request.method == 'POST'
                     and r.request.post_data_json['content']['outputs'] == word_only) as word_saved:
                     for organization in ('逐题文档', '按讲次合并', '整份合并'):
                         page.get_by_role('group', name=organization, exact=True).get_by_label('PDF', exact=True).uncheck()
+                    page.get_by_role('button', name='保存为新版本', exact=True).click()
                 word_version = word_saved.value.json()['revision']['version']
                 expect(page.get_by_role('status').filter(has_text='已保存为版本')).to_have_text(f'已保存为版本 {word_version}。')
                 page.get_by_role('button', name='生成 PDF / Word', exact=True).click()
@@ -528,13 +628,176 @@ def main():
                 assert word_rendered.state == 'output_check', word_rendered.error_code
                 word_card = page.locator('article').filter(has=page.get_by_role('heading', name=f'可预览，待检查 · 版本 {word_version}', exact=True))
                 expect(word_card).to_be_visible(timeout=20000)
-                word_card.get_by_role('button', name='查看输出', exact=True).click()
-                expect(word_card.locator('img[alt$="页预览"]')).to_have_count(5)
+                if word_card.get_by_role('button', name='查看输出', exact=True).count():
+                    word_card.get_by_role('button', name='查看输出', exact=True).click()
+                expect(word_card.locator('img[alt$="页预览"]')).to_have_count(8)
                 assert word_card.locator('iframe').count() == 0
                 assert word_card.get_by_role('link', name='下载 Word', exact=True).count() == 3
                 settle_visuals()
                 word_card.screenshot(path=str(output / 'word-only-output-previews.png'))
                 checks.append('word-only-every-page-preview-without-pdf-download')
+                # Exercise both other business loops through the same built UI,
+                # using the uploaded synthetic source and real append-only records.
+                page.goto(origin + app_url(f'/material/{material.pk}/question/new/'))
+                page.locator('#id_original_number').fill('整合练习题')
+                page.locator('#id_printed_text').fill('合成验收：3 + 5 = ?')
+                page.locator('#id_reason').fill('对照本机合成原图录入')
+                source_card = page.locator('.region-card').first
+                open_disclosure('精确选择区域（键盘）', source_card)
+                for field, value in [('x0','2'), ('y0','2'), ('x1','22'), ('y1','28')]:
+                    source_card.locator('.coord-' + field).fill(value)
+                source_card.locator('.add-coordinates').click()
+                page.locator('#question-form > .form-actions button[value=draft]').click()
+                expect(page.locator('.printed-text')).to_have_text('合成验收：3 + 5 = ?', use_inner_text=True)
+                question_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
+                new_question_id = question_path.rstrip('/').split('/')[-1]
+                new_question = db(lambda: EntityRecord.objects.get(kind='question', stable_id=new_question_id))
+                page.locator('#id_action').select_option('accept')
+                page.locator('#id_reason').fill('核对合成原图与题干')
+                with page.expect_response(lambda r: r.request.method == 'POST'
+                        and '/api/v1/workspace/submit/' in r.url
+                        and f'/question/{new_question_id}/review/' in unquote(r.url)) as review_response:
+                    page.get_by_role('button', name='记录审核决定', exact=True).click()
+                review_result = review_response.value.json()
+                assert review_response.value.status == 200, {
+                    'status': review_response.value.status, 'error': review_result.get('error'),
+                }
+                assert review_result.get('redirect') == question_path, review_result.get('redirect')
+                expect(page.locator('.workspace-page')).to_contain_text('已审核')
+                assert db(lambda: EntityRecord.objects.get(pk=new_question.pk).published_revision_id) == new_question.head_revision_id
+                page.goto(origin + app_url(f'/prints/?household={house.pk}'))
+                open_disclosure('制作练习与其他文档')
+                page.locator('#id_household').select_option(str(house.pk))
+                page.locator('#id_title').fill('整合验收无提示练习')
+                page.locator('#id_purpose').select_option('independent_practice')
+                page.locator(f'input[name=questions][value="{new_question.head_revision_id}"]').check()
+                page.get_by_role('button', name='生成 PDF／Word', exact=True).click()
+                expect(page.locator('.workspace-page h1')).to_have_text('整合验收无提示练习')
+                snapshot_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
+                snapshot_id = int(snapshot_path.rstrip('/').split('/')[-1])
+                from app.printing.models import ExportSnapshot
+                practice = db(lambda: ExportSnapshot.objects.get(pk=snapshot_id))
+                assert practice.provenance['answers'] == []
+                with page.expect_response(lambda r: '/document.pdf/' in r.url and 'preview=1' in r.url) as practice_pdf:
+                    page.get_by_role('link', name='预览 PDF', exact=True).click()
+                assert practice_pdf.value.status == 200
+                expect(page.get_by_role('dialog').locator('iframe')).to_be_visible()
+                page.get_by_role('button', name='关闭预览', exact=True).click()
+                with page.expect_download() as download:
+                    page.get_by_role('link', name='下载 Word', exact=True).click()
+                assert download.value.suggested_filename.endswith('.docx')
+                settle_visuals()
+                page.screenshot(path=str(output / 'practice-upload-question-export.png'), full_page=True)
+                checks.append('uploaded-source-new-question-review-no-answer-pdf-and-word')
+
+                page.goto(origin + app_url(f'/learning/profile/{f["learner"]}/attempt/new/'))
+                for field, value in [('question_id',f['question']), ('attempt_kind','retest'),
+                    ('source_kind','independent_answer'), ('independence','confirmed_independent'),
+                    ('prompt_status','none_confirmed'), ('actual_date_state','known'), ('legibility','readable')]:
+                    page.locator('#id_' + field).select_option(value)
+                page.locator('#id_actual_date').fill('2026-10-05')
+                page.locator('#id_answer_text').fill('8 厘米 · 本机合成复测')
+                page.locator('#id_authorship_basis').fill('仅为合成验收：采用已明确确认的合成观察')
+                page.locator('input[name=observation_values]').first.check()
+                page.locator('#id_previous_attempt_id').select_option(f['attempt'])
+                page.get_by_role('button', name='保存作答记录', exact=True).click()
+                open_disclosure('回看这次作答的修改历史')
+                expect(page.locator('.history-list')).to_contain_text('修订 1')
+                retest_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
+                retest_id = retest_path.rstrip('/').split('/')[-1]
+                retest = db(lambda: EntityRecord.objects.get(kind='attempt', stable_id=retest_id))
+                assert retest.pk != attempt_entity.pk
+                assert db(lambda: EntityRecord.objects.filter(household_id=house.pk, kind='attempt').count()) == attempt_count + 1
+                page.goto(origin + app_url(f'/study/learner/{f["learner_entity"]}/schedule/new/'))
+                page.locator('#id_question_revision_id').select_option(str(f['question_revision']))
+                page.locator('#id_due_date').fill('2026-10-05')
+                page.locator('#id_goal').fill('合成复测：检查乘法与单位')
+                page.locator('#id_prompt_plan').fill('先独立完成，再核对')
+                page.locator('#id_reason').fill('本机整合流程验收')
+                page.get_by_role('button', name='保存计划', exact=True).click()
+                expect(page.locator('.study-events')).to_be_visible()
+                schedule_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
+                new_schedule_pk = int(schedule_path.rstrip('/').split('/')[-1])
+                page.locator('#id_action').select_option('completed')
+                page.locator('#id_attempt_revision_id').select_option(str(retest.head_revision_id))
+                page.locator('#id_reason').fill('绑定刚保存的合成复测，不推断掌握')
+                page.get_by_role('button', name='追加计划事件', exact=True).click()
+                expect(page.locator('.study-events').last).to_contain_text('已完成复习')
+                from app.study.models import ScheduleRevision
+                events = db(lambda: list(ScheduleRevision.objects.filter(schedule_id=new_schedule_pk).order_by('revision_no')))
+                assert [event.action for event in events] == ['planned', 'completed']
+                assert events[-1].completed_attempt_revision_id == retest.head_revision_id
+                page.goto(origin + app_url(f'/study/learner/{f["learner_entity"]}/report/'))
+                expect(page.locator('.report-attempts')).to_contain_text('8 厘米 · 本机合成复测')
+                settle_visuals()
+                page.screenshot(path=str(output / 'retest-plan-report.png'), full_page=True)
+                checks.append('new-retest-plan-bind-real-attempt-and-report-preserve-history')
+                # Capture the seven normal entry pages at both widths, with
+                # secondary areas left closed as an actual user first sees them.
+                for width in (1440, 390):
+                    page.set_viewport_size({'width': width, 'height': 1000 if width == 1440 else 844})
+                    for view in ('overview', 'materials', 'knowledge', 'learning', 'progress', 'documents', 'settings'):
+                        page.goto(origin + app_url(view=view) + '&learner=' + f['learner'])
+                        if view == 'overview':
+                            expect(page.get_by_role('heading', name='合成学习者，今天从哪里开始？')).to_be_visible()
+                        elif view == 'materials':
+                            expect(page.get_by_role('button', name=re.compile('合成容器验收 PC 资料'))).to_be_visible()
+                            expect(page.get_by_text('正在读取当前家庭的资料…', exact=True)).not_to_be_visible()
+                        elif view == 'progress':
+                            expect(page.get_by_role('heading', name='复测计划', exact=True)).to_be_visible()
+                            previous_plans = page.locator('details').filter(has=page.locator('summary', has_text='已完成与取消的计划'))
+                            expect(previous_plans).not_to_have_attribute('open', '')
+                            expect(page.get_by_text('合成复测：检查乘法与单位', exact=False)).not_to_be_visible()
+                            open_disclosure('已完成与取消的计划')
+                            expect(page.get_by_text('复测目标：合成复测：检查乘法与单位', exact=True)).to_be_visible()
+                            previous_plans.locator('summary').first.click()
+                        elif view == 'documents':
+                            expect(page.get_by_role('button', name='查看讲解文档', exact=True)).to_be_visible()
+                        else:
+                            expect(page.locator('.workspace-page h1')).to_be_visible()
+                            if view == 'settings':
+                                create_account = page.locator('.workspace-page details').filter(has=page.locator('summary', has_text='创建家庭成员登录账号'))
+                                expect(create_account).not_to_have_attribute('open', '')
+                        settle_visuals()
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), (view, width)
+                        page.screenshot(path=str(output / f'entry-{view}-{width}.png'), full_page=True)
+                        if view == 'documents':
+                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
+                            page.get_by_role('button', name='查看讲解文档', exact=True).click()
+                            expect(page.get_by_role('button', name='生成文件', exact=True)).to_have_attribute('aria-pressed', 'true')
+                            expect(page.locator('#solution-editor-panel')).not_to_be_visible()
+                            expect(page.locator('#solution-outputs-panel article').first).to_be_visible()
+                            settle_visuals()
+                            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), ('solution-outputs', width)
+                            page.screenshot(path=str(output / f'solution-viewing-{width}.png'), full_page=True)
+                            page.goto(origin + app_url(view='documents'))
+                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
+                            open_disclosure('家长制作配套练习')
+                            page.get_by_role('button', name='制作五册资料', exact=True).click()
+                            expect(page.locator('.workspace-page h1')).to_contain_text('五册')
+                            assert dict(parse_qsl(urlsplit(page.url).query))['screen'].startswith(f'/prints/materials/{material.pk}/five-books/')
+                    if width == 390:
+                        page.goto(origin + app_url('/__app__/solutions/' + str(material.pk) + '/', view='documents'))
+                        page.get_by_role('button', name='编辑讲解', exact=True).click()
+                        expect(page.get_by_label('题目标题', exact=True)).to_be_visible()
+                        settle_visuals()
+                        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2')
+                        page.screenshot(path=str(output / 'solution-editor-390.png'), full_page=True)
+                page.set_viewport_size({'width': 1440, 'height': 1000})
+                checks.append('seven-entry-pages-and-document-viewing-1440-and-390')
+                page.goto(origin + app_url(view='settings'))
+                open_disclosure('创建家庭成员登录账号')
+                page.locator('#id_create_username').fill(actor.username)
+                page.locator('#id_create_password1').fill('synthetic-validation-only-123!')
+                page.locator('#id_create_password2').fill('synthetic-validation-only-123!')
+                user_count = db(lambda: get_user_model().objects.count())
+                with page.expect_response(lambda r: r.request.method == 'POST' and '/api/v1/workspace/submit/' in r.url) as account_error:
+                    page.get_by_role('button', name='创建账号并加入家庭', exact=True).click()
+                assert account_error.value.status == 400
+                expect(page.locator('.workspace-page .errorlist').first).to_be_visible()
+                expect(page.locator('#id_create_username')).to_be_visible()
+                assert db(lambda: get_user_model().objects.count()) == user_count
+                checks.append('settings-account-error-opens-required-form-without-new-account')
                 # Empty family and viewer boundaries use actual sessions.
                 page.goto(origin + app_url(view='materials', household=second_house.pk))
                 expect(page.get_by_label('家庭', exact=True)).to_have_value(second_house.pk)
@@ -553,6 +816,7 @@ def main():
                 assert denied_post.status == 404  # Permission denials do not reveal private records.
                 checks.append('viewer-read-only-mutation-denied')
                 context.clear_cookies()
+                open_disclosure('家长协助', page.get_by_role('navigation', name='主导航'))
                 page.get_by_role('navigation', name='主导航').get_by_role('button', name='设置', exact=True).click()
                 expect(page.get_by_role('link', name='前往登录', exact=True)).to_be_visible()
                 page.get_by_role('link', name='前往登录', exact=True).click()

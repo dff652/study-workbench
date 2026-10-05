@@ -102,8 +102,15 @@ describe('ProgressWorkspace', () => {
   })
 
   it('keeps an unknown actual date separate from the schedule recorded time and hides writes from viewers', async () => {
+    const user = userEvent.setup()
     mountWorkspace('viewer')
     expect((await screen.findAllByText('计划与完成历史')).length).toBe(2)
+    const previousPlans = screen.getByText('已完成与取消的计划').closest('details') as HTMLDetailsElement
+    expect(previousPlans.open).toBe(false)
+    await user.click(screen.getByText('已完成与取消的计划'))
+    const histories = screen.getAllByText('计划与完成历史')
+    expect(histories.every((summary) => !(summary.closest('details') as HTMLDetailsElement).open)).toBe(true)
+    await user.click(histories[1])
     expect(screen.getByText('实际作答日期：未知 · 已关联真实作答。')).toBeTruthy()
     expect(screen.getByText('记录时间：2026-10-04T09:30:00+08:00')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '新增复测计划' })).toBeNull()

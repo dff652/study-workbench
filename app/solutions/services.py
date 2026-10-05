@@ -52,7 +52,23 @@ def stamp(row, content):
         "records": [[rid, revisions[rid].content_hash, revisions[rid].entity.head_revision_id,
                      revisions[rid].entity.published_revision_id] for rid in sorted(ids) if rid in revisions],
         "assets": [[str(asset.pk), asset.sha256] for asset in sorted(assets.values(), key=lambda item: str(item.pk)) if any(
-            figure["asset_id"] == str(asset.pk) for question in content["questions"] for figure in question["figures"])]}))
+            figure["asset_id"] == str(asset.pk) for question in content["questions"] for figure in schema.figures(question))]}))
+
+
+def require_current_links(row, content):
+    """Old revisions remain readable; new confirmation/output requires current evidence."""
+    from app.web.models import QuestionSource
+    _, revisions, _ = inputs(row)
+    related = set(QuestionSource.objects.filter(material=row).values_list("revision_id", flat=True))
+    for question in content["questions"]:
+        rid = question["question_revision_id"]
+        if rid is not None and rid not in related:
+            raise core.PersistenceError("source_changed", "关联题目不属于这份资料，请重新选择。")
+        linked = ([rid] if rid is not None else []) + [link["revision_id"] for link in question["links"]]
+        for revision_id in linked:
+            revision = revisions.get(revision_id)
+            if revision is None or not (revision.pk == revision.entity.head_revision_id == revision.entity.published_revision_id):
+                raise core.PersistenceError("source_changed", "关联题目或知识已更新、撤回或尚未确认，请核对并重新选择当前版本。")
 
 
 @transaction.atomic
@@ -93,6 +109,7 @@ def action(actor, material_id, *, action, expected_version, request_key, reason)
         raise core.PersistenceError("source_changed", "来源或知识版本已更新，请比较后保存新解析版本。")
     pages, revisions, assets = inputs(row)
     schema.validate(revision.content, pages, revisions, assets)
+    require_current_links(row, revision.content)
     if action == "confirm":
         confirmation = SolutionConfirmation.objects.create(revision=revision, author=actor, reason=reason)
         result = {"revision_id": revision.pk, "confirmation_id": confirmation.pk}

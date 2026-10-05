@@ -22,7 +22,7 @@ def prepare(request,material_id):
             if learner is not None:
                 try:learner=int(learner)
                 except ValueError:raise core.PersistenceError('invalid_input','请选择当前家庭的学习者。')
-            packet_id=packets.generate(request.user,material_id,learner_id=learner)
+            packet_id=packets.generate(request.user,material_id,learner_id=learner,evidence_scope=request.POST.get('evidence_scope','selected_learner_history'))
             return redirect('printing:packet',material_id=material_id,packet_id=packet_id)
     except ObjectDoesNotExist:raise Http404
     except (core.PersistenceError,ExportError) as exc:return _failure(request,exc)

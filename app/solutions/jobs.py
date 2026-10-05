@@ -43,6 +43,7 @@ def action(actor, output_id, *, action, expected_version, request_key, reason, c
     if action == "cancel" and row.state in {"queued", "running", "failed", "output_check"}:
         row.state = "cancelled"
     elif action == "retry" and row.state == "failed":
+        services.require_current_links(row.revision.material, row.revision.content)
         if row.revision.source_stamp != services.stamp(row.revision.material, row.revision.content):
             raise core.PersistenceError("source_changed", "来源已更新，请保存新版本后重新生成。")
         row.state, row.error_code, row.started_at = "queued", "", None
@@ -102,6 +103,7 @@ def execute_next():
     if claimed is None:
         return None
     try:
+        services.require_current_links(claimed.revision.material, claimed.revision.content)
         if claimed.revision.source_stamp != services.stamp(claimed.revision.material, claimed.revision.content):
             raise core.PersistenceError("source_changed", "来源已变化。")
         _, _, assets = services.inputs(claimed.revision.material)
@@ -109,6 +111,7 @@ def execute_next():
         with transaction.atomic():
             row = get(claimed.requested_by, claimed.pk, write=True)
             if row.state == "running" and row.version == claimed.version:
+                services.require_current_links(row.revision.material, row.revision.content)
                 if row.revision.source_stamp != services.stamp(row.revision.material, row.revision.content):
                     raise core.PersistenceError("source_changed", "来源已变化。")
                 row.result, row.state = result, "output_check"

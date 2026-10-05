@@ -4,6 +4,7 @@
 {% block content %}
   <nav class="breadcrumbs report-controls"><a href="{{ index_url }}">复习安排</a><span aria-hidden="true">/</span><span>学习证据报告</span><span class="button-row"><a class="secondary-button" href="{{ print_report_url }}">导出 PDF／Word</a></span></nav>
   <header class="report-heading"><p class="eyebrow">可追溯学习记录</p><h1>{{ learner.display_name }}的学习证据报告</h1><p>{{ learner.grade|default:"年级未填写" }} · 生成时间 {{ generated_at }}</p><p class="notice">报告呈现实际审核状态、每次作答版本和来源证据。未知、提示后、课堂记录或来源不足不计作独立成功，也不生成掌握分数。</p></header>
+  <p class="notice">记录范围：{% if material_title %}{{ material_title }} · 相关题目的历次记录{% else %}这位学习者的全部记录{% endif %}</p>
   <section class="panel"><h2>逐次作答</h2>
     {% if attempts %}<ol class="report-attempts">{% for attempt in attempts %}<li class="report-attempt">
       <h3>{{ attempt.question_text }}</h3>

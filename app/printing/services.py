@@ -317,23 +317,25 @@ def _export_blocks(actor,owner,title,purpose,blocks,provenance,source_hash,revis
 
 
 @transaction.atomic
-def export_evidence_report(actor,learner_entity_pk):
+def export_evidence_report(actor,learner_entity_pk,*,material_id=None):
     from app.study.services import evidence_report
     from app.web.learning_labels import label as learning_label, ATTEMPT_STATE_LABELS
     learner=EntityRecord.objects.get(pk=learner_entity_pk,kind='learner')
     owner=records.household(actor,learner.household_id,write=True)
-    report=evidence_report(actor,learner.pk)
+    report=evidence_report(actor,learner.pk,material_id=material_id)
     # Freeze real review projections and source references, not a mastery score.
     provenance={'report':report,'learner_entity_id':learner.pk}
     title='学习证据报告：'+report['learner']['display_name'][:30]
+    scope_label=('本资料题目相关历次记录：'+report['material_title']) if material_id else '该学习者全部历史记录'
     blocks=[Block('title',escape(title),'title'),Block('p',
-        '逐次记录实际审核状态。课堂、提示后、来源不明、空白和不清晰的作答分别保留；未知不推断为掌握。','instruction')]
+        escape(scope_label)+'。逐次记录实际审核状态。课堂、提示后、来源不明、空白和不清晰的作答分别保留；未知不推断为掌握。','instruction')]
+    attempt_labels = {row['attempt_id']: f'第 {index} 条记录' for index, row in enumerate(report['attempts'], 1)}
+    question_labels = {row['question_id']: row['question_text'][:100] for row in report['attempts']}
     for attempt in report['attempts']:
         blocks.append(Block('h',escape(attempt['question_text'][:120]),'assessment'))
-        fields=[('作答身份','attempt_id'),('作答版本','attempt_revision_id'),('题目版本','question_revision_id'),
-                ('作答状态','state'),('实际日期','actual_date'),('录入时间','recorded_at'),('来源类型','source_kind'),
+        fields=[('作答类型','attempt_kind'),('作答状态','state'),('实际日期','actual_date'),('录入时间','recorded_at'),('来源类型','source_kind'),
                 ('独立性','independence'),('提示情况','prompt_status'),('可读性','legibility')]
-        descriptions=[]
+        descriptions=[attempt_labels[attempt['attempt_id']], '题目第 '+str(attempt.get('question_revision_number') or '待核实')+' 版']
         for label,field in fields:
             value=attempt.get(field + '_label',attempt.get(field))
             if field=='state':value=learning_label(ATTEMPT_STATE_LABELS,value)
@@ -342,26 +344,26 @@ def export_evidence_report(actor,learner_entity_pk):
         details+='\n独立成功证据：'+('符合当前人工证据条件' if attempt['independent_success'] else '未确认')
         blocks.append(Block('small',escape(details).replace('\n','<br/>'),'assessment'))
         for assessment in attempt['assessments']:
-            blocks.append(Block('p',escape('评价 '+assessment['assessment_revision_id']+'；实际审核状态 '+assessment['review_state_label']),'assessment'))
+            blocks.append(Block('p',escape('评价第 '+str(assessment['revision_no'])+' 版；实际审核状态 '+assessment['review_state_label']),'assessment'))
             for dimension in assessment['dimensions']:
                 text=f"{dimension['dimension_label']}：{dimension['judgment_label']} / {dimension['basis_label']}\n{dimension['rationale']}"
                 if dimension['unknown_reason']:text+='\n未知原因：'+dimension['unknown_reason']
                 for source in dimension['sources']:
-                    text+='\n来源：'+source['image_id']+' / '+(source['region_revision_id'] or '整图')
+                    text+='\n来源：'+source['label']+' / '+('已选区域' if source['region_revision_id'] else '整图')
                 blocks.append(Block('small',escape(text).replace('\n','<br/>'),'assessment'))
     for label,key in [('已观察到的方法或过程','observed_correct_methods'),('证据不足或未知','insufficient_evidence'),
             ('重复错误证据','repeated_errors'),('已知实际日期间隔','known_actual_date_intervals')]:
         blocks.append(Block('h',label,'assessment'))
         for row in report[key]:
             if key=='known_actual_date_intervals':
-                text=f"{row['from_actual_date']} → {row['to_actual_date']}：间隔 {row['days']} 天；作答 {row['from_attempt_id']} → {row['to_attempt_id']}"
+                text=f"{row['from_actual_date']} → {row['to_actual_date']}：间隔 {row['days']} 天；{attempt_labels[row['from_attempt_id']]} → {attempt_labels[row['to_attempt_id']]}"
             elif key=='repeated_errors':
-                text=f"题目 {row['question_id']} · {row['dimension_label']} · {row['occurrence_count']} 次。"
-                text+='\n'+'\n'.join(f"作答 {item['attempt_id']} · 评价 {item['assessment_revision_id']} · {item['judgment_label']}" for item in row['evidence'])
+                text=f"{question_labels[row['question_id']]} · {row['dimension_label']} · {row['occurrence_count']} 次。"
+                text+='\n'+'\n'.join(f"{attempt_labels[item['attempt_id']]} · {item['judgment_label']}" for item in row['evidence'])
             elif key=='insufficient_evidence':
-                text=f"作答 {row['attempt_id']} · {row.get('dimension_label') or '整体'}：{row['reason']}"
+                text=f"{attempt_labels[row['attempt_id']]} · {row.get('dimension_label') or '整体'}：{row['reason']}"
             else:
-                text=f"{row['dimension_label']} · 作答 {row['attempt_id']} · 评价 {row['assessment_revision_id']}"
+                text=f"{row['dimension_label']} · {attempt_labels[row['attempt_id']]}"
             blocks.append(Block('small',escape(text).replace('\n','<br/>'),'assessment'))
         if not report[key]:blocks.append(Block('small','暂无符合条件的证据。','assessment'))
     source_hash=digest(canonical(provenance))

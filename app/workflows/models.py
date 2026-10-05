@@ -42,3 +42,17 @@ class WorkflowEvent(models.Model):
     class Meta:
         ordering = ("version",)
         constraints = [models.UniqueConstraint(fields=("job", "version"), name="swb_workflow_event_version")]
+
+
+class WorkspaceDraft(models.Model):
+    """Private, recoverable input; never a confirmed domain revision."""
+    household = models.ForeignKey("persistence.Household", on_delete=models.PROTECT)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    key = models.CharField(max_length=160)
+    version = models.PositiveIntegerField(default=1)
+    base_stamp = models.CharField(max_length=128, blank=True)
+    payload = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=("household", "actor", "key"), name="swb_workspace_draft_unique")]

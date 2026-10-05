@@ -207,10 +207,15 @@ def evidence_report(request,pk):
         learner=EntityRecord.objects.get(pk=pk,kind='learner')
         with transaction.atomic():records.household(request.user,learner.household_id)
     except (ObjectDoesNotExist,core.PersistenceError):raise Http404
+    from app.web.models import MaterialSet
+    available_materials = list(MaterialSet.objects.filter(household_id=learner.household_id).order_by('title'))
+    selected_material = (request.POST if request.method=='POST' else request.GET).get('material') or None
+    if selected_material and not any(str(row.pk)==selected_material for row in available_materials):
+        raise Http404
     error=None
     if request.method=='POST':
         try:
-            exported=services.export_evidence_report(request.user,pk)
+            exported=services.export_evidence_report(request.user,pk,material_id=selected_material)
             return redirect('printing:snapshot',pk=exported.pk)
         except (core.PersistenceError,ExportError) as exc:error=str(exc)
-    return render(request,'printing/evidence_report.html',{'learner':learner,'error':error})
+    return render(request,'printing/evidence_report.html',{'learner':learner,'error':error,'materials':available_materials,'selected_material':selected_material})

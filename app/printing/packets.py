@@ -50,7 +50,7 @@ def readiness(actor, material_id):
     for entity in entities.select_related('head_revision','published_revision').order_by('pk'):
         revision=entity.head_revision
         number=QuestionSource.objects.filter(material=material,revision=revision).values_list('original_number',flat=True).first()
-        label=number or entity.stable_id
+        label=number or '未编号题目'
         entry={'question_id':entity.stable_id,'revision_id':revision.pk,'number':label,
             'text':revision.payload.get('working_text') or '题干待补','confirmed':False,'answer_ready':False}
         try:
@@ -100,7 +100,9 @@ def _unknown_report(actor,material,revision_ids):
 
 
 @transaction.atomic
-def generate(actor,material_id,*,learner_id=None):
+def generate(actor,material_id,*,learner_id=None,evidence_scope="selected_learner_history"):
+    if evidence_scope not in ('material_questions','selected_learner_history'):
+        raise core.PersistenceError('invalid_input','请选择学习证据范围。')
     state=readiness(actor,material_id)
     material=state['material']
     records.household(actor,material.household_id,write=True)
@@ -113,7 +115,7 @@ def generate(actor,material_id,*,learner_id=None):
     books=[]
     for purpose,label in BOOKS:
         if purpose=='evidence_report':
-            snapshot=services.export_evidence_report(actor,learner.pk) if learner else _unknown_report(actor,material,revision_ids)
+            snapshot=services.export_evidence_report(actor,learner.pk,material_id=material.pk if evidence_scope=='material_questions' else None) if learner else _unknown_report(actor,material,revision_ids)
         else:
             snapshot=services.export_questions(actor,material.household_id,revision_ids,
                 title=material.title[:110]+' · '+label,purpose=purpose,_packet=True)
@@ -123,7 +125,7 @@ def generate(actor,material_id,*,learner_id=None):
         books.append({'purpose':purpose,'label':label,'snapshot_id':snapshot.pk,'export_id':snapshot.export_id,'files':files})
     manifest={'schema_version':SCHEMA,'material_id':str(material.pk),'household_id':str(material.household_id),
         'question_revisions':revision_ids,'learner_id':learner.pk if learner else None,
-        'evidence_scope':'selected_learner_history' if learner else 'not_recorded',
+        'evidence_scope':evidence_scope if learner else 'not_recorded',
         'content_gaps':state['content_gaps'],'release_state':'layout_check_required','books':books}
     if state['diagram_revisions']:
         manifest['diagram_revisions'] = state['diagram_revisions']

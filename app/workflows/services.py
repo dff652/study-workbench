@@ -44,7 +44,7 @@ def _event(job, actor, action, details=None, *, initial=False):
 
 
 @transaction.atomic
-def create(actor, material_id, *, request_key, proposal=None, learner_id=None):
+def create(actor, material_id, *, request_key, proposal=None, learner_id=None, evidence_scope="selected_learner_history"):
     material = materials._material(actor, material_id, write=True)
     request_key = materials._text(request_key, 160)
     if learner_id is not None:
@@ -52,7 +52,13 @@ def create(actor, material_id, *, request_key, proposal=None, learner_id=None):
     value = proposal if proposal is not None else {"schema_version": exchange.SCHEMA, "sources": [], "records": []}
     if proposal is not None:
         exchange.validate(value, {str(page.pk): page for page in material.pages.select_related("image")})
-    fingerprint = digest(canonical({"input": value, "learner_id": learner_id, "actor": actor.pk}))
+    if evidence_scope not in ("material_questions", "selected_learner_history"):
+        raise core.PersistenceError("invalid_input", "请选择学习证据范围。")
+    identity = {"input": value, "learner_id": learner_id, "actor": actor.pk}
+    # Preserve fingerprints for old callers using the established all-history default.
+    if evidence_scope != "selected_learner_history":
+        identity["evidence_scope"] = evidence_scope
+    fingerprint = digest(canonical(identity))
     previous = WorkflowJob.objects.filter(material=material, request_key=request_key).first()
     if previous:
         if previous.fingerprint != fingerprint:
@@ -60,7 +66,7 @@ def create(actor, material_id, *, request_key, proposal=None, learner_id=None):
         return previous
     job = WorkflowJob.objects.create(material=material, created_by=actor, request_key=request_key,
         fingerprint=fingerprint, input=value, source_stamp=stamp(material),
-        state="needs_review" if value["records"] else "ready", result={"learner_id": learner_id})
+        state="needs_review" if value["records"] else "ready", result={"learner_id": learner_id, "evidence_scope": evidence_scope})
     _event(job, actor, "created", {"record_count": len(value["records"]), "ai_requested": False}, initial=True)
     return job
 
@@ -162,7 +168,7 @@ def execute_next():
             _verify_originals(job.material)
             learner = job.result.get("learner_id")
             learner_pk = EntityRecord.objects.get(household=job.material.household, kind="learner", stable_id=learner).pk if learner else None
-            packet_id = packets.generate(job.created_by, job.material_id, learner_id=learner_pk)
+            packet_id = packets.generate(job.created_by, job.material_id, learner_id=learner_pk, evidence_scope=job.result.get("evidence_scope", "selected_learner_history"))
             current.refresh_from_db()
             # Completion commits only for the exact claim; a late worker cannot revive cancellation.
             if current.state == "running" and current.version == job.version:

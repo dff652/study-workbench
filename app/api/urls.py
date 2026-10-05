@@ -4,11 +4,13 @@ from . import workflow_views as workflow
 from . import progress_views as progress
 from . import content_views as content
 from . import preparation_views as preparation
-from . import workspace
+from . import workspace, drafts
 from . import solution_views as solutions
 
 app_name = "api"
 urlpatterns = [
+    path("drafts/<path:key>/", drafts.detail, name="draft_detail"),
+    path("draft-save/<path:key>/", drafts.save, name="draft_save"),
     path("solutions/formula-preview/", solutions.formula_preview, name="solution_formula_preview"),
     path("materials/<uuid:material_id>/solutions/history/", solutions.history, name="solution_history"),
     path("materials/<uuid:material_id>/solutions/outputs/", solutions.outputs, name="solution_outputs"),

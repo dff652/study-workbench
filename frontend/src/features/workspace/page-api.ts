@@ -109,7 +109,7 @@ function normalizePageScope(value: unknown): WorkspacePageScope | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
   const scope = value as Record<string, unknown>
   if (typeof scope.household_id !== 'string' || !scope.household_id.trim()
-    || typeof scope.learner_id !== 'string' || !scope.learner_id.trim()) return null
+    || typeof scope.learner_id !== 'string') return null
   return { household_id: scope.household_id.trim(), learner_id: scope.learner_id.trim() }
 }
 

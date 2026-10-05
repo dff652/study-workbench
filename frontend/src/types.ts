@@ -214,6 +214,10 @@ export type MaterialListResponse = {
   schema_version: 'swb.api.v1'
   items: MaterialRow[]
   total: number
+  page?: number
+  page_size?: number
+  has_next?: boolean
+  query?: string
 }
 
 export type ProgressMaterial = {
@@ -639,13 +643,25 @@ export type SolutionContent = {
   lectures: Array<{ id: string; title: string }>; questions: SolutionQuestion[]
   outputs: Record<'per_question' | 'per_lecture' | 'combined', Array<'pdf' | 'docx'>>
 }
+export type SolutionFigure = SolutionQuestion['figures'][number]
+export type SolutionStep = {
+  id: string; text: string; formula: string | null
+  figure: SolutionFigure | null; new_page: boolean
+}
+export type StructuredSolutionQuestion = Omit<SolutionQuestion, 'steps'> & {
+  steps: SolutionStep[]; alternative_steps: SolutionStep[]
+}
+export type StructuredSolutionContent = Omit<SolutionContent, 'schema_version' | 'questions'> & {
+  schema_version: 'swb.solution.v2'; questions: StructuredSolutionQuestion[]
+}
+export type AnySolutionContent = SolutionContent | StructuredSolutionContent
 export type SolutionAsset = {
   id: string; kind: 'source_crop' | 'source_image' | 'auxiliary'; label: string; basis: string
   source: SolutionSource | null; width: number; height: number; url: string
 }
 export type SolutionRevision = {
   id: number; version: number; created_at: string; author: string; reason: string
-  content: SolutionContent; confirmed: boolean; gaps: Array<{ question_id: string; message: string }>
+  content: AnySolutionContent; confirmed: boolean; gaps: Array<{ question_id: string; message: string }>
 }
 export type SolutionOutput = {
   id: string; revision_id: number; revision_version: number; version: number
@@ -657,13 +673,14 @@ export type SolutionOutput = {
 }
 export type SolutionWorkspaceResponse = {
   schema_version: 'swb.api.v1'; material: { id: string; title: string }; writable: boolean
-  revision: SolutionRevision | null; initial_content: SolutionContent
+  revision: SolutionRevision | null; initial_content: AnySolutionContent
+  source_stamp?: string
   history: Array<Omit<SolutionRevision, 'content' | 'gaps'>>; outputs: SolutionOutput[]
   history_next_before?: number | null; output_next_before?: string | null
   assets: SolutionAsset[]
   pages: Array<{ id: string; label: string; width: number; height: number; preview_url: string; detail_url: string }>
   questions: Array<{ revision_id: string; label: string; statement: string; sources: SolutionSource[]; detail_url: string }>
-  nodes: Array<{ revision_id: string; kind: 'knowledge' | 'method' | 'question_type'; label: string; detail_url: string }>
+  nodes: Array<{ revision_id: string; kind: 'knowledge' | 'method' | 'question_type'; label: string; detail_url: string; selectable?: boolean }>
 }
 export type SolutionHistoryResponse = {
   schema_version: 'swb.api.v1'; history: SolutionWorkspaceResponse['history']
@@ -672,7 +689,7 @@ export type SolutionHistoryResponse = {
 export type SolutionOutputsResponse = {
   schema_version: 'swb.api.v1'; outputs: SolutionOutput[]; output_next_before: string | null
 }
-export type SaveSolutionInput = { expected_version: number; request_key: string; content: SolutionContent; reason: string }
+export type SaveSolutionInput = { expected_version: number; request_key: string; content: AnySolutionContent; reason: string }
 export type SolutionActionInput = {
   action: 'confirm' | 'generate'; expected_version: number; request_key: string; reason: string
 }

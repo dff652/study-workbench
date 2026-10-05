@@ -9,6 +9,7 @@
 - [Web 体验改进验收](reviews/web-ux-20261005.md)：当前候选的实际测试、浏览器与独立复核进展，区分真实试用和运行交付。
 - [Web 第一期范围与交付门槛](web-phase1-release-20261005.md)：第一期完整 Web 产品、第二期手机端，以及工程／运行／真实试用的完成条件。
 - [本轮整合源码交付 review](reviews/web-handoff-20261005.md)：提交范围、输入一致性、阶段文档及 push／PR 门槛。
+- [36 Web 体验改版部署验收](reviews/web-ux-deployment-20261005.md)：当前已审本地运行身份、前后恢复、实际 HTTPS 与未验边界。
 - [36 Web 整合部署验收](reviews/web-deployment-20261005.md)：前后配套恢复、迁移、实际 HTTPS 与数据保留。
 - [真实家庭 Web 小批次](web-family-trial-20261005.md)：真实资料、学习者、草稿、文档、作答与复测的实际反馈条件。
 - [PC 使用说明](pc-usage.md)：从照片、原图对照解析到真实作答／复测与下载。

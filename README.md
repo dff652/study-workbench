@@ -25,7 +25,7 @@
 
 ## 验收证据
 
-2026-10-05，新的 Web 体验候选已实现常显导航、紧凑上下文、宽屏工作区、Tab 和列表／详情。主代理本机测试与浏览器验收通过，首轮表单竞态修复后的独立第二轮 PASS，见 [体验验收](docs/reviews/web-ux-20261005.md)。源码已本地提交为 `2a605c3`，配套文档 `77eea51` 与本地交付独立 review 已 PASS，见 [交付记录](docs/reviews/web-ux-handoff-20261005.md)。目标服务尚未更新；真实家庭任务反馈仍待取得。
+2026-10-05，新的 Web 体验候选已实现常显导航、紧凑上下文、宽屏工作区、Tab 和列表／详情。主代理本机测试与浏览器验收通过，首轮表单竞态修复后的独立第二轮 PASS，见 [体验验收](docs/reviews/web-ux-20261005.md)。源码已本地提交为 `2a605c3`，配套文档 `77eea51` 与本地交付独立 review 已 PASS，见 [交付记录](docs/reviews/web-ux-handoff-20261005.md)。36 已配套备份、前后空实例恢复并升级到 `bed16d3`，主代理 32 项运维及加载完成后的 23 组实际 HTTPS 浏览器检查通过，独立运行复核待登记，见 [UX 运行验收](docs/reviews/web-ux-deployment-20261005.md)。真实家庭任务反馈仍待取得。
 
 此前整合版加入私人草稿、分步解析、全资料检索，主代理验收完成，独立第二轮复核 PASS。下表保留该版历史结果；源码交付与运行状态分别见 [DEV_STATE](DEV_STATE.md) 和 [整合验收](docs/reviews/pc-integration-20261005.md)。
 
@@ -38,7 +38,7 @@
 
 [本轮整合验收](docs/reviews/pc-integration-20261005.md) · [整合前 PC 基线](docs/pc-acceptance-20261005.md)。不同轮次和专项结果分别记录，不相加为一次全套测试。
 
-36 已备份、恢复演练并升级到整合源码 `66e7fb2`，32 项运维及 18 组实际 HTTPS 浏览器检查通过，原记录、文件和恢复点保持；详见 [运行验收](docs/reviews/web-deployment-20261005.md)。[真实家庭 Web 小批次](docs/web-family-trial-20261005.md)仍待实际操作反馈。
+此前 36 已备份、恢复演练并升级到整合源码 `66e7fb2`，32 项运维及 18 组实际 HTTPS 浏览器检查通过，原记录、文件和恢复点保持；详见 [运行验收](docs/reviews/web-deployment-20261005.md)。[真实家庭 Web 小批次](docs/web-family-trial-20261005.md)仍待实际操作反馈。
 
 ## 能做什么
 

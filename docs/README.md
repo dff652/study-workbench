@@ -4,6 +4,9 @@
 
 ## 使用与当前交付
 
+- [Web 体验改进方案与任务清单](web-ux-improvement-plan-20261005.md)：导航／空间／任务交互／文案、改进顺序及新产品验收门槛。
+- [Web 体验实施契约](web-ux-implementation-contract-20261005.md)：公共组件、URL／输入保持、业务模板及三个 Luna6 任务的文件归属。
+- [Web 体验改进验收](reviews/web-ux-20261005.md)：当前候选的实际测试、浏览器与独立复核进展，区分真实试用和运行交付。
 - [Web 第一期范围与交付门槛](web-phase1-release-20261005.md)：第一期完整 Web 产品、第二期手机端，以及工程／运行／真实试用的完成条件。
 - [本轮整合源码交付 review](reviews/web-handoff-20261005.md)：提交范围、输入一致性、阶段文档及 push／PR 门槛。
 - [36 Web 整合部署验收](reviews/web-deployment-20261005.md)：前后配套恢复、迁移、实际 HTTPS 与数据保留。
@@ -67,3 +70,5 @@
 | [协作约定](../AGENTS.md) |
 | [虚构关系包](../tests/fixtures/domain/synthetic-v0.1.json) |
 | [requirements.txt](../requirements.txt) |
+
+- [Web 体验改版本地交付 review](reviews/web-ux-handoff-20261005.md)：源码／测试本地提交与配套文档交付，运行升级另行记录。

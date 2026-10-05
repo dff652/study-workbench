@@ -208,6 +208,7 @@ export type MaterialRow = {
   created_at: string
   material_url: string
   prepare_url: string
+  classification?: { subject: string; version: number }
 }
 
 export type MaterialListResponse = {
@@ -653,7 +654,7 @@ export type StructuredSolutionQuestion = Omit<SolutionQuestion, 'steps'> & {
   steps: SolutionStep[]; alternative_steps: SolutionStep[]
 }
 export type StructuredSolutionContent = Omit<SolutionContent, 'schema_version' | 'questions'> & {
-  schema_version: 'swb.solution.v2'; questions: StructuredSolutionQuestion[]
+  schema_version: 'swb.solution.v2' | 'swb.solution.v3'; school_subject?: string; questions: StructuredSolutionQuestion[]
 }
 export type AnySolutionContent = SolutionContent | StructuredSolutionContent
 export type SolutionAsset = {
@@ -673,13 +674,15 @@ export type SolutionOutput = {
   zip_url: string | null
 }
 export type SolutionWorkspaceResponse = {
-  schema_version: 'swb.api.v1'; material: { id: string; title: string }; writable: boolean
+  schema_version: 'swb.api.v1'; material: { id: string; title: string; household_id?: string }; writable: boolean
   revision: SolutionRevision | null; initial_content: AnySolutionContent
+  saved_revision?: SolutionRevision; saved_source_stamp?: string
+  command_result?: { revision_id: number; output_id?: string; confirmation_id?: number }
   source_stamp?: string
   history: Array<Omit<SolutionRevision, 'content' | 'gaps'>>; outputs: SolutionOutput[]
   history_next_before?: number | null; output_next_before?: string | null
   assets: SolutionAsset[]
-  pages: Array<{ id: string; label: string; width: number; height: number; preview_url: string; detail_url: string }>
+  pages: Array<{ id: string; label: string; position?: number; sha256?: string; width: number; height: number; preview_url: string; detail_url: string }>
   questions: Array<{ revision_id: string; label: string; statement: string; sources: SolutionSource[]; detail_url: string }>
   nodes: Array<{ revision_id: string; kind: 'knowledge' | 'method' | 'question_type'; label: string; detail_url: string; selectable?: boolean }>
 }

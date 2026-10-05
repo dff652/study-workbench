@@ -105,6 +105,49 @@ describe('App URL navigation', () => {
     expect(await screen.findAllByRole('combobox', { name: '学习者' })).toHaveLength(1)
   })
 
+  it('keeps the three document modes reachable and filters the knowledge launcher by subject', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=documents&household=home-1')
+    const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>练习准备</h1></main>' })
+    render(<App />)
+    const knowledge = await screen.findByRole('tab', { name: '知识点讲解' })
+    expect(screen.getByRole('tab', { name: '逐题讲解' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '五册与练习' })).toBeTruthy()
+    await user.click(knowledge)
+    const filter = await screen.findByRole('combobox', { name: '资料学科' })
+    await user.selectOptions(filter, 'english')
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => {
+      const url = new URL(String(input), window.location.origin)
+      return url.pathname === '/api/v1/materials/' && url.searchParams.get('subject') === 'english'
+    })).toBe(true))
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('knowledge')
+    expect(requestedPages.some((path) => path.startsWith('/__app__/'))).toBe(false)
+  })
+
+  it('opens the knowledge launcher from the index without requesting an app-only path as a native page', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=knowledge&household=home-1')
+    const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>知识目录</h1></main>' })
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: '整理知识点讲解' }))
+    expect(await screen.findByRole('heading', { name: '知识点讲解' })).toBeTruthy()
+    expect(new URLSearchParams(window.location.search).get('screen')).toBe('/__app__/knowledge-explanations/')
+    expect(requestedPages.some((path) => path.startsWith('/__app__/'))).toBe(false)
+  })
+
+  it('restores a material subject filter and clears it when switching household', async () => {
+    const user = userEvent.setup()
+    window.history.replaceState({}, '', '/app/?view=materials&household=home-1&subject=physics')
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    const filter = await screen.findByRole('combobox', { name: '资料学科' })
+    expect((filter as HTMLSelectElement).value).toBe('physics')
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => new URL(String(input), window.location.origin).searchParams.get('subject') === 'physics')).toBe(true))
+    await user.selectOptions(screen.getByRole('combobox', { name: '家庭' }), 'home-2')
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('subject')).toBe(false))
+    expect((await screen.findByRole('combobox', { name: '资料学科' }) as HTMLSelectElement).value).toBe('')
+  })
+
   it('clears a former household material location before loading a replacement household', async () => {
     window.history.replaceState({}, '', '/app/?view=materials&household=former-home&material=former-material&q=former-query&page=3')
     installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })

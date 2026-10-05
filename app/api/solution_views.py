@@ -38,15 +38,16 @@ def outputs(request, material_id):
 @api("POST")
 def save(request, material_id):
     value = body(request, {"content", "expected_version", "request_key", "reason"})
-    services.save(request.user, material_id, **value)
-    return queries.workspace(request.user, material_id)
+    saved = services.save(request.user, material_id, **value)
+    return {**queries.workspace(request.user, material_id),
+        "saved_revision": queries.revision_row(saved), "saved_source_stamp": saved.source_stamp}
 
 
 @api("POST")
 def action(request, material_id):
     value = body(request, {"action", "expected_version", "request_key", "reason"})
-    services.action(request.user, material_id, **value)
-    return queries.workspace(request.user, material_id)
+    result = services.action(request.user, material_id, **value)
+    return {**queries.workspace(request.user, material_id), "command_result": result}
 
 
 @api()
@@ -82,7 +83,7 @@ def asset(request, asset_id):
 def output_action(request, output_id):
     value = body(request, {"action", "expected_version", "request_key", "reason", "checks"})
     row = jobs.action(request.user, output_id, **value)
-    result = queries.workspace(request.user, row.revision.material_id)
+    result = queries.workspace(request.user, row.revision.material_id, row.revision.mode)
     if not any(item["id"] == str(row.pk) for item in result["outputs"]):
         result["outputs"].append(queries.output_row(row))
     return result
@@ -108,5 +109,6 @@ def output_zip(request, output_id):
     if row.state not in {"output_check", "complete"} or not row.result.get("documents"):
         from django.http import Http404
         raise Http404
+    prefix = "knowledge" if row.revision.mode == "knowledge" else "solutions"
     return FileResponse(rendering.archive(row), content_type="application/zip", as_attachment=True,
-                        filename=f"solutions-v{row.revision.version}.zip")
+                        filename=f"{prefix}-v{row.revision.version}.zip")

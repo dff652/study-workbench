@@ -356,11 +356,18 @@ def models_Q_primary_or_aux(revision_ids, *, role=None):
     return query
 
 
-def _material_question_revision_ids(household_id, material_id, current_revision_ids):
-    source_rows = QuestionSource.objects.filter(material_id=material_id,
+def _material_question_revision_ids(household_id, material_id, current_revision_ids, *, subject=None):
+    source_rows = QuestionSource.objects.filter(
         material__household_id=household_id,
         revision__entity__household_id=household_id,
-        revision__entity__kind="question").values_list("revision_id", "sources")
+        revision__entity__kind="question")
+    if material_id is not None:
+        source_rows = source_rows.filter(material_id=material_id)
+    if subject is not None:
+        from . import subjects
+        selected = subjects.classified(MaterialSet.objects.filter(household_id=household_id)).filter(school_subject=subject)
+        source_rows = source_rows.filter(material_id__in=selected.values("pk"))
+    source_rows = source_rows.values_list("revision_id", "sources")
     matched = set()
     region_revision_ids = set()
     for revision_id, sources in source_rows:
@@ -390,6 +397,16 @@ def index_data(actor, household_id, filters=None):
     nodes = _home_nodes(house.pk)
     questions = _home_question_rows(house.pk)
     filters = filters or {}
+    subject = filters.get("subject")
+    if subject:
+        from . import subjects
+        subjects.validate(subject)
+        current_ids = {row["revision"].pk for row in questions}
+        allowed = _material_question_revision_ids(house.pk, None, current_ids, subject=subject)
+        if subject == "unknown":
+            assigned = _material_question_revision_ids(house.pk, None, current_ids)
+            allowed.update(current_ids - assigned)
+        questions = [row for row in questions if row["revision"].pk in allowed]
     material_id = str(filters.get("material_id", "")).strip()
     if material_id:
         try:

@@ -315,10 +315,10 @@ def main():
                     assert target_key(response.json()['page']['url']) == target_key(path), name
                     expect(page.locator('.workspace-page')).to_have_count(1)
                     if name == 'prints':
-                        expect(page.get_by_role('tab', name='讲解文件', exact=True)).to_have_attribute('aria-selected', 'true')
+                        expect(page.get_by_role('tab', name='逐题讲解', exact=True)).to_have_attribute('aria-selected', 'true')
                         expect(page.locator('.workspace-page')).not_to_be_visible()
                         page.screenshot(path=str(output / 'document-home-default.png'), full_page=True)
-                        page.get_by_role('tab', name='练习与答案', exact=True).click()
+                        page.get_by_role('tab', name='五册与练习', exact=True).click()
                     expect(page.locator('.workspace-page')).to_be_visible()
                     expect(page.get_by_role('navigation', name='主导航')).to_be_visible()
                     expect(page.locator('.workspace-page h1'), name).to_have_count(1)
@@ -774,7 +774,7 @@ def main():
                 expect(page.locator('.workspace-page')).to_contain_text('已审核')
                 assert db(lambda: EntityRecord.objects.get(pk=new_question.pk).published_revision_id) == new_question.head_revision_id
                 page.goto(origin + app_url(f'/prints/?household={house.pk}'))
-                page.get_by_role('tab', name='练习与答案', exact=True).click()
+                page.get_by_role('tab', name='五册与练习', exact=True).click()
                 expect(page.locator('#id_household')).to_have_value(str(house.pk))
                 page.locator('#id_title').fill('整合验收无提示练习')
                 page.locator('#id_purpose').select_option('independent_practice')
@@ -938,7 +938,7 @@ def main():
                             assert heights and all(40 <= height <= 48.5 for height in heights), (view, width, heights)
                             row_measurements.append({'view':view, 'width':width, 'heights':heights})
                         if view == 'documents':
-                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
+                            page.get_by_role('combobox', name='选择资料', exact=True).select_option(str(material.pk))
                             page.get_by_role('button', name='查看讲解文档', exact=True).click()
                             expect(page.get_by_role('tab', name=re.compile('^生成文件'))).to_have_attribute('aria-selected', 'true')
                             expect(page.locator('#solution-editor-panel')).not_to_be_visible()
@@ -947,7 +947,7 @@ def main():
                             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), ('solution-outputs', width)
                             page.screenshot(path=str(output / f'solution-viewing-{width}.png'), full_page=True)
                             page.goto(origin + app_url(view='documents'))
-                            page.get_by_label(re.compile('^选择资料')).select_option(str(material.pk))
+                            page.get_by_role('combobox', name='选择资料', exact=True).select_option(str(material.pk))
                             page.get_by_role('button', name='制作五册资料', exact=True).click()
                             expect(page.locator('.workspace-page h1')).to_contain_text('五册')
                             assert dict(parse_qsl(urlsplit(page.url).query))['screen'].startswith(f'/prints/materials/{material.pk}/five-books/')

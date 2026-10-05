@@ -5,22 +5,24 @@ import { isUnauthorized } from '../../components/shared'
 import { Button } from '../../components/ui/button'
 import { WorkspaceHeading } from '../../components/workspace-tabs'
 import type { MaterialListResponse } from '../../types'
+import { SubjectSelect } from '../materials/subjects'
 
 type Remote = { status: 'loading' } | { status: 'loaded'; data: MaterialListResponse } | { status: 'error'; message: string }
 
-export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onMaterials, onUnauthorized }: { householdId: string; onOpen: (materialId: string) => void; onPrepareDocuments?: (materialId: string) => void; onMaterials: () => void; onUnauthorized: () => void }) {
+export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onMaterials, onUnauthorized, mode = 'solution' }: { householdId: string; onOpen: (materialId: string) => void; onPrepareDocuments?: (materialId: string) => void; onMaterials: () => void; onUnauthorized: () => void; mode?: 'solution' | 'knowledge' }) {
   const [remote, setRemote] = useState<Remote>({ status: 'loading' })
   const [materialId, setMaterialId] = useState('')
   const [searchText, setSearchText] = useState('')
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(1)
   const [retry, setRetry] = useState(0)
+  const [subject, setSubject] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
     let active = true
     setRemote({ status: 'loading' })
-    api.materials(householdId, controller.signal, { q: query, page, pageSize: 20 }).then((data) => {
+    api.materials(householdId, controller.signal, { q: query, subject, page, pageSize: 20 }).then((data) => {
       if (!active) return
       setRemote({ status: 'loaded', data })
       setMaterialId((current) => current && data.items.some((item) => item.id === current) ? current : data.items[0]?.id || '')
@@ -30,7 +32,7 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
       setRemote({ status: 'error', message: getErrorMessage(cause) })
     })
     return () => { active = false; controller.abort() }
-  }, [householdId, onUnauthorized, page, query, retry])
+  }, [householdId, onUnauthorized, page, query, retry, subject])
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -44,6 +46,7 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
       <WorkspaceHeading title='选择资料' />
       <form className='flex flex-wrap items-end gap-2 border-b pb-3' role='search' onSubmit={submitSearch}>
         <label className='min-w-[min(100%,16rem)] flex-1 text-sm font-medium'>按名称搜索<input type='search' placeholder='输入资料名称' className='mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm font-normal' value={searchText} onChange={(event) => setSearchText(event.target.value)} /></label>
+        <SubjectSelect value={subject} all label='资料学科' onChange={(value) => { setSubject(value); setPage(1) }} />
         <Button type='submit' variant='outline' size='sm'><Search className='size-4' aria-hidden='true' />搜索</Button>
         {query ? <Button type='button' variant='ghost' size='sm' onClick={() => { setSearchText(''); setPage(1); setQuery('') }}>清除</Button> : null}
       </form>
@@ -59,8 +62,8 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
           </div>
         </div>
         <div className='flex flex-wrap items-center gap-2'>
-          <Button type='button' size='sm' disabled={!materialId} onClick={() => onOpen(materialId)}>查看讲解文档</Button>
-          {onPrepareDocuments ? <Button type='button' size='sm' variant='outline' disabled={!materialId} onClick={() => onPrepareDocuments(materialId)}>制作五册资料</Button> : <p className='text-xs text-muted-foreground'>当前成员可查看讲解文档；制作练习册由家庭所有者或审核成员操作。</p>}
+          <Button type='button' size='sm' disabled={!materialId} onClick={() => onOpen(materialId)}>{mode === 'knowledge' ? '打开知识点讲解' : '查看讲解文档'}</Button>
+          {onPrepareDocuments ? <Button type='button' size='sm' variant='outline' disabled={!materialId} onClick={() => onPrepareDocuments(materialId)}>制作五册资料</Button> : <p className='text-xs text-muted-foreground'>{mode === 'knowledge' ? '选好资料后，对照原图整理知识结论、条件和完整依据。' : '当前成员可查看讲解文档；制作练习册由家庭所有者或审核成员操作。'}</p>}
         </div>
         <div className='flex flex-wrap items-center justify-between gap-2 border-t pt-3 text-sm text-muted-foreground'>
           <span>{remote.data.total} 份资料 · 第 {remote.data.page || page} 页</span>
@@ -70,6 +73,6 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
           </div>
         </div>
       </> : null}
-      {remote.status === 'loaded' && remote.data.items.length === 0 ? <div className='space-y-2 text-sm'><p>{query ? '没有找到符合名称的资料。' : '当前家庭还没有资料。新建资料并上传原图后即可整理解析。'}</p>{!query ? <Button type='button' size='sm' variant='outline' onClick={onMaterials}>前往资料整理</Button> : null}</div> : null}
+      {remote.status === 'loaded' && remote.data.items.length === 0 ? <div className='space-y-2 text-sm'><p>{query || subject ? '没有找到符合筛选条件的资料。' : '当前家庭还没有资料。新建资料并上传原图后即可整理讲解。'}</p>{!query && !subject ? <Button type='button' size='sm' variant='outline' onClick={onMaterials}>前往资料整理</Button> : null}</div> : null}
     </section>
 }

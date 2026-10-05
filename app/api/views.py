@@ -62,7 +62,7 @@ def api(method="GET"):
                 return error("not_found", "没有找到可访问的记录。", 404)
             except (core.PersistenceError, ExportError) as exc:
                 status = 404 if exc.code in {"not_found", "permission_denied", "unauthorized", "object_not_found"} else 409 if any(x in exc.code for x in ("stale", "conflict", "changed")) else 400
-                if isinstance(exc, core.PersistenceError) and exc.code in {"invalid_solution", "solution_incomplete", "stale_solution"}:
+                if isinstance(exc, core.PersistenceError) and exc.code in {"invalid_solution", "solution_incomplete", "stale_solution", "invalid_knowledge", "knowledge_incomplete", "invalid_subject", "stale_subject"}:
                     return error(exc.code, str(exc), status)
                 return error(exc.code, MESSAGES.get(exc.code, "记录已变化，请刷新。" if status == 409 else "无法完成请求，请核对输入或访问权限。"), status)
             except (ValueError, TypeError, SuspiciousOperation):

@@ -6,9 +6,17 @@ from . import content_views as content
 from . import preparation_views as preparation
 from . import workspace, drafts
 from . import solution_views as solutions
+from . import knowledge_views as knowledge
 
 app_name = "api"
 urlpatterns = [
+    path("materials/<uuid:material_id>/classification/", workflow.classification, name="material_classification"),
+    path("materials/<uuid:material_id>/classification/save/", workflow.classification_save, name="material_classification_save"),
+    path("materials/<uuid:material_id>/knowledge-explanations/", knowledge.workspace, name="knowledge_explanations"),
+    path("materials/<uuid:material_id>/knowledge-explanations/history/", knowledge.history, name="knowledge_explanation_history"),
+    path("materials/<uuid:material_id>/knowledge-explanations/outputs/", knowledge.outputs, name="knowledge_explanation_outputs"),
+    path("materials/<uuid:material_id>/knowledge-explanations/draft/", knowledge.save, name="knowledge_explanation_save"),
+    path("materials/<uuid:material_id>/knowledge-explanations/actions/", knowledge.action, name="knowledge_explanation_action"),
     path("drafts/<path:key>/", drafts.detail, name="draft_detail"),
     path("draft-save/<path:key>/", drafts.save, name="draft_save"),
     path("solutions/formula-preview/", solutions.formula_preview, name="solution_formula_preview"),

@@ -15,6 +15,7 @@ import { ContentWorkspace } from '../content/workspace'
 import { MaterialUploadQueue } from './page'
 import { usePrivateDraft } from '../drafts/use-private-draft'
 import type { PrivateDraft } from '../drafts/client'
+import { SubjectEditor, SubjectSelect } from './subjects'
 
 type Remote<T> = { status: 'loading' } | { status: 'loaded'; data: T } | { status: 'error'; message: string }
 const MATERIAL_PAGE_SIZE = 20
@@ -36,6 +37,7 @@ export function MaterialWorkspace({
   onTabChange,
   initialMaterialId,
   initialQuery,
+  initialSubject = '',
   initialPage = 1,
   onLocationChange,
 }: {
@@ -52,14 +54,18 @@ export function MaterialWorkspace({
   onTabChange?: (value: string) => void
   initialMaterialId?: string
   initialQuery?: string
+  initialSubject?: string
   initialPage?: number
-  onLocationChange?: (location: { materialId: string; query: string; page: number }) => void
+  onLocationChange?: (location: { materialId: string; query: string; page: number; subject?: string }) => void
 }) {
   const [materials, setMaterials] = useState<Remote<MaterialListResponse>>({ status: 'loading' })
   const [materialsScope, setMaterialsScope] = useState('')
   const [selection, setSelection] = useState({ householdId, materialId: initialMaterialId || '' })
   const [searchInput, setSearchInput] = useState(initialQuery || '')
   const [searchQuery, setSearchQuery] = useState(initialQuery || '')
+  const [subjectFilter, setSubjectFilter] = useState(initialSubject)
+  const [subjectDirty, setSubjectDirty] = useState(false)
+  const [subjectBusy, setSubjectBusy] = useState(false)
   const [searchPage, setSearchPage] = useState(() => normalizeMaterialPage(initialPage))
   const [searchHouseholdId, setSearchHouseholdId] = useState(householdId)
   const [detail, setDetail] = useState<Remote<MaterialDetailResponse>>({ status: 'loading' })
@@ -101,7 +107,7 @@ export function MaterialWorkspace({
   const visibleSearchInput = searchHouseholdId === householdId ? searchInput : ''
   const materialQuery = searchHouseholdId === householdId ? searchQuery : ''
   const materialPage = searchHouseholdId === householdId ? searchPage : 1
-  const materialListKey = JSON.stringify([householdId, materialQuery, materialPage])
+  const materialListKey = JSON.stringify([householdId, materialQuery, materialPage, subjectFilter])
   const currentMaterials: Remote<MaterialListResponse> = materialsScope === materialListKey ? materials : { status: 'loading' }
   const currentDetail: Remote<MaterialDetailResponse> = detailMaterialId === selectedMaterialId && detailHouseholdId === householdId && selectedMaterialId
     ? detail
@@ -134,7 +140,8 @@ export function MaterialWorkspace({
     setSearchInput(initialQuery || '')
     setSearchQuery(initialQuery || '')
     setSearchPage(normalizeMaterialPage(initialPage))
-  }, [householdId, initialPage, initialQuery])
+    setSubjectFilter(initialSubject)
+  }, [householdId, initialPage, initialQuery, initialSubject])
 
   useEffect(() => {
     if (!initialMaterialId && selectedMaterialId) {
@@ -153,7 +160,7 @@ export function MaterialWorkspace({
     let active = true
     setMaterials({ status: 'loading' })
     setMaterialsScope(`loading:${materialListKey}`)
-    api.materials(householdId, controller.signal, { q: materialQuery, page: materialPage, pageSize: MATERIAL_PAGE_SIZE }).then((data) => {
+    api.materials(householdId, controller.signal, { q: materialQuery, subject: subjectFilter, page: materialPage, pageSize: MATERIAL_PAGE_SIZE }).then((data) => {
       if (!active) return
       setMaterialsScope(materialListKey)
       setMaterials({ status: 'loaded', data })
@@ -170,7 +177,7 @@ export function MaterialWorkspace({
       setMaterials({ status: 'error', message: getErrorMessage(cause) })
     })
     return () => { active = false; controller.abort() }
-  }, [householdId, listRetry, materialListKey, materialQuery, materialPage, onUnauthorized])
+  }, [householdId, listRetry, materialListKey, materialQuery, materialPage, subjectFilter, onUnauthorized])
 
   useEffect(() => {
     setLearnerId(selectedLearnerId)
@@ -252,7 +259,7 @@ export function MaterialWorkspace({
   const selectMaterial = (materialId: string, skipUnsavedCheck = false, location?: { query: string; page: number }) => {
     if ((!skipUnsavedCheck && scopeBusy) || materialId === selectedMaterialId) return
     if (!skipUnsavedCheck && workflowSavePending && !window.confirm('当前整理任务设置尚未保存。切换资料后这些设置会丢失，仍要切换吗？')) return
-    if (!skipUnsavedCheck && contentDirty && !window.confirm('题面、答案或整页阅读记录还有未保存输入。切换资料会丢弃这些输入，仍要切换吗？')) return
+    if (!skipUnsavedCheck && (contentDirty || subjectDirty) && !window.confirm('题面、答案、学科或整页阅读记录还有未保存输入。切换资料会丢弃这些输入，仍要切换吗？')) return
     setSelection({ householdId, materialId })
     setDetail({ status: 'loading' })
     setDetailMaterialId('')
@@ -270,7 +277,7 @@ export function MaterialWorkspace({
     changeTab('pages')
   }
 
-  const scopeBusy = createBusy || uploadQueueBusy || workflowBusy || workflowActionBusy || contentBusy
+  const scopeBusy = createBusy || uploadQueueBusy || workflowBusy || workflowActionBusy || contentBusy || subjectBusy
 
   const searchMaterials = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -342,9 +349,9 @@ export function MaterialWorkspace({
   }, [workflowDraft.message])
 
   useEffect(() => {
-    onUnsavedChange(titleSavePending || workflowSavePending || createBusy || workflowBusy || contentDirty)
+    onUnsavedChange(titleSavePending || workflowSavePending || createBusy || workflowBusy || contentDirty || subjectDirty || subjectBusy)
     return () => onUnsavedChange(false)
-  }, [contentDirty, createBusy, onUnsavedChange, titleSavePending, workflowBusy, workflowSavePending])
+  }, [contentDirty, createBusy, onUnsavedChange, titleSavePending, workflowBusy, workflowSavePending, subjectDirty, subjectBusy])
 
   const createMaterial = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -433,6 +440,7 @@ export function MaterialWorkspace({
           <Button type='button' size='sm' onClick={() => setCreateFormHouseholdId(createOpen ? '' : householdId)} disabled={!canWrite || scopeBusy}><FilePlus2 className='size-4' aria-hidden='true' />新建资料</Button>
         </>} />
         <form className='flex flex-wrap items-end gap-2 border-b pb-3' role='search' onSubmit={searchMaterials}>
+          <SubjectSelect value={subjectFilter} all label='资料学科' disabled={scopeBusy} onChange={(subject) => { setSubjectFilter(subject); setSearchPage(1); onLocationChange?.({ materialId: selectedMaterialId, query: materialQuery, page: 1, subject }) }} />
           <label className='min-w-[min(100%,14rem)] flex-1 text-sm font-medium'>搜索资料 <HelpTip label='资料搜索帮助'>输入资料名称中的几个字，按“搜索”查看匹配资料；翻页会继续在当前家庭的全部资料中查找。</HelpTip><input type='search' disabled={scopeBusy} value={visibleSearchInput} onChange={(event) => updateSearchInput(event.target.value)} placeholder='输入资料名称' className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' /></label>
           <Button type='submit' variant='outline' disabled={scopeBusy}><Search className='size-4' aria-hidden='true' />搜索</Button>
           {materialQuery ? <Button type='button' variant='ghost' disabled={scopeBusy} onClick={() => { if (workflowSavePending && !window.confirm('当前整理任务设置尚未保存。清除搜索后可能切换资料并丢失这些设置，仍要继续吗？')) return; updateSearchInput(''); setSearchQuery(''); setSearchPage(1); onLocationChange?.({ materialId: selectedMaterialId, query: '', page: 1 }) }}>清除</Button> : null}
@@ -490,6 +498,7 @@ export function MaterialWorkspace({
           {currentDetail.status === 'loading' ? <LoadingState label='正在读取资料页、完整度和任务历史…' /> : null}
           {currentDetail.status === 'error' ? <RetryState message={currentDetail.message} onRetry={refreshDetail} title='无法读取资料详情' /> : null}
           {currentDetail.status === 'loaded' ? <>
+            <SubjectEditor key={selectedMaterialId} materialId={selectedMaterialId} csrfToken={csrfToken} writable={canWrite} onUnauthorized={onUnauthorized} onSaved={() => { refreshDetail(); setListRetry((value) => value + 1) }} onDirtyChange={setSubjectDirty} onBusyChange={setSubjectBusy} />
             {detailRefreshError ? <div role='alert' className='flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30'><span>资料暂时无法刷新：{detailRefreshError}。当前输入仍保留。</span><Button type='button' size='sm' variant='outline' onClick={() => refreshDetail()}>重试刷新资料</Button></div> : null}
             <PrivateDraftRecovery
               title='发现一份未完成的整理任务设置'

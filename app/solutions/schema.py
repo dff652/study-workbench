@@ -8,6 +8,7 @@ from app.persistence import services as core
 
 SCHEMA = "swb.solution.v1"
 STRUCTURED_SCHEMA = "swb.solution.v2"
+CLASSIFIED_SCHEMA = "swb.solution.v3"
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 RELATIONS = {"knowledge": "knowledge", "primary_method": "method",
              "secondary_method": "method", "question_type": "question_type"}
@@ -82,9 +83,13 @@ def figures(question):
 
 
 def validate(content, pages, revisions, assets):
-    fields(content, {"schema_version", "title", "lectures", "questions", "outputs"})
-    if content["schema_version"] not in (SCHEMA, STRUCTURED_SCHEMA) or len(canonical(content)) > 1024 * 1024:
+    classified = isinstance(content, dict) and content.get("schema_version") == CLASSIFIED_SCHEMA
+    fields(content, {"schema_version", "title", "lectures", "questions", "outputs"} | ({"school_subject"} if classified else set()))
+    if content["schema_version"] not in (SCHEMA, STRUCTURED_SCHEMA, CLASSIFIED_SCHEMA) or len(canonical(content)) > 1024 * 1024:
         fail("解析草稿版本不支持或内容超过 1 MiB。")
+    if classified:
+        from app.web.subjects import validate as validate_subject
+        validate_subject(content["school_subject"])
     text(content["title"], 160)
     array(content["lectures"])
     lectures = set()
@@ -97,7 +102,7 @@ def validate(content, pages, revisions, assets):
         lectures.add(lecture["id"])
     array(content["questions"])
     question_ids, part_ids, numbers, step_ids = set(), set(), set(), set()
-    structured = content["schema_version"] == STRUCTURED_SCHEMA
+    structured = content["schema_version"] in (STRUCTURED_SCHEMA, CLASSIFIED_SCHEMA)
     for question in content["questions"]:
         fields(question, QUESTION_KEYS | ({"alternative_steps"} if structured else set()))
         identifier(question["id"])

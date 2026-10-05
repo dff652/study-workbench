@@ -76,6 +76,31 @@ describe('usePrivateDraft write ordering', () => {
     expect(requests).toHaveLength(2)
   })
 
+  it('shares cleanup while its CAS write is pending instead of conflicting with itself', async () => {
+    const writes: Array<Record<string, unknown>> = []
+    let release!: (response: Response) => void
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method !== 'POST') return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      writes.push(JSON.parse(String(init.body)))
+      return new Promise<Response>((resolve) => { release = resolve })
+    }))
+    render(<Harness />)
+    await waitFor(() => expect(screen.getByRole('status').textContent).toBe(''))
+    fireEvent.click(screen.getByRole('button', { name: '清理草稿' }))
+    await waitFor(() => expect(writes).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: '清理草稿' }))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(writes).toHaveLength(1)
+    expect(writes[0]).toMatchObject({ expected_version: 0, payload: { cleared: true } })
+    release(draftResponse(1, { cleared: true }))
+    expect(await screen.findByText('私人草稿已清理。')).toBeTruthy()
+    // A later independent cleanup uses the acknowledged version.
+    fireEvent.click(screen.getByRole('button', { name: '清理草稿' }))
+    await waitFor(() => expect(writes).toHaveLength(2))
+    expect(writes[1].expected_version).toBe(1)
+    release(draftResponse(2, { cleared: true }))
+  })
+
   it('ignores a late response after the key changes and uses the new key version', async () => {
     const requests: Array<{ key: string; body: Record<string, unknown> }> = []
     let releaseFirst!: (response: Response) => void

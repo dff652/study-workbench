@@ -3,6 +3,7 @@ from django import forms
 from app.web.presentation import distinct_choices, household_choices
 
 from .forms import RequestForm, ReviewForm
+from .subjects import CHOICES as SUBJECT_CHOICES
 
 
 NODE_KINDS = (
@@ -15,6 +16,7 @@ NODE_KINDS = (
 class IndexForm(forms.Form):
     household_id = forms.ChoiceField(label="家庭", choices=())
     material_id = forms.ChoiceField(label="资料", required=False, choices=(("", "全部资料"),))
+    subject = forms.ChoiceField(label="题目资料学科", required=False, choices=(("", "全部学科"),) + SUBJECT_CHOICES)
     knowledge_id = forms.ChoiceField(label="知识点", required=False, choices=(("", "全部"),))
     method_id = forms.ChoiceField(label="方法", required=False, choices=(("", "全部"),))
     method_role = forms.ChoiceField(label="方法角色", required=False, choices=(

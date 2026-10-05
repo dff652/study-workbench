@@ -20,6 +20,7 @@ import type {
   SolutionWorkspaceResponse,
 } from '../../types'
 import { newSolutionId, newSolutionPart, newSolutionQuestion, newSolutionStep } from './model'
+import { SubjectSelect } from '../materials/subjects'
 
 const fieldClass = 'mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm'
 const textareaClass = `${fieldClass} min-h-20`
@@ -38,6 +39,7 @@ export function SolutionEditor({
   canWrite,
   onChange,
   onAssetsChanged,
+  onBusyChange,
   onUnauthorized,
 }: {
   content: StructuredSolutionContent
@@ -47,10 +49,15 @@ export function SolutionEditor({
   canWrite: boolean
   onChange: (content: StructuredSolutionContent) => void
   onAssetsChanged: (assets: SolutionAsset[]) => void
+  onBusyChange?: (busy: boolean) => void
   onUnauthorized: () => void
 }) {
   const [activeId, setActiveId] = useState(content.questions[0]?.id || '')
   const [busyAssetQuestions, setBusyAssetQuestions] = useState<Set<string>>(() => new Set())
+  useEffect(() => {
+    onBusyChange?.(busyAssetQuestions.size > 0)
+    return () => onBusyChange?.(false)
+  }, [busyAssetQuestions, onBusyChange])
   useEffect(() => {
     if (content.questions.some((question) => question.id === activeId)) return
     setActiveId(content.questions[0]?.id || '')
@@ -65,6 +72,7 @@ export function SolutionEditor({
     <Disclosure title='文档设置' description='文档标题、讲次和输出格式。解析草稿仍可保留未知项，题干、来源区域和答案的未知状态会原样保存。'>
       <div className='grid gap-5 lg:grid-cols-2'>
         <label className='text-sm font-medium'>文档标题<input className={fieldClass} maxLength={160} value={content.title} disabled={!canWrite} onChange={(event) => onChange({ ...content, title: event.target.value })} /></label>
+        <SubjectSelect value={content.school_subject || 'unknown'} disabled={!canWrite} onChange={(school_subject) => onChange({ ...content, schema_version: 'swb.solution.v3', school_subject })} />
         <div className='space-y-2'>
           <div className='flex items-center justify-between gap-2'><h3 className='text-sm font-semibold'>讲次</h3><Button type='button' size='sm' variant='outline' disabled={!canWrite} onClick={() => onChange({ ...content, lectures: [...content.lectures, { id: newSolutionId('lecture'), title: `第 ${content.lectures.length + 1} 讲` }] })}>添加讲次</Button></div>
           <div className='space-y-2'>
@@ -185,8 +193,8 @@ function QuestionEditor({
   const selectedSources = question.sources.filter((source) => source.page_id === sourcePageId)
   const imagePage: MaterialPage | undefined = sourcePage ? {
     id: sourcePage.id,
-    position: pages.findIndex((page) => page.id === sourcePage.id) + 1,
-    sha256: '',
+    position: sourcePage.position ?? pages.findIndex((page) => page.id === sourcePage.id) + 1,
+    sha256: sourcePage.sha256 || '',
     width: sourcePage.width,
     height: sourcePage.height,
     page_url: sourcePage.detail_url,
@@ -402,7 +410,7 @@ function SolutionStepEditor({ step, index, total, assets, disabled, csrfToken, o
   </fieldset>
 }
 
-function StepFormulaPreview({ stepId, stepNumber, value, csrfToken, disabled, onUnauthorized, onChange }: {
+export function StepFormulaPreview({ stepId, stepNumber, value, csrfToken, disabled, onUnauthorized, onChange }: {
   stepId: string
   stepNumber: number
   value: string
@@ -445,7 +453,7 @@ function StepFormulaPreview({ stepId, stepNumber, value, csrfToken, disabled, on
   </div>
 }
 
-function StringListEditor({ title, values, disabled, onChange }: { title: string; values: string[]; disabled: boolean; onChange: (values: string[]) => void }) {
+export function StringListEditor({ title, values, disabled, onChange }: { title: string; values: string[]; disabled: boolean; onChange: (values: string[]) => void }) {
   return <div className='space-y-2'>
     <div className='flex items-center justify-between gap-2'><h3 className='text-sm font-semibold'>{title}</h3><Button type='button' size='sm' variant='outline' disabled={disabled} onClick={() => onChange([...values, ''])}>添加</Button></div>
     {values.map((value, index) => <div key={index} className='flex items-start gap-2'><textarea aria-label={`${title} ${index + 1}`} className={textareaClass} disabled={disabled} value={value} onChange={(event) => onChange(values.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} /><Button type='button' size='sm' variant='outline' disabled={disabled} onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>移除</Button></div>)}
@@ -543,7 +551,7 @@ function FigureEditor({ figures, assets, disabled, onChange }: { figures: Soluti
   </section>
 }
 
-function CorrectionEditor({ corrections, disabled, onChange }: { corrections: SolutionQuestion['corrections']; disabled: boolean; onChange: (corrections: SolutionQuestion['corrections']) => void }) {
+export function CorrectionEditor({ corrections, disabled, onChange }: { corrections: SolutionQuestion['corrections']; disabled: boolean; onChange: (corrections: SolutionQuestion['corrections']) => void }) {
   const add = () => onChange([...corrections, { kind: 'draft_correction', original: '', replacement: '', basis: '' }])
   return <section className='space-y-2'>
     <div className='flex items-center justify-between gap-2'><h3 className='text-sm font-semibold'>订正记录</h3><Button type='button' size='sm' variant='outline' disabled={disabled} onClick={add}>添加订正</Button></div>
@@ -559,7 +567,7 @@ function CorrectionEditor({ corrections, disabled, onChange }: { corrections: So
   </section>
 }
 
-function AssetUploader({ question, pages, assets, materialId, csrfToken, disabled, onBusyChange, onAssetsChanged, onUnauthorized }: {
+export function AssetUploader({ question, pages, assets, materialId, csrfToken, disabled, onBusyChange, onAssetsChanged, onUnauthorized, sourceLabel = '本题' }: {
   question: Pick<StructuredSolutionQuestion, 'id' | 'sources'>
   pages: SolutionWorkspaceResponse['pages']
   assets: SolutionAsset[]
@@ -569,6 +577,7 @@ function AssetUploader({ question, pages, assets, materialId, csrfToken, disable
   onBusyChange: (busy: boolean) => void
   onAssetsChanged: (assets: SolutionAsset[]) => void
   onUnauthorized: () => void
+  sourceLabel?: string
 }) {
   const [kind, setKind] = useState<SolutionAsset['kind']>('auxiliary')
   const [file, setFile] = useState<File | null>(null)
@@ -644,7 +653,7 @@ function AssetUploader({ question, pages, assets, materialId, csrfToken, disable
     <p className='text-xs text-muted-foreground'>来源裁切图和整页原图由当前资料原图生成并与原始像素校验；修改过的构图请按辅助图上传并记录依据。素材会先进入资料素材库，不会自动插入或改变解题步骤。</p>
     <div className='grid gap-2 md:grid-cols-2'>
       <label className='text-xs font-medium'>图片类型<select className={fieldClass} disabled={disabled || busy} value={kind} onChange={(event) => { setKind(event.target.value as SolutionAsset['kind']); setError(''); setNotice('') }}><option value='auxiliary'>辅助图（PNG）</option><option value='source_crop'>原图来源裁切</option><option value='source_image'>整张原图</option></select></label>
-      {requiresPage ? <label className='text-xs font-medium'>对应原图来源<select className={fieldClass} disabled={disabled || busy || question.sources.length === 0} value={sourceIndex} onChange={(event) => setSourceIndex(event.target.value)}><option value=''>选择本题已记录来源</option>{question.sources.map((source) => <option key={sourceIdentity(source)} value={sourceIdentity(source)}>{pages.find((page) => page.id === source.page_id)?.label || '资料页'} · {source.region ? `区域 ${source.region.join(', ')}` : '整页 / 区域未知'}</option>)}</select></label> : <label className='text-xs font-medium'>PNG 辅助图<input className={fieldClass} type='file' accept='image/png' disabled={disabled || busy} onChange={(event) => { setFile(event.currentTarget.files?.[0] || null); setError(''); setNotice('') }} /></label>}
+      {requiresPage ? <label className='text-xs font-medium'>对应原图来源<select className={fieldClass} disabled={disabled || busy || question.sources.length === 0} value={sourceIndex} onChange={(event) => setSourceIndex(event.target.value)}><option value=''>选择{sourceLabel}已记录来源</option>{question.sources.map((source) => <option key={sourceIdentity(source)} value={sourceIdentity(source)}>{pages.find((page) => page.id === source.page_id)?.label || '资料页'} · {source.region ? `区域 ${source.region.join(', ')}` : '整页 / 区域未知'}</option>)}</select></label> : <label className='text-xs font-medium'>PNG 辅助图<input className={fieldClass} type='file' accept='image/png' disabled={disabled || busy} onChange={(event) => { setFile(event.currentTarget.files?.[0] || null); setError(''); setNotice('') }} /></label>}
       <label className='text-xs font-medium'>图示名称<input className={fieldClass} maxLength={160} disabled={disabled || busy} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
       <label className='text-xs font-medium'>依据<input className={fieldClass} maxLength={1000} disabled={disabled || busy} value={basis} onChange={(event) => setBasis(event.target.value)} placeholder='说明用途或来源' /></label>
     </div>

@@ -25,7 +25,8 @@ import { ProgressWorkspace } from './features/progress/workspace'
 import { WorkspacePage } from './features/workspace/page'
 import { SolutionWorkspace } from './features/solutions/workspace'
 import { SolutionsLauncher } from './features/solutions/launcher'
-import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, safeBusinessPath, screenForView, solutionMaterialId, solutionScreen, withoutFragment, type AppRoute, type View } from './routing/routes'
+import { KnowledgeWorkspace } from './features/knowledge/workspace'
+import { fragmentOfPath, householdIdForBusinessPath, isFilePath, knowledgeMaterialId, knowledgeScreen, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, safeBusinessPath, screenForView, solutionMaterialId, solutionScreen, withoutFragment, type AppRoute, type View } from './routing/routes'
 import type { WorkspacePageScope } from './features/workspace/page-api'
 import type { AboutResponse, LearnersResponse, SessionResponse } from './types'
 
@@ -180,10 +181,10 @@ export default function App() {
   const handleWorkspaceTab = useCallback((tab: string) => {
     replaceRoute({ ...routeRef.current, tab })
   }, [replaceRoute])
-  const handleMaterialLocation = useCallback((location: { materialId: string; query: string; page: number }) => {
+  const handleMaterialLocation = useCallback((location: { materialId: string; query: string; page: number; subject?: string }) => {
     const current = routeRef.current
     if (current.view !== 'materials' || current.screen) return
-    const next = { ...current, materialId: location.materialId, materialQuery: location.query, materialPage: location.page }
+    const next = { ...current, materialId: location.materialId, materialQuery: location.query, materialPage: location.page, materialSubject: location.subject ?? current.materialSubject ?? '' }
     if (current.materialId && location.materialId && location.materialId !== current.materialId) window.history.pushState({}, '', routeUrl(next))
     replaceRoute(next)
   }, [replaceRoute])
@@ -346,8 +347,12 @@ export default function App() {
   const workspaceAnchor = fragmentOfPath(effectiveScreen)
   const solutionId = route.view === 'documents' ? solutionMaterialId(route.screen) : null
   const isSolutionScreen = solutionId !== null
+  const knowledgeId = ['knowledge', 'documents'].includes(route.view) ? knowledgeMaterialId(route.screen) : null
+  const isKnowledgeScreen = knowledgeId !== null
+  const isKnowledgeLauncher = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/__app__/knowledge-explanations/'
+  const isKnowledgeIndex = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/knowledge/'
   const isDocumentsLanding = route.view === 'documents' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/prints/' && !isSolutionScreen
-  const documentsTab = route.tab === 'practice' ? 'practice' : 'solutions'
+  const documentsTab = route.tab === 'practice' ? 'practice' : route.tab === 'knowledge' ? 'knowledge' : 'solutions'
   const isBusinessScreen = Boolean(effectiveScreen) && (route.view === 'knowledge' || route.view === 'learning'
     || route.view === 'documents' || route.view === 'settings' || Boolean(route.screen))
   const needsLearner = viewNeedsLearner(route.view)
@@ -364,6 +369,7 @@ export default function App() {
       materialId: undefined,
       materialQuery: undefined,
       materialPage: undefined,
+      materialSubject: undefined,
     })
   }
 
@@ -464,7 +470,7 @@ export default function App() {
           </header>
 
           <Main id='content' fluid className='w-full min-w-0 space-y-4 px-4 py-4 sm:px-6'>
-            {!isBusinessScreen || (isDocumentsLanding && documentsTab === 'solutions') || isSolutionScreen ? <h1 className='text-xl font-semibold tracking-tight'>{isSolutionScreen ? '逐题讲解' : title}</h1> : null}
+            {!isBusinessScreen || (isDocumentsLanding && documentsTab !== 'practice') || isSolutionScreen || isKnowledgeScreen || isKnowledgeLauncher ? <h1 className='text-xl font-semibold tracking-tight'>{isSolutionScreen ? '逐题讲解' : isKnowledgeScreen || isKnowledgeLauncher ? '知识点讲解' : title}</h1> : null}
 
             {households.length === 0 ? (
               <EmptyState title='当前账号没有可访问的家庭' detail='请使用有权限的账号登录，或联系家庭所有者调整访问权限。' icon={House} />
@@ -492,7 +498,7 @@ export default function App() {
             {households.length > 0 && isDocumentsLanding ? <WorkspaceTabs
               id='document-center'
               label='文档分类'
-              tabs={[{ value: 'solutions', label: '讲解文件' }, { value: 'practice', label: '练习与答案' }]}
+              tabs={[{ value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '逐题讲解' }, { value: 'practice', label: '五册与练习' }]}
               value={documentsTab}
               onChange={handleWorkspaceTab}
             /> : null}
@@ -509,6 +515,15 @@ export default function App() {
                 onMaterials={() => selectView('materials')}
               /></WorkspacePanel> : null
             ) : null}
+            {households.length > 0 && isKnowledgeIndex ? <div className='flex flex-wrap items-center gap-3 border-b pb-3'><Button type='button' size='sm' variant='outline' onClick={() => navigateRoute({ ...route, screen: '/__app__/knowledge-explanations/', tab: undefined })}>整理知识点讲解</Button><p className='text-sm text-muted-foreground'>按资料编写完整结论、条件与依据，再生成知识讲解文档。</p></div> : null}
+            {households.length > 0 && (isKnowledgeLauncher || isDocumentsLanding) ? <WorkspacePanel id='document-center' value='knowledge' active={isKnowledgeLauncher ? 'knowledge' : documentsTab}><SolutionsLauncher
+              key={`${householdId}:knowledge`}
+              mode='knowledge'
+              householdId={householdId}
+              onUnauthorized={handleUnauthorized}
+              onOpen={(materialId) => navigateRoute({ ...route, screen: knowledgeScreen(materialId), tab: isDocumentsLanding ? 'outputs' : 'editor' })}
+              onMaterials={() => selectView('materials')}
+            /></WorkspacePanel> : null}
             {households.length > 0 && isSolutionScreen && solutionId ? <SolutionWorkspace
               key={`${householdId}:${solutionId}`}
               materialId={solutionId}
@@ -520,9 +535,23 @@ export default function App() {
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
               onUnauthorized={handleUnauthorized}
               onUnsavedChange={handleUnsavedChange}
+              onScopeLoaded={handleWorkspaceScope}
               onBack={() => navigateRoute({ ...route, screen: screenForView('documents', householdId, route.learner) })}
             /> : null}
-            {households.length > 0 && isBusinessScreen && effectiveScreen && !isSolutionScreen ? (
+            {households.length > 0 && isKnowledgeScreen && knowledgeId ? <KnowledgeWorkspace
+              key={`${householdId}:knowledge:${knowledgeId}`}
+              materialId={knowledgeId}
+              householdId={householdId}
+              initialTab={route.tab || 'editor'}
+              onTabChange={handleWorkspaceTab}
+              csrfToken={session.data.csrf_token}
+              canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
+              onUnauthorized={handleUnauthorized}
+              onUnsavedChange={handleUnsavedChange}
+              onScopeLoaded={handleWorkspaceScope}
+              onBack={() => navigateRoute({ ...route, screen: route.view === 'documents' ? screenForView('documents', householdId) : '/__app__/knowledge-explanations/', tab: route.view === 'documents' ? 'knowledge' : undefined })}
+            /> : null}
+            {households.length > 0 && isBusinessScreen && effectiveScreen && !isSolutionScreen && !isKnowledgeScreen && !isKnowledgeLauncher ? (
               <DocumentPracticePanel landing={isDocumentsLanding} active={documentsTab}><WorkspacePage
                 key={workspaceUrl}
                 url={workspaceUrl}
@@ -555,6 +584,7 @@ export default function App() {
                 initialMaterialId={route.materialId || ''}
                 initialQuery={route.materialQuery || ''}
                 initialPage={route.materialPage || 1}
+                initialSubject={route.materialSubject || ''}
                 onLocationChange={handleMaterialLocation}
               />
             ) : null}

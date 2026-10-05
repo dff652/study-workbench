@@ -11,6 +11,7 @@ export type AppRoute = {
   materialId?: string
   materialQuery?: string
   materialPage?: number
+  materialSubject?: string
 }
 
 export type LearnerRouteTarget = { id: string; report_url: string }
@@ -50,6 +51,7 @@ export function parseRoute(location: Pick<Location, 'pathname' | 'search'>, orig
   const materialId = params.get('material') || ''
   const materialPage = Number(params.get('page') || '1')
   const materialQuery = (params.get('q') || '').slice(0, 200)
+  const materialSubject = params.get('subject') || ''
   return {
     view,
     household: screenHousehold || outerHousehold,
@@ -58,6 +60,7 @@ export function parseRoute(location: Pick<Location, 'pathname' | 'search'>, orig
     ...(validTab(params.get('tab')) ? { tab: params.get('tab')! } : {}),
     ...(view === 'materials' && /^[a-z0-9_-]{1,128}$/i.test(materialId) ? { materialId } : {}),
     ...(view === 'materials' && materialQuery ? { materialQuery } : {}),
+    ...(view === 'materials' && validSubject(materialSubject) ? { materialSubject } : {}),
     ...(view === 'materials' && Number.isSafeInteger(materialPage) && materialPage > 1 ? { materialPage } : {}),
   }
 }
@@ -72,6 +75,7 @@ export function routeUrl(route: AppRoute) {
   if (route.view === 'materials') {
     if (route.materialId && /^[a-z0-9_-]{1,128}$/i.test(route.materialId)) params.set('material', route.materialId)
     if (route.materialQuery) params.set('q', route.materialQuery.slice(0, 200))
+    if (validSubject(route.materialSubject)) params.set('subject', route.materialSubject!)
     if (Number.isSafeInteger(route.materialPage) && route.materialPage! > 1) params.set('page', String(route.materialPage))
   }
   return `/app/?${params.toString()}`
@@ -120,12 +124,17 @@ export function routeForBusinessPath(path: string, current: AppRoute, learner = 
     delete next.materialId
     delete next.materialQuery
     delete next.materialPage
+    delete next.materialSubject
   }
   return next
 }
 
 function validTab(value: string | null | undefined) {
   return typeof value === 'string' && /^[a-z][a-z0-9_-]{0,30}$/.test(value)
+}
+
+function validSubject(value: string | undefined) {
+  return typeof value === 'string' && ['unknown', 'mathematics', 'chinese', 'english', 'physics', 'chemistry', 'biology', 'history', 'geography', 'politics', 'science', 'other'].includes(value)
 }
 
 export function householdIdForBusinessPath(path: string, origin = window.location.origin): string | null {
@@ -204,8 +213,19 @@ export function solutionMaterialId(screen: string) {
   }
 }
 
+export function knowledgeScreen(materialId: string) {
+  return `/__app__/knowledge-explanations/${encodeURIComponent(materialId)}/`
+}
+
+export function knowledgeMaterialId(screen: string) {
+  const pathname = screen.split(/[?#]/, 1)[0]
+  if (!pathname.startsWith('/__app__/knowledge-explanations/')) return null
+  return solutionMaterialId(pathname.replace(/^\/__app__\/knowledge-explanations\//, '/__app__/solutions/'))
+}
+
 export function viewForBusinessPath(pathname: string, fallback: View): View {
   if (solutionMaterialId(pathname) !== null) return 'documents'
+  if (knowledgeMaterialId(pathname) !== null) return 'knowledge'
   if (pathname.startsWith('/knowledge/')) return 'knowledge'
   if (pathname.startsWith('/catalogue/')) return 'knowledge'
   if (pathname.startsWith('/learning/schedules/')) return 'progress'

@@ -199,7 +199,9 @@ describe('SolutionEditor formula preview', () => {
     const legacy: SolutionContent = { ...content, questions: [{ ...question, steps: ['第一步', '第二步'], formulas: ['x+1', 'x+2'], figures: [figure] }] }
     const converted = toStructuredSolutionContent(legacy)
     const steps = converted.questions[0].steps
-    expect(converted.schema_version).toBe('swb.solution.v2')
+    expect(converted.schema_version).toBe('swb.solution.v3')
+    expect(converted.school_subject).toBe('unknown')
+    expect(legacy.schema_version).toBe('swb.solution.v1')
     expect(steps.map((step) => [step.text, step.formula, step.figure?.caption])).toEqual([
       ['第一步', null, undefined], ['第二步', null, undefined],
     ])

@@ -171,9 +171,9 @@ export const api = {
       }),
       signal,
     ),
-  materials: (householdId: string, signal: AbortSignal, options: { q?: string; page?: number; pageSize?: number } = {}) =>
+  materials: (householdId: string, signal: AbortSignal, options: { q?: string; subject?: string; page?: number; pageSize?: number } = {}) =>
     getJson<MaterialListResponse>(
-      withQuery('/api/v1/materials/', { household: householdId, q: options.q || '', page: options.page || 1, page_size: options.pageSize || 20 }),
+      withQuery('/api/v1/materials/', { household: householdId, q: options.q || '', subject: options.subject || '', page: options.page || 1, page_size: options.pageSize || 20 }),
       signal,
     ),
   progress: (householdId: string, signal: AbortSignal) =>

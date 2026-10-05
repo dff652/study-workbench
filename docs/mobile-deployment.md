@@ -4,6 +4,8 @@
 
 Android 优先、局域网 IP＋私有 CA 已固定；部署结果以 [DEV_STATE](../DEV_STATE.md) 的最新记录为准。手机信任、主屏幕安装及家庭试用仍需实际操作；不会因此启动原生客户端或模型测试。
 
+2026-10-05：36 已升级至 PC 源码 `136c251`，原 HTTPS 代理、私有 CA、数据库及资料卷保持。18 组实际 HTTPS 浏览器检查覆盖 1440／390 宽度、七个入口、逐题解析读取、原历史与下载、安装元数据、离线和注销；这是 Chromium 验收，Android 实体设备仍未测试。详见 [36 PC 部署验收](reviews/pc-deployment-20261005.md)。
+
 ## 1. 已实现的交付物
 
 - [HTTPS 覆盖配置](../compose.mobile.yaml)：在现有 Compose 之上添加 Caddy，移除 Web 主机端口；数据库／资料卷沿用原定义。HTTPS 默认只绑定 loopback。

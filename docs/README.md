@@ -6,6 +6,8 @@
 
 - [Web 第一期范围与交付门槛](web-phase1-release-20261005.md)：第一期完整 Web 产品、第二期手机端，以及工程／运行／真实试用的完成条件。
 - [本轮整合源码交付 review](reviews/web-handoff-20261005.md)：提交范围、输入一致性、阶段文档及 push／PR 门槛。
+- [36 Web 整合部署验收](reviews/web-deployment-20261005.md)：前后配套恢复、迁移、实际 HTTPS 与数据保留。
+- [真实家庭 Web 小批次](web-family-trial-20261005.md)：真实资料、学习者、草稿、文档、作答与复测的实际反馈条件。
 - [PC 使用说明](pc-usage.md)：从照片、原图对照解析到真实作答／复测与下载。
 - [两套 PC 整合契约](pc-integration-contract-20261005.md)：私人草稿、结构化步骤、检索／报告与学生／家长体验；当前本地状态另见 DEV_STATE。
 - [学生体验与渐进披露](pc-student-experience-20261005.md)：七个入口的信息组织、操作层级及参考取舍。

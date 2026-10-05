@@ -151,10 +151,30 @@ solutions.action(actor, page.material_id, action='confirm', expected_version=1, 
 queued = solutions.action(actor, page.material_id, action='generate', expected_version=1, request_key=key(), reason='合成生成')
 rendered = solution_jobs.execute_next()
 assert str(rendered.pk) == queued['output_id'] and rendered.state == 'output_check', rendered.error_code
+# Keep the original v1 revision/output and add an explicit v2 version. The
+# paired restore must preserve both plus a private, unconfirmed work copy.
+from copy import deepcopy
+from app.workflows.models import WorkspaceDraft
+structured = deepcopy(content)
+structured['schema_version'] = 'swb.solution.v2'
+structured['questions'][0]['steps'] = [
+    {'id': 'step-first', 'text': '先把两组分别数清。', 'formula': '4+4',
+     'figure': {'asset_id': str(asset.pk), 'role': 'method', 'caption': '这一步的辅助图', 'width_mm': 35}, 'new_page': False},
+    {'id': 'step-next', 'text': '在新页检查结果。', 'formula': '4*2', 'figure': None, 'new_page': True}]
+structured['questions'][0]['alternative_steps'] = []
+new_solution = solutions.save(actor, page.material_id, content=structured, expected_version=1,
+    request_key=key(), reason='合成结构化新版本，旧版保持')
+queued_v2 = solutions.action(actor, page.material_id, action='generate', expected_version=2,
+    request_key=key(), reason='结构化分页恢复验收')
+rendered_v2 = solution_jobs.execute_next()
+assert str(rendered_v2.pk) == queued_v2['output_id'] and rendered_v2.state == 'output_check', rendered_v2.error_code
+WorkspaceDraft.objects.create(household_id=household_id, actor=actor,
+    key='restore-private-copy', base_stamp='formal-version-2', payload={'note': '这是尚未提交的私人内容。'})
 print(json.dumps({'attempts':len(attempts), 'assessment':assessment['assessment_id'],
     'exports':[row.export_id for row in exports], 'schedule':plan['schedule_id'], 'model_disabled':True,
     'local_policy_and_timing':True, 'retired_export_archive_and_ledger':True,
     'persistent_workflow_and_audit':True, 'solution_output':str(rendered.pk),
+    'structured_solution_output': str(rendered_v2.pk), 'private_draft_preserved': True,
     'fixture': {'household':household_id, 'material':str(page.material_id), 'page':str(page.pk),
         'question':question['question_id'], 'question_revision':qrow.pk, 'question_entity':qrow.entity_id,
         'learner':learner.stable_id, 'learner_entity':learner.pk, 'observation':obs['observation_id'],

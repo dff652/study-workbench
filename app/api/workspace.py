@@ -150,6 +150,47 @@ def learner_scope(match):
     return {"household_id": str(row.household_id), "learner_id": learner_id} if learner_id else None
 
 
+def page_scope(match, request):
+    """Bind private form recovery to the authorized object, never a browser's stale selector."""
+    scope = learner_scope(match)
+    if scope:
+        return scope
+    from app.persistence import services as core
+    from app.persistence.models import EntityRecord, Household, RevisionRecord
+    from app.web.models import MaterialPage, MaterialSet
+    values = match.kwargs
+    household_id = None
+    if 'material_id' in values:
+        household_id = MaterialSet.objects.get(pk=values['material_id']).household_id
+    elif 'page_id' in values:
+        household_id = MaterialPage.objects.select_related('material').get(pk=values['page_id']).material.household_id
+    elif 'entity_id' in values:
+        household_id = EntityRecord.objects.get(pk=values['entity_id']).household_id
+    elif 'question_id' in values:
+        household_id = EntityRecord.objects.get(kind='question', stable_id=values['question_id']).household_id
+    elif match.namespace == 'learning' and any(name + '_id' in values for name in ('learner', 'attempt', 'assessment', 'observation')):
+        kind = next(name for name in ('learner', 'attempt', 'assessment', 'observation') if name + '_id' in values)
+        household_id = EntityRecord.objects.get(kind=kind, stable_id=values[kind + '_id']).household_id
+    elif match.namespace == 'printing' and match.url_name in {'diagrams', 'answer', 'erratum'}:
+        household_id = RevisionRecord.objects.select_related('entity').get(pk=values['pk']).entity.household_id
+    elif match.namespace == 'printing' and match.url_name == 'snapshot':
+        from app.printing.models import ExportSnapshot
+        household_id = ExportSnapshot.objects.get(pk=values['pk']).household_id
+    elif match.namespace == 'ai' and 'run_id' in values:
+        from app.ai.models import ModelRun
+        household_id = ModelRun.objects.get(pk=values['run_id']).household_id
+    else:
+        household_id = values.get('household_id')
+        if household_id is None:
+            params = request.POST if request.method == 'POST' else request.GET
+            household_id = params.get('household_id') or params.get('household')
+    if household_id is None:
+        return None
+    owner = Household.objects.get(pk=household_id)
+    core.require_household_access(request.user, owner)
+    return {'household_id': str(owner.pk), 'learner_id': ''}
+
+
 def dispatch(request):
     url, parts, match = allowed_target(request.GET.get("url", ""))
     forwarded = copy(request)
@@ -170,7 +211,7 @@ def dispatch(request):
     if "text/html" not in result.get("Content-Type", "") or getattr(result, "streaming", False):
         raise Http404
     page = fragment(result.content, url)
-    scope = learner_scope(match)
+    scope = page_scope(match, forwarded)
     if scope:
         page["scope"] = scope
     return response({"page": page}, status=result.status_code)

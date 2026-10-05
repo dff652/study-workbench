@@ -64,6 +64,7 @@ function installRouteAppApi({
       const scope = pageScope?.(path)
       return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', page: { url: path, title: '业务页面', html: pageHtml(path), widgets: [], ...(scope ? { scope } : {}) } }))
     }
+    if (url.pathname.endsWith('/overview/')) return Promise.resolve(Response.json(overview))
     if (url.pathname === '/api/v1/progress/') return Promise.resolve(Response.json({ ...emptyProgress, scope: { ...emptyProgress.scope, household_id: url.searchParams.get('household') || '' } }))
     const learnerProgressMatch = url.pathname.match(/^\/api\/v1\/learners\/([^/]+)\/progress\/$/)
     if (learnerProgressMatch) {
@@ -83,6 +84,24 @@ describe('App URL navigation', () => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
     window.history.replaceState({}, '', '/app/')
+  })
+
+  it('starts with learning actions and reveals family navigation only when requested', async () => {
+    const user = userEvent.setup()
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    expect(await screen.findByRole('heading', { name: '小甲，今天从哪里开始？' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '选题练习' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '查看讲解' })).toBeTruthy()
+    const familyNavigation = screen.getByText('家长协助', { exact: true }).closest('details') as HTMLDetailsElement
+    expect(familyNavigation.open).toBe(false)
+    expect(familyNavigation.contains(screen.getByRole('button', { name: '资料整理' }))).toBe(true)
+    expect((screen.getByText('查看学习记录与待核对项').closest('details') as HTMLDetailsElement).open).toBe(false)
+    await user.click(screen.getByText('家长协助', { exact: true }))
+    expect(familyNavigation.open).toBe(true)
+    expect(screen.getByRole('button', { name: '资料整理' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '学习档案' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '设置' })).toBeTruthy()
   })
 
   it('keeps a direct URL selection, routes business links, restores popstate, and clears record context on household change', async () => {

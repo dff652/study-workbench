@@ -31,3 +31,28 @@
     }
   }
 }
+
+/* Native business forms share the same reading rhythm inside the PC frame. */
+#content .workspace-page { font-size: 1rem; line-height: 1.65; }
+#content .workspace-page :is(label, legend) { font-size: 0.9375rem; }
+#content .workspace-page :is(button, input[type='submit'], input[type='button']) { min-height: 2.75rem; }
+.workspace-page details.disclosure {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--background);
+  padding: 0;
+}
+.workspace-page details.disclosure > summary {
+  cursor: pointer;
+  min-height: 3rem;
+  padding: 0.8rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.workspace-page details.disclosure > summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 0.75rem;
+}
+.workspace-page details.disclosure > :not(summary) { margin: 0 1rem 1rem; }
+.workspace-page details.disclosure[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 1rem; }

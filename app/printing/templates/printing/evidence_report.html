@@ -2,5 +2,5 @@
 {% block content %}<h1>学习证据报告</h1>
 <p>生成 PDF／Word，冻结每次作答、评价审核状态及来源版本。未知与撤回记录保留，不生成掌握分数。</p>
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
-<form method="post">{% csrf_token %}<button>生成学习证据报告 PDF／Word</button></form>
-<p><a href="{% url 'study:report' learner.pk %}">查看当前证据报告</a></p>{% endblock %}
+<form method="post">{% csrf_token %}<label>证据范围<select name="material"><option value="">该学习者全部历史记录</option>{% for material in materials %}<option value="{{ material.pk }}"{% if selected_material == material.pk|stringformat:"s" %} selected{% endif %}>{{ material.title }} · 相关题目历次记录</option>{% endfor %}</select></label><button>生成学习证据报告 PDF／Word</button></form>
+<p><a href="{% url 'study:report' learner.pk %}{% if selected_material %}?material={{ selected_material }}{% endif %}">查看当前证据报告</a></p>{% endblock %}

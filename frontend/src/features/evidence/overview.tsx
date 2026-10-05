@@ -48,10 +48,10 @@ export function Overview({
   return (
     <div className='space-y-6'>
       <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-4'>
-        <MetricCard label='作答记录' value={formatCount(metrics.attempt_count)} detail='按真实作答事件计次' icon={ClipboardList} tone='bg-sky-100 text-sky-800' />
+        <MetricCard label='作答记录' value={formatCount(metrics.attempt_count)} detail='每次实际作答分别保留' icon={ClipboardList} tone='bg-sky-100 text-sky-800' />
         <MetricCard label='涉及题目' value={formatCount(metrics.question_count)} detail='同一道题只计一次' icon={BookOpenCheck} tone='bg-indigo-100 text-indigo-800' />
-        <MetricCard label='独立成功证据' value={formatCount(metrics.independent_success_count)} detail='沿用现有成功判定规则' icon={ShieldCheck} tone='bg-emerald-100 text-emerald-800' />
-        <MetricCard label='日期未记录' value={formatCount(metrics.unknown_date_count)} detail='不使用录入时间替代实际日期' icon={CalendarDays} tone='bg-amber-100 text-amber-900' />
+        <MetricCard label='已核实的独立做对' value={formatCount(metrics.independent_success_count)} detail='已核对，没有得到提示' icon={ShieldCheck} tone='bg-emerald-100 text-emerald-800' />
+        <MetricCard label='日期未记录' value={formatCount(metrics.unknown_date_count)} detail='可以稍后补充实际作答日期' icon={CalendarDays} tone='bg-amber-100 text-amber-900' />
       </div>
 
       <div className='grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]'>
@@ -74,16 +74,16 @@ export function Overview({
             ))}
             <p className='sm:col-span-2 text-xs leading-5 text-muted-foreground'>
               {metrics.independent_success_rate === null
-                ? '暂不显示独立成功比例；目前没有经过确认的统计定义。'
-                : `独立成功比例：${String(metrics.independent_success_rate)}。`}只显示已有记录提供的结果，不进行推算。
+                ? '目前只展示已经核对的记录数量。'
+                : `独立成功比例：${String(metrics.independent_success_rate)}。`}没有记录的部分仍保留未知。
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className='border-b pb-4'>
-            <CardTitle className='text-base'>学习证据入口</CardTitle>
-            <CardDescription>打开现有档案、证据报告或复习计划</CardDescription>
+            <CardTitle className='text-base'>回看学习过程</CardTitle>
+            <CardDescription>查看已记录的作答，和家长一起核对</CardDescription>
           </CardHeader>
           <CardContent className='flex flex-col items-start gap-3 pt-5 text-sm'>
             <ApiLink href={links.profile_url}>学习档案</ApiLink>
@@ -106,7 +106,7 @@ export function Overview({
               <BookOpenCheck className='size-4 text-emerald-700' aria-hidden='true' />
               已观察到的正确方法与过程
             </CardTitle>
-            <CardDescription>来自已接受并发布评价的可追溯方法观察</CardDescription>
+            <CardDescription>从已核对的作答中，看看哪些方法用对了</CardDescription>
           </CardHeader>
           <CardContent className='pt-5'>
             {findings.observed_correct_methods.length === 0 ? (

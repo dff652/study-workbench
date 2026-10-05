@@ -40,7 +40,7 @@ function fixture(post?: () => Promise<Response>) {
     return Response.json(path.includes('/materials/material-1/') ? detail : { schema_version: 'swb.api.v1', items: [material], total: 1 })
   })
   vi.stubGlobal('fetch', fetchMock)
-  render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} />)
+  render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} />)
   return fetchMock
 }
 
@@ -57,6 +57,39 @@ describe('MaterialWorkspace navigation', () => {
     expect(screen.queryByText('正在读取资料页…')).toBeNull()
   })
 
+  it('groups material work into mounted sections and the current-task action opens its details', async () => {
+    const user = userEvent.setup()
+    fixture()
+    const queueButton = await screen.findByRole('button', { name: '加入处理队列' })
+    const fileInput = screen.getByLabelText('选择多张原图')
+    const summaries = Array.from(document.querySelectorAll('details > summary'), (summary) => summary.textContent?.trim() || '')
+    for (const section of ['1. 原图', '2. 题目核对', '3. 讲解', '4. 整理任务']) {
+      expect(summaries.some((summary) => summary.startsWith(section))).toBe(true)
+    }
+
+    const original = Array.from(document.querySelectorAll('details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('1. 原图'))
+    expect(original).toBeTruthy()
+    if (!original) throw new Error('原图区域未渲染')
+    await user.click(original.querySelector(':scope > summary') as HTMLElement)
+    expect(original.open).toBe(true)
+    await user.click(original.querySelector(':scope > summary') as HTMLElement)
+    expect(original.open).toBe(false)
+    expect(fileInput.isConnected).toBe(true)
+    expect(queueButton.isConnected).toBe(true)
+
+    const history = Array.from(document.querySelectorAll('details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('资料任务历史'))
+    expect(history).toBeTruthy()
+    if (!history) throw new Error('资料任务历史区域未渲染')
+    await user.click(history.querySelector(':scope > summary') as HTMLElement)
+    await user.click(await screen.findByRole('button', { name: '查看任务' }))
+    expect((document.querySelector('.materials-task-disclosure') as HTMLDetailsElement).open).toBe(true)
+    expect((Array.from(document.querySelectorAll('.materials-task-disclosure details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('当前任务')) as HTMLDetailsElement).open).toBe(true)
+
+    await user.click(await screen.findByRole('button', { name: '查看当前任务' }))
+    expect((document.querySelector('.materials-task-disclosure') as HTMLDetailsElement).open).toBe(true)
+    expect((Array.from(document.querySelectorAll('.materials-task-disclosure details')).find((details) => details.querySelector(':scope > summary')?.textContent?.includes('当前任务')) as HTMLDetailsElement).open).toBe(true)
+  })
+
   it('prevents task switching while a write is pending and restores navigation afterwards', async () => {
     const user = userEvent.setup()
     let finish!: (response: Response) => void
@@ -67,5 +100,122 @@ describe('MaterialWorkspace navigation', () => {
     expect(fetchMock.mock.calls.some(([path]) => String(path).includes('/workflows/job-2/'))).toBe(false)
     await act(async () => finish(Response.json({ schema_version: 'swb.api.v1', job: { ...jobs[0], state: 'queued', context: { version: 2, source_stamp: 'stamp' } } })))
     await waitFor(() => expect(screen.getByRole('button', { name: '查看任务' }).matches(':disabled')).toBe(false))
+  })
+
+  it('sends search and pagination to the server', async () => {
+    const user = userEvent.setup()
+    const listRequests: URL[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') {
+        listRequests.push(url)
+        const page = Number(url.searchParams.get('page'))
+        return Response.json({ schema_version: 'swb.api.v1', items: [material], total: 45, page, page_size: 20, has_next: page === 1 })
+      }
+      if (url.pathname.startsWith('/api/v1/drafts/')) return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      if (url.pathname === '/api/v1/materials/material-1/') return Response.json(detail)
+      return Response.json({ schema_version: 'swb.api.v1', items: [] })
+    }))
+    render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} />)
+    await screen.findByRole('button', { name: /测试资料/ })
+    await user.type(screen.getByPlaceholderText('例如：数学周练'), '分数')
+    await user.click(screen.getByRole('button', { name: '搜索' }))
+    await waitFor(() => expect(listRequests.some((url) => url.searchParams.get('q') === '分数' && url.searchParams.get('page') === '1' && url.searchParams.get('page_size') === '20')).toBe(true))
+
+    await user.click(await screen.findByRole('button', { name: '下一页' }))
+    await waitFor(() => expect(listRequests.some((url) => url.searchParams.get('q') === '分数' && url.searchParams.get('page') === '2' && url.searchParams.get('page_size') === '20')).toBe(true))
+  })
+
+  it('ignores a delayed material list from a previous household', async () => {
+    const oldMaterial = { ...material, id: 'old-material', title: '旧家庭资料' }
+    const newMaterial = { ...material, id: 'new-material', title: '新家庭资料' }
+    let resolveOld!: (response: Response) => void
+    const oldResponse = new Promise<Response>((resolve) => { resolveOld = resolve })
+    const listRequests: URL[] = []
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname === '/api/v1/materials/') {
+        listRequests.push(url)
+        if (url.searchParams.get('household') === 'home-a') return oldResponse
+        return Response.json({ schema_version: 'swb.api.v1', items: [newMaterial], total: 1, page: 1, page_size: 20, has_next: false })
+      }
+      if (url.pathname.startsWith('/api/v1/drafts/')) return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      if (url.pathname === `/api/v1/materials/${newMaterial.id}/`) return Response.json({ ...detail, material: newMaterial, jobs: [] })
+      return Response.json({ schema_version: 'swb.api.v1', items: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const props = { householdName: '家庭', csrfToken: 'synthetic', canWrite: true, learners: [], selectedLearnerId: '', onUnauthorized: vi.fn(), onOpenSolutions: vi.fn(), onUnsavedChange: vi.fn() }
+    const view = render(<MaterialWorkspace {...props} householdId='home-a' />)
+    await waitFor(() => expect(listRequests).toHaveLength(1))
+
+    view.rerender(<MaterialWorkspace {...props} householdId='home-b' />)
+    expect(await screen.findByRole('button', { name: /新家庭资料/ })).toBeTruthy()
+    await act(async () => {
+      resolveOld(Response.json({ schema_version: 'swb.api.v1', items: [oldMaterial], total: 1, page: 1, page_size: 20, has_next: false }))
+      await oldResponse
+    })
+    expect(screen.queryByRole('button', { name: /旧家庭资料/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /新家庭资料/ })).toBeTruthy()
+  })
+
+  it('autosaves a material title once and settles after the saved state rerenders', async () => {
+    const user = userEvent.setup()
+    const draftSaves: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname.startsWith('/api/v1/drafts/') || url.pathname.startsWith('/api/v1/draft-save/')) {
+        if (init?.method === 'POST') {
+          const body = JSON.parse(String(init.body)) as Record<string, unknown>
+          draftSaves.push(body)
+          return Response.json({ schema_version: 'swb.api.v1', draft: { key: 'title-draft', version: Number(body.expected_version) + 1, base_stamp: 'material-title:v1', payload: body.payload, updated_at: '2026-10-05T00:00:00Z' } })
+        }
+        return Response.json({ schema_version: 'swb.api.v1', draft: null })
+      }
+      if (url.pathname === '/api/v1/materials/') return Response.json({ schema_version: 'swb.api.v1', items: [material], total: 1, page: 1, page_size: 20, has_next: false })
+      if (url.pathname === '/api/v1/materials/material-1/') return Response.json(detail)
+      return Response.json({ schema_version: 'swb.api.v1', items: [] })
+    }))
+    render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} />)
+    await user.click(await screen.findByRole('button', { name: '新建资料' }))
+    await user.type(screen.getByLabelText('资料名称'), '数学周练')
+    await waitFor(() => expect(draftSaves).toHaveLength(1), { timeout: 2500 })
+    expect(draftSaves[0].payload).toEqual({ title: '数学周练' })
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    expect(draftSaves).toHaveLength(1)
+    expect(screen.getAllByText('私人草稿已保存。').length).toBeGreaterThan(0)
+  })
+
+  it('saves the new title when replacing a restored title immediately after clearing it', async () => {
+    const user = userEvent.setup()
+    const draftSaves: Array<Record<string, unknown>> = []
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), window.location.origin)
+      if (url.pathname.startsWith('/api/v1/drafts/') || url.pathname.startsWith('/api/v1/draft-save/')) {
+        if (init?.method === 'POST') {
+          const body = JSON.parse(String(init.body)) as Record<string, unknown>
+          draftSaves.push(body)
+          return Response.json({ schema_version: 'swb.api.v1', draft: { key: 'title-draft', version: Number(body.expected_version) + 1, base_stamp: 'material-title:v1', payload: body.payload, updated_at: '2026-10-05T00:00:00Z' } })
+        }
+        const titleDraft = url.pathname.includes('create-title')
+          ? { key: 'materials:create-title', version: 3, base_stamp: 'material-title:v1', payload: { title: '旧名称' }, updated_at: '2026-10-05T00:00:00Z' }
+          : null
+        return Response.json({ schema_version: 'swb.api.v1', draft: titleDraft })
+      }
+      if (url.pathname === '/api/v1/materials/') return Response.json({ schema_version: 'swb.api.v1', items: [material], total: 1, page: 1, page_size: 20, has_next: false })
+      if (url.pathname === '/api/v1/materials/material-1/') return Response.json(detail)
+      return Response.json({ schema_version: 'swb.api.v1', items: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<MaterialWorkspace householdId='household' householdName='我的家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={vi.fn()} />)
+    await user.click(await screen.findByRole('button', { name: '恢复这份草稿' }))
+    const titleInput = await screen.findByLabelText('资料名称')
+    expect((titleInput as HTMLInputElement).value).toBe('旧名称')
+    await user.clear(titleInput)
+    await user.type(titleInput, '新名称')
+    await waitFor(() => expect(draftSaves).toHaveLength(1), { timeout: 2500 })
+    expect(draftSaves[0].expected_version).toBe(3)
+    expect(draftSaves[0].payload).toEqual({ title: '新名称' })
+    await new Promise((resolve) => setTimeout(resolve, 900))
+    expect(draftSaves).toHaveLength(1)
   })
 })

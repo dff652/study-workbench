@@ -9,6 +9,6 @@
 </section>
 <form method="post" class="panel">{% csrf_token %}
 <label for="packet-learner">学习证据</label><select id="packet-learner" name="learner_id"><option value="">暂不关联学习者，生成待测清单</option>{% for learner in learners %}<option value="{{ learner.pk }}">{{ learner.head_revision.payload.display_name }}</option>{% endfor %}</select>
-<p class="muted">选择学习者时，第三册汇总该学习者的历次记录；其余四册使用本资料集的相同题目版本。未记录或无法判定的证据保留未知。</p>
+<label for="packet-evidence-scope">学习记录范围</label><select id="packet-evidence-scope" name="evidence_scope"><option value="material_questions">本资料题目的历次记录</option><option value="selected_learner_history">这位学习者的全部记录</option></select><p class="muted">第三册按所选范围汇总真实作答；其余四册使用本资料的题目。没有记录或无法判断时保留未知。</p>
 <button class="primary-button" {% if not ready %}disabled{% endif %}>生成五册 PDF 与 Word</button></form>
 {% endblock %}

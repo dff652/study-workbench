@@ -27,7 +27,21 @@ def material_row(row):
 def material_list(request):
     hid = household(request)
     rows = materials.list_materials(request.user).filter(household_id=hid)
-    return {"items": [material_row(row) for row in rows[:200]], "total": rows.count()}
+    query = request.GET.get("q", "").strip()[:200]
+    if query:
+        rows = rows.filter(title__icontains=query)
+    try:
+        page = int(request.GET.get("page", "1"))
+        page_size = int(request.GET.get("page_size", "20"))
+        if page < 1 or not 1 <= page_size <= 100:
+            raise ValueError
+    except (ValueError, TypeError):
+        raise ValueError("Invalid material page")
+    rows = rows.order_by("-created_at", "-pk")
+    total = rows.count()
+    start = (page - 1) * page_size
+    return {"items": [material_row(row) for row in rows[start:start + page_size]], "total": total,
+            "page": page, "page_size": page_size, "has_next": start + page_size < total, "query": query}
 
 
 @api("POST")
@@ -74,9 +88,10 @@ def job_row(job):
 
 @api("POST")
 def create(request, material_id):
-    value = body(request, {"request_key", "proposal", "learner_id"})
+    value = body(request, {"request_key", "proposal", "learner_id", "evidence_scope"})
     job = workflows.create(request.user, material_id, request_key=value.get("request_key"),
-        proposal=value.get("proposal"), learner_id=value.get("learner_id"))
+        proposal=value.get("proposal"), learner_id=value.get("learner_id"),
+        evidence_scope=value.get("evidence_scope", "selected_learner_history"))
     return {"job": job_row(job)}
 
 

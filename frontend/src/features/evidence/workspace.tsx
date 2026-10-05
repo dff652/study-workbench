@@ -5,6 +5,7 @@ import { INITIAL_FILTERS, type Remote } from '../../components/shared'
 import { FilterBar } from './filter-bar'
 import { Overview } from './overview'
 import { Attempts } from './attempts'
+import { Disclosure } from '../../components/disclosure'
 
 export type EvidencePage = 'overview' | 'attempts'
 
@@ -72,15 +73,18 @@ export function EvidenceWorkspace({
   if (activePage === 'overview') {
     return (
       <div className='space-y-6'>
-        <FilterBar filters={filters} onChange={updateFilters} />
-        <Overview remote={overview} onRetry={() => setOverviewRetry((count) => count + 1)} />
+        <Disclosure title='查看学习记录与待核对项' description='需要回看时，展开记录概要，再查看具体证据。'>
+          <div className='space-y-5'><Disclosure title='筛选要看的记录' description='按实际作答日期和来源缩小范围。'><FilterBar filters={filters} onChange={updateFilters} /></Disclosure>
+            <Overview remote={overview} onRetry={() => setOverviewRetry((count) => count + 1)} />
+          </div>
+        </Disclosure>
       </div>
     )
   }
 
   return (
     <div className='space-y-6'>
-      <FilterBar filters={filters} onChange={updateFilters} />
+      <Disclosure title='筛选作答记录' description='按实际作答日期和来源查找。'><FilterBar filters={filters} onChange={updateFilters} /></Disclosure>
       <Attempts
         remote={attempts}
         page={page}

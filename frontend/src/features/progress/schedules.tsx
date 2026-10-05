@@ -3,6 +3,7 @@ import { CalendarClock, CircleHelp, Plus, RotateCcw } from 'lucide-react'
 import { api } from '../../api'
 import { ApiLink, EmptyState, errorText, formatCount, isUnauthorized, LoadingState, RetryState, SOURCE_LABELS, type Remote } from '../../components/shared'
 import { Badge } from '../../components/ui/badge'
+import { Disclosure } from '../../components/disclosure'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import type { CreateScheduleInput, ReviewSchedule, ScheduleAction, ScheduleActionInput, ScheduleOptionsResponse, SchedulesResponse } from '../../types'
@@ -48,6 +49,13 @@ export function Schedules({
   if (remote.status === 'error') return <RetryState message={remote.message} onRetry={onRefresh} />
 
   const { counts, items } = remote.data
+  const currentItems = items.filter((item) => item.state !== 'completed' && item.state !== 'cancelled')
+  const previousItems = items.filter((item) => item.state === 'completed' || item.state === 'cancelled')
+  const renderSchedule = (item: ReviewSchedule) => (
+    <ScheduleCard key={item.id} item={item} csrfToken={csrfToken} canWrite={canWrite}
+      onSaved={() => { setNotice('复测计划已保存，历史记录已更新。'); onChanged() }}
+      onUnauthorized={onUnauthorized} />
+  )
   return (
     <section className='space-y-4' aria-labelledby='schedules-title'>
       <div className='flex flex-wrap items-end justify-between gap-3'>
@@ -84,16 +92,10 @@ export function Schedules({
         <EmptyState title='当前没有复测计划' detail='可从已确认题目创建计划；没有计划时不会补造复测记录。' icon={CalendarClock} />
       ) : (
         <div className='space-y-4'>
-          {items.map((item) => (
-            <ScheduleCard
-              key={item.id}
-              item={item}
-              csrfToken={csrfToken}
-              canWrite={canWrite}
-              onSaved={() => { setNotice('复测计划已保存，历史记录已更新。'); onChanged() }}
-              onUnauthorized={onUnauthorized}
-            />
-          ))}
+          {currentItems.length ? currentItems.map(renderSchedule) : <EmptyState title='暂无待复测计划' detail='以前完成或取消的计划仍可展开回看。' icon={CalendarClock} />}
+          {previousItems.length ? <Disclosure title='已完成与取消的计划' description={`${previousItems.length} 条历史计划，需要回看时再展开。`}>
+            <div className='space-y-4'>{previousItems.map(renderSchedule)}</div>
+          </Disclosure> : null}
         </div>
       )}
     </section>
@@ -201,8 +203,7 @@ function ScheduleCard({
       </CardHeader>
 
       {item.history.length > 0 ? (
-        <CardContent className='border-b px-5 py-4'>
-          <h3 className='mb-3 text-sm font-semibold'>计划与完成历史</h3>
+        <Disclosure title='计划与完成历史' className='rounded-none border-0 border-b shadow-none'>
           <ol className='space-y-3'>
             {item.history.map((entry) => (
               <li key={entry.revision_no} className='border-l-2 border-muted pl-3 text-sm'>
@@ -215,7 +216,7 @@ function ScheduleCard({
               </li>
             ))}
           </ol>
-        </CardContent>
+        </Disclosure>
       ) : (
         <CardContent className='border-b px-5 py-4 text-sm text-muted-foreground'>暂无可显示的历史记录。</CardContent>
       )}

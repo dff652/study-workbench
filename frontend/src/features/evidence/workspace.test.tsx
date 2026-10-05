@@ -79,7 +79,7 @@ describe('EvidenceWorkspace', () => {
   it('uses a plain Chinese note instead of showing a raw success-rate state', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(emptyOverview())))
     render(<EvidenceWorkspace householdId='home-1' learner={learner('learner-1')} activePage='overview' onUnauthorized={vi.fn()} />)
-    expect((await screen.findByText(/暂不显示独立成功比例/)).textContent).toContain('没有经过确认的统计定义')
+    expect((await screen.findByText(/目前只展示已经核对的记录数量/)).textContent).toContain('没有记录的部分仍保留未知')
     expect(screen.queryByText('not_provided')).toBeNull()
   })
 

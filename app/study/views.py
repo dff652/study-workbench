@@ -1,6 +1,7 @@
 """Authenticated schedule and evidence-report pages."""
 from functools import wraps
 from uuid import uuid4
+from urllib.parse import urlencode
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist, SuspiciousOperation
@@ -136,12 +137,16 @@ def schedule_detail(request, schedule_pk):
 @never_cache
 def report(request, learner_entity_pk):
     try:
-        data = services.evidence_report(request.user, learner_entity_pk)
+        data = services.evidence_report(request.user, learner_entity_pk, material_id=request.GET.get("material") or None)
     except core.PersistenceError as exc:
         return _failure(request, exc)
     data["index_url"] = reverse("study:index")
     data["json_url"] = reverse("study:report_json", kwargs={"learner_entity_pk": learner_entity_pk})
     data["print_report_url"] = reverse("printing:evidence_report", kwargs={"pk": learner_entity_pk})
+    if data.get("material_id"):
+        suffix = "?" + urlencode({"material": data["material_id"]})
+        data["json_url"] += suffix
+        data["print_report_url"] += suffix
     return render(request, "study/report.html", data)
 
 
@@ -151,7 +156,7 @@ def report(request, learner_entity_pk):
 @never_cache
 def report_json(request, learner_entity_pk):
     try:
-        data = services.evidence_report(request.user, learner_entity_pk)
+        data = services.evidence_report(request.user, learner_entity_pk, material_id=request.GET.get("material") or None)
     except core.PersistenceError as exc:
         return _failure(request, exc)
     response = JsonResponse(data, json_dumps_params={"ensure_ascii": False, "indent": 2})

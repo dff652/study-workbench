@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { api, ApiError } from './api'
 import { AboutPanel } from './components/about-panel'
+import { LearningStart } from './components/learning-start'
+import { Disclosure } from './components/disclosure'
 import { NavButton } from './components/nav-button'
 import { EmptyState, isUnauthorized, type Remote } from './components/shared'
 import { Main } from './components/layout/main'
@@ -29,11 +31,14 @@ import type { AboutResponse, LearnersResponse, SessionResponse } from './types'
 
 const PRIMARY_NAV = [
   { view: 'overview', label: '学习总览', icon: Layers3 },
-  { view: 'materials', label: '资料整理', icon: House },
   { view: 'knowledge', label: '知识与题库', icon: BookOpenCheck },
-  { view: 'learning', label: '学习档案', icon: GraduationCap },
   { view: 'progress', label: '进度与复测', icon: CalendarClock },
   { view: 'documents', label: '文档中心', icon: FileText },
+] as const
+
+const FAMILY_NAV = [
+  { view: 'materials', label: '资料整理', icon: House },
+  { view: 'learning', label: '学习档案', icon: GraduationCap },
   { view: 'settings', label: '设置', icon: Settings },
 ] as const
 
@@ -179,11 +184,12 @@ export default function App() {
   const handleWorkspaceScope = useCallback((scope: WorkspacePageScope, requestedUrl: string) => {
     const current = routeRef.current
     const activeSession = sessionRef.current
-    if (activeSession.status !== 'loaded' || !scope.household_id || !scope.learner_id
+    if (activeSession.status !== 'loaded' || !scope.household_id
       || withoutFragment(current.screen) !== withoutFragment(requestedUrl)
       || !activeSession.data.households.some((item) => item.id === scope.household_id)) return
-    if (current.household === scope.household_id && current.learner === scope.learner_id) return
-    replaceRoute({ ...current, household: scope.household_id, learner: scope.learner_id })
+    const learnerId = scope.learner_id || (current.household === scope.household_id ? current.learner : '')
+    if (current.household === scope.household_id && current.learner === learnerId) return
+    replaceRoute({ ...current, household: scope.household_id, learner: learnerId })
   }, [replaceRoute])
 
   useEffect(() => {
@@ -331,7 +337,7 @@ export default function App() {
   const workspaceAnchor = fragmentOfPath(effectiveScreen)
   const solutionId = route.view === 'documents' ? solutionMaterialId(route.screen) : null
   const isSolutionScreen = solutionId !== null
-  const isDocumentsLanding = route.view === 'documents' && effectiveScreen.startsWith('/prints/') && !isSolutionScreen
+  const isDocumentsLanding = route.view === 'documents' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/prints/' && !isSolutionScreen
   const isBusinessScreen = Boolean(effectiveScreen) && (route.view === 'knowledge' || route.view === 'learning'
     || route.view === 'documents' || route.view === 'settings' || Boolean(route.screen))
   const needsLearner = route.view === 'overview' || route.view === 'attempts' || route.view === 'progress'
@@ -399,8 +405,14 @@ export default function App() {
           </div>
           <nav aria-label='主导航' className='flex gap-2 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible'>
             {PRIMARY_NAV.map(({ view, label, icon }) => (
-              <NavButton key={view} active={route.view === view || (view === 'learning' && route.view === 'attempts')} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
+              <NavButton key={view} active={route.view === view} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
             ))}
+            <details className='shrink-0 lg:mt-3 lg:border-t lg:pt-2' open={['materials', 'learning', 'attempts', 'settings'].includes(route.view) || undefined}>
+              <summary className='min-h-11 cursor-pointer rounded-md px-3 py-3 text-sm font-medium text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary'>家长协助</summary>
+              <div className='flex gap-2 pt-1 lg:flex-col'>{FAMILY_NAV.map(({ view, label, icon }) => (
+                <NavButton key={view} active={route.view === view || (view === 'learning' && route.view === 'attempts')} icon={icon} onClick={() => selectView(view)}>{label}</NavButton>
+              ))}</div>
+            </details>
           </nav>
           {householdId ? <section className='mx-3 mb-4 rounded-lg border border-sidebar-border px-3 py-3'>
             <h2 className='mb-2 text-xs font-semibold tracking-wide text-muted-foreground'>当前家庭</h2>
@@ -439,8 +451,8 @@ export default function App() {
             </div>
           </header>
 
-          <Main id='content' fluid className='space-y-6 px-4 py-6 sm:px-6 xl:px-8'>
-            {!isBusinessScreen ? <div className='flex flex-wrap items-end justify-between gap-4'>
+          <Main id='content' fluid className='mx-auto w-full max-w-[88rem] space-y-5 px-4 py-5 sm:px-6 xl:px-8'>
+            {!isBusinessScreen || isDocumentsLanding ? <div className='flex flex-wrap items-end justify-between gap-4'>
               <div>
                 <h1 className='text-2xl font-semibold tracking-tight sm:text-3xl'>{title}</h1>
                 <p className='mt-2 max-w-2xl text-sm leading-6 text-muted-foreground'>{descriptionFor(route.view)}</p>
@@ -450,7 +462,7 @@ export default function App() {
             {households.length === 0 ? (
               <EmptyState title='当前账号没有可访问的家庭' detail='请使用有权限的账号登录，或联系家庭所有者调整访问权限。' icon={House} />
             ) : <Card className='shadow-sm'>
-              <CardContent className='grid gap-4 p-4 sm:grid-cols-[minmax(14rem,0.8fr)_minmax(14rem,1fr)] sm:items-end sm:p-5'>
+              <CardContent className='grid gap-3 p-3 sm:grid-cols-[minmax(10rem,0.8fr)_minmax(12rem,1fr)] sm:items-end sm:px-4'>
                 <div>
                   <p id='household-label' className='mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground'><House className='size-3.5' aria-hidden='true' />家庭</p>
                   {households.length === 1 ? (
@@ -471,12 +483,20 @@ export default function App() {
                     </select>
                   ) : null}
                   {learners.status === 'loaded' && learners.data.items.length === 0 ? <div className='flex h-10 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground'>暂无学习者记录</div> : null}
-                </div> : <div className='rounded-lg bg-primary/[0.04] px-4 py-3'>
-                  <p className='text-xs text-muted-foreground'>当前家庭</p>
-                  <p className='mt-1 truncate font-semibold'>{selectedHousehold?.name || '未选择'}</p>
-                </div>}
+                </div> : null}
               </CardContent>
             </Card>}
+
+            {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningStart
+              learnerName={learner?.display_name || ''}
+              canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
+              onPractice={() => navigateBusinessPath(`/knowledge/?household_id=${encodeURIComponent(householdId)}#question-index`)}
+              onExplanation={() => selectView('documents')}
+              onReview={() => selectView('progress')}
+              onMaterials={() => selectView('materials')}
+              onRecord={() => learner && navigateBusinessPath(`/learning/profile/${encodeURIComponent(learner.id)}/attempt/new/`)}
+              onHistory={() => selectView('learning')}
+            /> : null}
 
             {route.view === 'settings' && settingsLinks.length > 0 ? (
               <nav aria-label='设置导航' className='flex flex-wrap gap-2'>
@@ -488,11 +508,22 @@ export default function App() {
             ) : null}
 
             {households.length > 0 && isBusinessScreen && effectiveScreen ? (
-              isDocumentsLanding ? <SolutionsLauncher householdId={householdId} onUnauthorized={handleUnauthorized} onOpen={(materialId) => navigateRoute({ ...route, view: 'documents', screen: solutionScreen(materialId) })} onMaterials={() => selectView('materials')} /> : null
+              isDocumentsLanding ? <SolutionsLauncher
+                key={householdId}
+                householdId={householdId}
+                onUnauthorized={handleUnauthorized}
+                onOpen={(materialId) => navigateRoute({ ...route, view: 'documents', screen: `${solutionScreen(materialId)}?panel=outputs` })}
+                onPrepareDocuments={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'
+                  ? (materialId) => navigateBusinessPath(`/prints/materials/${encodeURIComponent(materialId)}/five-books/`)
+                  : undefined}
+                onMaterials={() => selectView('materials')}
+              /> : null
             ) : null}
             {households.length > 0 && isSolutionScreen && solutionId ? <SolutionWorkspace
-              key={`${householdId}:${solutionId}`}
+              key={`${householdId}:${solutionId}:${new URL(effectiveScreen, window.location.origin).searchParams.get('panel') || 'editor'}`}
               materialId={solutionId}
+              householdId={householdId}
+              initialPanel={new URL(effectiveScreen, window.location.origin).searchParams.get('panel') === 'outputs' ? 'outputs' : 'editor'}
               csrfToken={session.data.csrf_token}
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
               onUnauthorized={handleUnauthorized}
@@ -500,22 +531,25 @@ export default function App() {
               onBack={() => navigateRoute({ ...route, screen: screenForView('documents', householdId, route.learner) })}
             /> : null}
             {households.length > 0 && isBusinessScreen && effectiveScreen && !isSolutionScreen ? (
-              <WorkspacePage
+              <BusinessPageFrame documentsLanding={isDocumentsLanding}><WorkspacePage
                 key={workspaceUrl}
                 url={workspaceUrl}
+                householdId={householdId}
+                canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
                 anchor={workspaceAnchor}
                 csrfToken={session.data.csrf_token}
                 onNavigate={stableNavigateBusinessPath}
                 onScopeLoaded={handleWorkspaceScope}
                 onUnauthorized={handleUnauthorized}
                 onUnsavedChange={handleUnsavedChange}
-              />
+              /></BusinessPageFrame>
             ) : null}
             {households.length > 0 && !isBusinessScreen && route.view === 'materials' ? (
               <MaterialWorkspace
                 key={householdId}
                 householdId={householdId}
                 householdName={selectedHousehold?.name || ''}
+                onUnsavedChange={handleUnsavedChange}
                 csrfToken={session.data.csrf_token}
                 canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
                 learners={learners.status === 'loaded' ? learners.data.items : []}
@@ -566,6 +600,12 @@ export default function App() {
   )
 }
 
+function BusinessPageFrame({ documentsLanding, children }: { documentsLanding: boolean; children: React.ReactNode }) {
+  return documentsLanding
+    ? <Disclosure title='制作练习与其他文档' description='需要打印练习、五册文档或证据报告时，在这里选择。'>{children}</Disclosure>
+    : children
+}
+
 function LoginRequired({ onRetry }: { onRetry: () => void }) {
   return (
     <div className='flex min-h-svh items-center justify-center bg-muted/40 p-5'>
@@ -604,13 +644,13 @@ function previewTitle(pathname: string, kind: 'image' | 'pdf') {
 function descriptionFor(view: View) {
   switch (view) {
     case 'materials': return '整理家庭资料、核对题面与原图，并检查整理结果。'
-    case 'overview': return '查看真实作答记录、来源和仍待核实的学习证据。'
+    case 'overview': return '选一道题开始，回看讲解，或继续上次的复习。'
     case 'attempts':
     case 'learning': return '查看逐次作答、来源、评价和订正历史。未知与未测状态会明确保留。'
     case 'progress': return '查看资料整理进展、已记录的学习证据和复测计划。'
-    case 'knowledge': return '整理知识点、方法、题型和题目之间的来源关联。'
+    case 'knowledge': return '找一道题练习，也可以查看相关知识点与解题方法。'
     case 'documents': return '生成、检查和下载家庭学习资料。'
-    case 'settings': return '管理家庭成员、模型服务和数据保留设置。'
+    case 'settings': return '由家长管理家庭成员、辅助工具和资料保留方式。'
   }
 }
 

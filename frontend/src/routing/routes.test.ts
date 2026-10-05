@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, screenForView, safeBusinessPath, withoutFragment } from './routes'
+import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, screenForView, safeBusinessPath, solutionMaterialId, withoutFragment } from './routes'
 
 describe('app routing', () => {
+  it('preserves the document viewing panel through refresh without accepting an encoded slash', () => {
+    const route = { view: 'documents' as const, household: 'home', learner: 'child', screen: '/__app__/solutions/material-1/?panel=outputs' }
+    const restored = parseRoute(new URL(routeUrl(route), 'https://study.test'))
+    expect(restored).toEqual(route)
+    expect(solutionMaterialId(restored.screen)).toBe('material-1')
+    expect(solutionMaterialId('/__app__/solutions/material%2Fother/?panel=outputs')).toBeNull()
+  })
   it('round-trips the selected page and household, learner, and business screen through the URL', () => {
     const route = {
       view: 'knowledge' as const,

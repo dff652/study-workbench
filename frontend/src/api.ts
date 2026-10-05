@@ -170,9 +170,9 @@ export const api = {
       }),
       signal,
     ),
-  materials: (householdId: string, signal: AbortSignal) =>
+  materials: (householdId: string, signal: AbortSignal, options: { q?: string; page?: number; pageSize?: number } = {}) =>
     getJson<MaterialListResponse>(
-      withQuery('/api/v1/materials/', { household: householdId }),
+      withQuery('/api/v1/materials/', { household: householdId, q: options.q || '', page: options.page || 1, page_size: options.pageSize || 20 }),
       signal,
     ),
   progress: (householdId: string, signal: AbortSignal) =>
@@ -270,7 +270,7 @@ export const api = {
   },
   createWorkflow: (
     materialId: string,
-    input: { request_key: string; learner_id?: string; proposal?: SkillImport },
+    input: { request_key: string; learner_id?: string; proposal?: SkillImport; evidence_scope?: 'material_questions' | 'selected_learner_history' },
     csrf: string,
     signal?: AbortSignal,
   ) => postJson<{ schema_version: 'swb.api.v1'; job: WorkflowJob }>(

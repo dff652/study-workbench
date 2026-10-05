@@ -9,5 +9,5 @@
       {% if not row.retention_url and not row.timing_url %}<span class="muted">当前角色没有维护权限。</span>{% endif %}
     </div></li>{% endfor %}</ul>{% else %}<p class="muted">当前账号尚未加入家庭。</p>{% endif %}
   </section>
-  <section class="panel"><h2>数据边界</h2><p>家庭成员只会看到当前角色获准的操作。导出可选择保留或归档，历史操作可追溯；这些操作不会删除原始照片、领域历史或模型提案。</p></section>
+  <details class="panel disclosure"><summary>了解数据维护范围</summary><div class="disclosure-content"><h2>数据边界</h2><p>家庭成员只会看到当前角色获准的操作。导出可选择保留或归档，历史操作可追溯；这些操作不会删除原始照片、领域历史或模型提案。</p></div></details>
 {% endblock %}

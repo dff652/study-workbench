@@ -7,7 +7,7 @@
   <form method="post" class="question-form" id="question-form">
     {% csrf_token %}{{ form.request_key }}{{ form.sources }}{{ form.context_token }}
     <section class="panel">
-      <h2>题目内容</h2>
+      <h2>1. 记录题目内容</h2>
       {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
       <div class="field"><label for="id_original_number">原资料题号</label>{{ form.original_number }}{{ form.original_number.errors }}</div>
       <div class="field"><label for="id_printed_text">印刷题干</label>{{ form.printed_text }}<span class="help-text">{{ form.printed_text.help_text }}</span>{{ form.printed_text.errors }}</div>
@@ -16,7 +16,7 @@
       <div class="field"><label for="id_reason">备注</label>{{ form.reason }}<span class="help-text">可补充本次录入或修改的说明。</span>{{ form.reason.errors }}</div>
     </section>
     <section class="panel region-editor" data-material-id="{{ material.id }}" data-storage-key="swb-question-sources-{{ material.id }}" {% if is_edit %}data-edit="true"{% endif %}>
-      <div class="section-heading"><div><h2>原图与区域</h2><p class="muted">可从多页各框选一个或多个区域；拖动后选择“加入题目来源”。题目不自动推断答案或笔迹作者。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
+      <div class="section-heading"><div><h2>2. 对照原图，选择题目区域</h2><p class="muted">在图上拖动，再选择“加入题目来源”。题目跨页时，可以继续从其他页加入区域。</p></div><span class="count-badge" id="source-count">0 个区域</span></div>
       {% if page_cards %}
         <div class="source-page-grid">
           {% for card in page_cards %}
@@ -31,9 +31,9 @@
                 </div>
                 <div class="image-wrap"><img class="region-image" src="{{ card.preview_url }}" width="{{ card.preview.width }}" height="{{ card.preview.height }}" alt="第 {{ card.position }} 页原图"><canvas class="region-canvas" aria-label="拖动以框选第 {{ card.position }} 页区域"></canvas></div>
                 <button type="button" class="secondary-button add-region">加入题目来源</button>
-                <fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend>
+                <details class="disclosure"><summary>精确选择区域（键盘）</summary><fieldset class="coordinate-fallback"><legend>键盘输入坐标</legend>
                   <label>x0 <input type="number" min="0" class="coord-x0" inputmode="numeric"></label><label>y0 <input type="number" min="0" class="coord-y0" inputmode="numeric"></label><label>x1 <input type="number" min="0" class="coord-x1" inputmode="numeric"></label><label>y1 <input type="number" min="0" class="coord-y1" inputmode="numeric"></label><button type="button" class="secondary-button add-coordinates">加入坐标区域</button>
-                </fieldset>
+                </fieldset></details>
                 {% if card.questions %}<p class="muted small-text">已关联 {{ card.questions|length }} 道题</p>{% endif %}
               </article>
             {% endif %}
@@ -43,7 +43,7 @@
       <div class="selected-regions"><h3>已选来源区域</h3><ul class="selected-source-list"></ul><p class="muted selection-empty">还没有选择区域。缺失题干但有区域时，仍可保存待补草稿。</p><p class="selection-feedback" role="status" aria-live="polite"></p></div>
       {% if form.sources.errors %}<div class="notice error" role="alert">{{ form.sources.errors }}</div>{% endif %}
     </section>
-    <p class="help-text">确认前请对照原图核对题干、公式和区域。缺失或看不清的内容可先保存草稿。</p>
+    <h2>3. 检查后保存</h2><p class="help-text">对照原图核对题干、公式和区域。缺失或看不清的内容可以先保存待补。</p>
     <div class="form-actions"><button class="primary-button" type="submit" name="submit_action" value="confirm">保存并确认题目</button><button class="secondary-button" type="submit" name="submit_action" value="draft">{{ submit_label }}</button>{% if is_edit %}<a class="secondary-button link-button" href="{{ question_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'web:material_detail' material.id %}">取消</a>{% endif %}</div>
   </form>
 {% endblock %}

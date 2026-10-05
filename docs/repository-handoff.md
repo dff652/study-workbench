@@ -2,7 +2,9 @@
 
 ## 当前知识讲解与学科源码交付（2026-10-05）
 
-按用户同意的顺序，UX 交付及 36 升级之后已在独立 `codex/knowledge-subject-integration` 工作树实现三种文档入口、人工学科分类与知识点讲解，见 [本机集成验收](reviews/knowledge-integration-20261005.md)。用户随后同意本地提交／review、push 和 PR；已验源码／测试已本地提交 `1f35fa4`，55 路径与最终验收字节一致，配套文档单独交付。完整范围包含此前未推送 UX，精确 GitHub 及独立交付状态见 [知识源码交付](reviews/knowledge-handoff-20261005.md)。本轮不合并或部署；36 仍运行下方已审 UX `bed16d3`，两份新增数据库迁移只在临时自有实例验证。匿名小批次与真实家庭、Word 实机的结果分别登记。
+按用户同意的顺序，UX 交付及 36 升级之后已在独立 `codex/knowledge-subject-integration` 工作树实现三种文档入口、人工学科分类与知识点讲解，见 [本机集成验收](reviews/knowledge-integration-20261005.md)。用户随后同意本地提交／review、push 和 PR；已验源码／测试提交 `1f35fa4`，55 路径与最终验收字节一致，11 份配套文档单独提交 `adabc45`。完整七笔交付包含此前未推送 UX，独立本地 review PASS：128 路径／168 历史 blob／558 跟踪输入、17 份变化文档／263 本地链接／6 锚点通过，独立新跑核心 26 项及精确类型／构建复现通过。
+
+已 push 当前分支并创建 [PR #3](https://github.com/dff652/study-workbench/pull/3)，目标为 main `4b70f03`，初始 PR HEAD／完整 128 个文件与本地一致，OPEN、非草稿且未合并；GitHub 没有返回自动检查。精确 GitHub 及独立证据见 [知识源码交付](reviews/knowledge-handoff-20261005.md)，本段事实回执继续提交到同一 PR，最终 HEAD 以 Git／PR 为准。本轮没有合并或部署，36 仍运行下方已审 UX `bed16d3`；两份新增迁移只在临时自有实例验证。匿名小批次与真实家庭、Word 实机的结果分别登记。以下段落保留各阶段当时的提交／push／运行状态，最新源码交付以上方为准。
 
 ## 当前 Web 体验改版本地交付（2026-10-05）
 

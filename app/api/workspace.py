@@ -35,7 +35,7 @@ PAGES = {
 }
 WIDGETS = {"web/regions.js": "regions", "web/order.js": "order", "web/derivatives.js": "derivatives"}
 TAGS = set("a abbr article aside b blockquote br button canvas caption code col colgroup dd details div dl dt em fieldset figcaption figure footer form h1 h2 h3 h4 h5 h6 header hr i img input label legend li main nav ol optgroup option p pre section select small span strong sub summary sup table tbody td textarea tfoot th thead time tr ul".split())
-ATTRS = set("id class name type value checked selected disabled readonly required multiple hidden open method enctype placeholder rows cols size min max step minlength maxlength pattern accept autocomplete for role title alt width height loading tabindex colspan rowspan scope aria-label aria-labelledby aria-describedby aria-live aria-hidden aria-expanded aria-controls".split())
+ATTRS = set("id class name type value checked selected disabled readonly required multiple hidden open method enctype placeholder rows cols size min max step minlength maxlength pattern accept autocomplete for role title alt width height loading tabindex colspan rowspan scope aria-label aria-labelledby aria-describedby aria-live aria-hidden aria-expanded aria-controls aria-selected".split())
 CSS_VALUE = re.compile(r"(?:[0-9.]+(?:%|px|rem|em)?|auto|none|block|inline-block|relative|absolute|center|left|right)\Z")
 CSS_KEYS = {"top", "left", "right", "bottom", "width", "height", "max-width", "max-height", "display", "position", "text-align"}
 

@@ -39,6 +39,8 @@ export function QuestionEditor({
   csrfToken,
   onUnauthorized,
   onBusyChange,
+  onUnsavedChange,
+  onErratumUnsavedChange,
   onSaved,
 }: {
   materialId: string
@@ -51,6 +53,8 @@ export function QuestionEditor({
   csrfToken: string
   onUnauthorized: () => void
   onBusyChange: (busy: boolean) => void
+  onUnsavedChange?: (dirty: boolean) => void
+  onErratumUnsavedChange?: (dirty: boolean) => void
   onSaved: (questionId: string, message: string) => void
 }) {
   const [number, setNumber] = useState(question?.number || '')
@@ -65,10 +69,16 @@ export function QuestionEditor({
   const [erratumOpen, setErratumOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [questionDirty, setQuestionDirty] = useState(false)
+  const discardQuestionForErratum = useRef(false)
   const requestKey = useRef<RequestKeyState>(null)
   const answerHasRequiredText = !answerEnabled || (answerBody.trim().length > 0 && answerBasis.trim().length > 0)
   const hasNodeDraft = Object.values(nodes).some((draft) => Object.values(draft).some((value) => value.trim().length > 0))
   const formDisabled = !canWrite || busy || workspaceBusy || erratumOpen
+  const markQuestionDirty = () => {
+    setQuestionDirty(true)
+    onUnsavedChange?.(true)
+  }
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -100,6 +110,8 @@ export function QuestionEditor({
       const key = requestKeyFor(requestKey, JSON.stringify([materialId, payload]))
       const result = await api.saveMaterialContent(materialId, { ...payload, request_key: key }, csrfToken)
       requestKey.current = null
+      setQuestionDirty(false)
+      onUnsavedChange?.(false)
       onSaved(result.question_id, '内容已核对并保存；历史版本和来源仍保留。')
     } catch (cause) {
       if (isUnauthorized(cause)) onUnauthorized()
@@ -127,6 +139,8 @@ export function QuestionEditor({
       const key = requestKeyFor(requestKey, JSON.stringify(['draft', materialId, payload]))
       const result = await api.saveMaterialContentDraft(materialId, { ...payload, request_key: key }, csrfToken)
       requestKey.current = null
+      setQuestionDirty(false)
+      onUnsavedChange?.(false)
       onSaved(result.question_id, '待补题面草稿已保存；题目仍未确认。')
     } catch (cause) {
       if (isUnauthorized(cause)) onUnauthorized()
@@ -174,7 +188,8 @@ export function QuestionEditor({
                 page={selectedPage}
                 boxes={sourceBoxes}
                 disabled={formDisabled}
-                onAdd={(bbox) => { setSources((current) => [...current, { page_id: selectedPage.id, bbox }]); setError('') }}
+                onSelectionChange={(hasSelection) => { if (hasSelection) markQuestionDirty() }}
+                onAdd={(bbox) => { setSources((current) => [...current, { page_id: selectedPage.id, bbox }]); setError(''); markQuestionDirty() }}
                 addLabel='确认添加这个题目来源'
               />
               <div>
@@ -186,7 +201,7 @@ export function QuestionEditor({
                       return (
                         <li key={`${source.page_id}:${index}`} className='flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm'>
                           <span>资料页 {sourcePage?.position ?? '未知'} · 原图区域 [{source.bbox.join(', ')}] px</span>
-                          {canWrite ? <button type='button' className='inline-flex items-center gap-1 text-destructive underline' aria-label={`移除第 ${index + 1} 个来源`} onClick={() => setSources((current) => current.filter((_, sourceIndex) => sourceIndex !== index))} disabled={formDisabled}><X className='size-3.5' aria-hidden='true' />移除</button> : null}
+                          {canWrite ? <button type='button' className='inline-flex items-center gap-1 text-destructive underline' aria-label={`移除第 ${index + 1} 个来源`} onClick={() => { setSources((current) => current.filter((_, sourceIndex) => sourceIndex !== index)); markQuestionDirty() }} disabled={formDisabled}><X className='size-3.5' aria-hidden='true' />移除</button> : null}
                         </li>
                       )
                     })}
@@ -200,17 +215,17 @@ export function QuestionEditor({
                 <h3 id='content-question-title' className='font-semibold'>题目内容与核对</h3>
                 <p className='mt-1 text-xs text-muted-foreground'>核对图中题面、题号与来源。看不清或缺失处可以保留为空并说明。</p>
               </div>
-              <Field label='题号（可留空）' value={number} onChange={setNumber} disabled={formDisabled} />
-              <TextField label='图中印刷题面转写' value={printedText} onChange={setPrintedText} disabled={formDisabled} required />
+              <Field label='题号（可留空）' value={number} onChange={(value) => { setNumber(value); markQuestionDirty() }} disabled={formDisabled} />
+              <TextField label='图中印刷题面转写' value={printedText} onChange={(value) => { setPrintedText(value); markQuestionDirty() }} disabled={formDisabled} required />
 
               <div className='rounded-lg border p-4'>
                 <label className='flex items-start gap-2 text-sm font-medium'>
-                  <input type='checkbox' className='mt-1' checked={answerEnabled} disabled={formDisabled || Boolean(question?.answer)} onChange={(event) => setAnswerEnabled(event.target.checked)} />
+                  <input type='checkbox' className='mt-1' checked={answerEnabled} disabled={formDisabled || Boolean(question?.answer)} onChange={(event) => { setAnswerEnabled(event.target.checked); markQuestionDirty() }} />
                   可选家长答案
                 </label>
                 {answerEnabled ? <div className='mt-3 space-y-3'>
-                  <TextField label='家长核对的答案或解答' value={answerBody} onChange={setAnswerBody} disabled={formDisabled} required />
-                  <TextField label='答案依据' value={answerBasis} onChange={setAnswerBasis} disabled={formDisabled} required />
+                  <TextField label='家长核对的答案或解答' value={answerBody} onChange={(value) => { setAnswerBody(value); markQuestionDirty() }} disabled={formDisabled} required />
+                  <TextField label='答案依据' value={answerBasis} onChange={(value) => { setAnswerBasis(value); markQuestionDirty() }} disabled={formDisabled} required />
                   {formulaCount > 0 ? (
                     <div className='rounded-md bg-muted/30 px-3 py-2 text-sm'>
                       <p>该答案已有 {formulaCount} 个公式，保存时会原样保留。</p>
@@ -220,15 +235,15 @@ export function QuestionEditor({
                 </div> : null}
               </div>
 
-              <NodeFields nodes={nodes} onChange={setNodes} disabled={formDisabled} hasSources={sources.length > 0} />
+              <NodeFields nodes={nodes} onChange={(value) => { setNodes(value); markQuestionDirty() }} disabled={formDisabled} hasSources={sources.length > 0} />
 
               {canWrite ? (
                 <div className='space-y-3 rounded-lg border bg-muted/20 p-4'>
                   <label className='flex items-start gap-2 text-sm'>
-                    <input type='checkbox' className='mt-1' checked={checked} onChange={(event) => setChecked(event.target.checked)} disabled={formDisabled} />
+                    <input type='checkbox' className='mt-1' checked={checked} onChange={(event) => { setChecked(event.target.checked); markQuestionDirty() }} disabled={formDisabled} />
                     我已对照原图核对题面、题号、来源及已填写内容，并确认保存本次修订。
                   </label>
-                  <Field label='本次核对原因' value={reason} onChange={setReason} disabled={formDisabled} required />
+                  <Field label='本次核对原因' value={reason} onChange={(value) => { setReason(value); markQuestionDirty() }} disabled={formDisabled} required />
                   {error ? <p role='alert' className='text-sm text-destructive'>{error}</p> : null}
                   <div className='flex flex-wrap gap-2'>
                   <Button type='submit' disabled={busy || workspaceBusy || erratumOpen || !checked || !reason.trim() || !printedText.trim() || sources.length === 0 || !answerHasRequiredText}>
@@ -257,8 +272,29 @@ export function QuestionEditor({
                 csrfToken={csrfToken}
                 onUnauthorized={onUnauthorized}
                 onBusyChange={onBusyChange}
-                onCancel={() => setErratumOpen(false)}
-                onSaved={(message) => { setErratumOpen(false); onSaved(question.id, message) }}
+                onUnsavedChange={onErratumUnsavedChange}
+                onBeforeSave={() => {
+                  if (!questionDirty) {
+                    discardQuestionForErratum.current = false
+                    return true
+                  }
+                  const confirmed = window.confirm('题目表单还有未保存输入。应用讲义勘误后会重新读取题目并丢弃这些修改，仍要继续吗？')
+                  discardQuestionForErratum.current = confirmed
+                  return confirmed
+                }}
+                onCancel={() => {
+                  discardQuestionForErratum.current = false
+                  setErratumOpen(false)
+                }}
+                onSaved={(message) => {
+                  setErratumOpen(false)
+                  if (discardQuestionForErratum.current) {
+                    setQuestionDirty(false)
+                    onUnsavedChange?.(false)
+                  }
+                  discardQuestionForErratum.current = false
+                  onSaved(question.id, message)
+                }}
               />
             )}
           </div>
@@ -294,6 +330,8 @@ function ErratumForm({
   csrfToken,
   onUnauthorized,
   onBusyChange,
+  onUnsavedChange,
+  onBeforeSave,
   onCancel,
   onSaved,
 }: {
@@ -304,6 +342,8 @@ function ErratumForm({
   csrfToken: string
   onUnauthorized: () => void
   onBusyChange: (busy: boolean) => void
+  onUnsavedChange?: (dirty: boolean) => void
+  onBeforeSave?: () => boolean
   onCancel: () => void
   onSaved: (message: string) => void
 }) {
@@ -313,11 +353,13 @@ function ErratumForm({
   const [checked, setChecked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [draftDirty, setDraftDirty] = useState(false)
   const keyRef = useRef<RequestKeyState>(null)
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (busy || workspaceBusy || !checked || !correctedText.trim() || !basis.trim() || !reason.trim()) return
+    if (onBeforeSave && !onBeforeSave()) return
     const payload = {
       expected: context,
       question_id: question.id,
@@ -333,6 +375,8 @@ function ErratumForm({
       const key = requestKeyFor(keyRef, JSON.stringify([materialId, payload]))
       await api.saveErratum(materialId, { ...payload, request_key: key }, csrfToken)
       keyRef.current = null
+      setDraftDirty(false)
+      onUnsavedChange?.(false)
       onSaved('讲义勘误已核对并应用；原印刷题面及勘误依据仍会保留。')
     } catch (cause) {
       if (isUnauthorized(cause)) onUnauthorized()
@@ -353,17 +397,21 @@ function ErratumForm({
         <div className='rounded-md border bg-background p-3'><p className='text-xs font-medium text-muted-foreground'>原印刷题面（保留）</p><p className='mt-1 whitespace-pre-wrap text-sm'>{question.printed_text || '未记录'}</p></div>
         <div className='rounded-md border bg-background p-3'><p className='text-xs font-medium text-muted-foreground'>当前工作题干</p><p className='mt-1 whitespace-pre-wrap text-sm'>{question.working_text || '未记录'}</p></div>
       </div>
-      <TextField label='订正后的讲义题干' value={correctedText} onChange={setCorrectedText} disabled={busy || workspaceBusy} required />
-      <TextField label='订正依据' value={basis} onChange={setBasis} disabled={busy || workspaceBusy} required />
-      <Field label='勘误原因' value={reason} onChange={setReason} disabled={busy || workspaceBusy} required />
+      <TextField label='订正后的讲义题干' value={correctedText} onChange={(value) => { setCorrectedText(value); setDraftDirty(true); onUnsavedChange?.(true) }} disabled={busy || workspaceBusy} required />
+      <TextField label='订正依据' value={basis} onChange={(value) => { setBasis(value); setDraftDirty(true); onUnsavedChange?.(true) }} disabled={busy || workspaceBusy} required />
+      <Field label='勘误原因' value={reason} onChange={(value) => { setReason(value); setDraftDirty(true); onUnsavedChange?.(true) }} disabled={busy || workspaceBusy} required />
       <label className='flex items-start gap-2 text-sm'>
-        <input type='checkbox' className='mt-1' checked={checked} onChange={(event) => setChecked(event.target.checked)} disabled={busy || workspaceBusy} />
+        <input type='checkbox' className='mt-1' checked={checked} onChange={(event) => { setChecked(event.target.checked); setDraftDirty(true); onUnsavedChange?.(true) }} disabled={busy || workspaceBusy} />
         我已核对讲义原文、订正内容和依据，并确认应用这条勘误。
       </label>
       {error ? <p role='alert' className='text-sm text-destructive'>{error}</p> : null}
       <div className='flex flex-wrap gap-2'>
         <Button type='submit' disabled={busy || workspaceBusy || !checked || !correctedText.trim() || !basis.trim() || !reason.trim()}>{busy ? '正在保存…' : '确认并应用勘误'}</Button>
-        <Button type='button' variant='outline' disabled={busy || workspaceBusy} onClick={onCancel}>返回题目核对</Button>
+        <Button type='button' variant='outline' disabled={busy || workspaceBusy} onClick={() => {
+          if (draftDirty && !window.confirm('讲义勘误还有未保存内容，返回会丢失这些输入。仍要返回吗？')) return
+          if (draftDirty) onUnsavedChange?.(false)
+          onCancel()
+        }}>返回题目核对</Button>
       </div>
     </form>
   )

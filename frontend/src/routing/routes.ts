@@ -7,6 +7,10 @@ export type AppRoute = {
   household: string
   learner: string
   screen: string
+  tab?: string
+  materialId?: string
+  materialQuery?: string
+  materialPage?: number
 }
 
 export type LearnerRouteTarget = { id: string; report_url: string }
@@ -43,11 +47,18 @@ export function parseRoute(location: Pick<Location, 'pathname' | 'search'>, orig
     : ''
   const screenHousehold = screen ? householdIdForBusinessPath(screen, origin) : null
   const outerHousehold = params.get('household') || params.get('household_id') || ''
+  const materialId = params.get('material') || ''
+  const materialPage = Number(params.get('page') || '1')
+  const materialQuery = (params.get('q') || '').slice(0, 200)
   return {
     view,
     household: screenHousehold || outerHousehold,
     learner: screenLearner || (screenHousehold && screenHousehold !== outerHousehold ? '' : params.get('learner') || ''),
     screen,
+    ...(validTab(params.get('tab')) ? { tab: params.get('tab')! } : {}),
+    ...(view === 'materials' && /^[a-z0-9_-]{1,128}$/i.test(materialId) ? { materialId } : {}),
+    ...(view === 'materials' && materialQuery ? { materialQuery } : {}),
+    ...(view === 'materials' && Number.isSafeInteger(materialPage) && materialPage > 1 ? { materialPage } : {}),
   }
 }
 
@@ -57,6 +68,12 @@ export function routeUrl(route: AppRoute) {
   if (route.household) params.set('household', route.household)
   if (route.learner) params.set('learner', route.learner)
   if (route.screen) params.set('screen', route.screen)
+  if (validTab(route.tab)) params.set('tab', route.tab!)
+  if (route.view === 'materials') {
+    if (route.materialId && /^[a-z0-9_-]{1,128}$/i.test(route.materialId)) params.set('material', route.materialId)
+    if (route.materialQuery) params.set('q', route.materialQuery.slice(0, 200))
+    if (Number.isSafeInteger(route.materialPage) && route.materialPage! > 1) params.set('page', String(route.materialPage))
+  }
   return `/app/?${params.toString()}`
 }
 
@@ -91,13 +108,24 @@ export function routeForBusinessPath(path: string, current: AppRoute, learner = 
   const requestedLearner = hasRequestedLearner ? target.searchParams.get('learner') || '' : ''
   const linkedLearner = household === current.household ? learnerIdForBusinessPath(safePath, learners) || '' : ''
   const targetLearner = profileLearner || linkedLearner || (hasRequestedLearner ? requestedLearner : household === current.household ? learner : '')
-  return {
+  const next: AppRoute = {
     ...current,
     view,
     household,
     learner: targetLearner,
     screen: safePath,
   }
+  if (view !== current.view) delete next.tab
+  if (view !== 'materials' || household !== current.household) {
+    delete next.materialId
+    delete next.materialQuery
+    delete next.materialPage
+  }
+  return next
+}
+
+function validTab(value: string | null | undefined) {
+  return typeof value === 'string' && /^[a-z][a-z0-9_-]{0,30}$/.test(value)
 }
 
 export function householdIdForBusinessPath(path: string, origin = window.location.origin): string | null {
@@ -177,6 +205,7 @@ export function solutionMaterialId(screen: string) {
 }
 
 export function viewForBusinessPath(pathname: string, fallback: View): View {
+  if (solutionMaterialId(pathname) !== null) return 'documents'
   if (pathname.startsWith('/knowledge/')) return 'knowledge'
   if (pathname.startsWith('/catalogue/')) return 'knowledge'
   if (pathname.startsWith('/learning/schedules/')) return 'progress'

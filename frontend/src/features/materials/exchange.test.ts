@@ -42,7 +42,7 @@ describe('skill exchange preview parser', () => {
     expect(parseProposal(JSON.stringify(v2), pages).records.at(-1)?.kind).toBe('diagram')
     const changed = JSON.parse(JSON.stringify(v2))
     changed.records.at(-1).data.source.bbox = [1, 2, 110, 120]
-    expect(() => parseProposal(JSON.stringify(changed), pages)).toThrow(/本题原图区域/)
+    expect(() => parseProposal(JSON.stringify(changed), pages)).toThrow(/教学图须来自所关联题目的原图区域/)
   })
   it('accepts and retains all record kinds and optional tool input metadata', () => {
     const parsed = parseProposal(JSON.stringify(completePackage()), pages)
@@ -52,11 +52,24 @@ describe('skill exchange preview parser', () => {
     expect(parsed.tool_inputs).toEqual({ sources: ['scan'], preparation: 'local-only' })
   })
 
+  it('rejects unsafe v2 asset paths', () => {
+    const pkg = { ...completePackage(), schema_version: 'swb.skill-import.v2' }
+    const asset = { sha256: 'a'.repeat(64), media_type: 'image/png', base64: 'aGVsbG8=' }
+    for (const path of ['', '/figure.png', '../figure.png', 'dir\\figure.png', 'figure:private.png']) {
+      expect(() => parseProposal(JSON.stringify({ ...pkg, assets: { [path]: asset } }), pages)).toThrow(/图示文件不完整或格式不受支持/)
+    }
+  })
+
   it('rejects duplicate keys, unknown fields and mismatched page digests', () => {
     expect(() => parseProposal('{"schema_version":"swb.skill-import.v1","schema_version":"swb.skill-import.v1"}', pages)).toThrow(ProposalError)
-    expect(() => parseProposal(JSON.stringify({ ...completePackage(), extra: true }), pages)).toThrow(/未支持字段/)
+    expect(() => parseProposal(JSON.stringify({ ...completePackage(), extra: true }), pages)).toThrow(/包含无法识别的信息，未能安全导入/)
     const mismatch = completePackage()
     mismatch.sources[0].sha256 = 'b'.repeat(64)
-    expect(() => parseProposal(JSON.stringify(mismatch), pages)).toThrow(/SHA-256/)
+    expect(() => parseProposal(JSON.stringify(mismatch), pages)).toThrow(/当前资料的原图页不一致/)
+    try {
+      parseProposal(JSON.stringify(mismatch), pages)
+    } catch (error) {
+      expect((error as Error).message).not.toMatch(/sha256|swb\.|page_id|source_id/i)
+    }
   })
 })

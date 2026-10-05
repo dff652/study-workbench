@@ -2,9 +2,10 @@
 {% block title %}学习档案 · 学习资料工作台{% endblock %}
 {% block content %}
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>学习档案</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">逐次证据</p><h1>学习者档案</h1><p class="muted">观察、实际作答与评价分开保存。未知信息会保留为未知。</p></div>{% if household_id and writable %}<div class="button-row"><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">新增来源观察</a></div>{% endif %}</div>
+  <div class="page-heading workspace-toolbar"><h1>学习档案</h1>{% if household_id and writable %}<div class="button-row"><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">新增来源观察</a></div>{% endif %}</div>
+  <p class="muted">观察、实际作答与评价分开保存。未知信息会保留为未知。</p>
   {% if households %}
-    <section class="panel">
+    <section class="panel {% if household_id %}workspace-scope-field{% endif %}">
       <form method="get" class="inline-form">
         <div class="field grow"><label for="household">家庭</label><select id="household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}" {% if member.household_id|stringformat:'s' == household_id %}selected{% endif %}>家庭 {{ forloop.counter }}</option>{% endfor %}</select></div>
         <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>

@@ -39,7 +39,7 @@ it.each(['title', 'workflow'] as const)('preserves and saves new %s input entere
     if (url.pathname.startsWith('/api/v1/materials/')) return Response.json({ schema_version: 'swb.api.v1', material: url.pathname.includes('material-2') ? created : original, pages: [], readiness, jobs: [] })
     throw new Error('Unexpected HTTP request: ' + url.pathname)
   }))
-  render(<MaterialWorkspace householdId='home-a' householdName='合成家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={onUnsavedChange} />)
+  render(<MaterialWorkspace householdId='home-a' householdName='合成家庭' csrfToken='synthetic' canWrite learners={[]} selectedLearnerId='' onUnauthorized={vi.fn()} onOpenSolutions={vi.fn()} onUnsavedChange={onUnsavedChange} initialTab='tasks' />)
   if (kind === 'title') {
     await user.click(await screen.findByRole('button', { name: '新建资料' }))
     await user.type(screen.getByLabelText('资料名称'), '第一份新资料')

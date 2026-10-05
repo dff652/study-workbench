@@ -305,6 +305,7 @@ export type ReviewSchedule = {
   prompt_plan: string
   due_date: string
   state: ScheduleState
+  overdue: boolean
   target_stale: boolean
   context: unknown
   detail_url: string | null

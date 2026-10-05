@@ -55,7 +55,7 @@ describe('EvidenceWorkspace', () => {
 
     fireEvent.change(screen.getByLabelText('实际作答日期起'), { target: { value: '2026-10-01' } })
     await user.selectOptions(screen.getByLabelText('作答来源'), 'unknown')
-    await screen.findByText('题干待核对')
+    expect((await screen.findAllByText('题干待核对')).length).toBeGreaterThan(0)
     const requestUrls = fetchMock.mock.calls.map(([input]) => new URL(String(input), window.location.origin))
     expect(requestUrls.some((url) => url.searchParams.get('date_from') === '2026-10-01' && url.searchParams.get('source_kind') === 'unknown')).toBe(true)
   })
@@ -83,6 +83,79 @@ describe('EvidenceWorkspace', () => {
     expect(screen.queryByText('not_provided')).toBeNull()
   })
 
+  it('keeps filters visible and preserves them while switching between summary and attempt history', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin)
+      return url.pathname.endsWith('/overview/')
+        ? Response.json(emptyOverview())
+        : Response.json(attempts('单独保留的这次作答'))
+    })
+    const onTabChange = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const props = { householdId: 'home-1', learner: learner('learner-1'), activePage: 'overview' as const, onTabChange, onUnauthorized: vi.fn() }
+    const view = render(<EvidenceWorkspace {...props} initialTab='overview' />)
+
+    expect(await screen.findByRole('heading', { name: '学习概况' })).toBeTruthy()
+    const dateFrom = screen.getByLabelText('实际作答日期起') as HTMLInputElement
+    fireEvent.change(dateFrom, { target: { value: '2026-10-02' } })
+    await user.click(screen.getByRole('tab', { name: '作答记录' }))
+
+    expect((await screen.findAllByText('单独保留的这次作答')).length).toBeGreaterThan(0)
+    expect((screen.getByLabelText('实际作答日期起') as HTMLInputElement).value).toBe('2026-10-02')
+    expect(onTabChange).toHaveBeenCalledWith('attempts')
+    view.rerender(<EvidenceWorkspace {...props} initialTab='attempts' />)
+    expect(screen.getByRole('tab', { name: '作答记录' }).getAttribute('aria-selected')).toBe('true')
+    view.rerender(<EvidenceWorkspace {...props} initialTab='overview' />)
+    expect(await screen.findByRole('heading', { name: '学习概况' })).toBeTruthy()
+    expect((screen.getByLabelText('实际作答日期起') as HTMLInputElement).value).toBe('2026-10-02')
+    const requestUrls = fetchMock.mock.calls.map(([input]) => new URL(String(input), window.location.origin))
+    expect(requestUrls.some((url) => url.pathname.endsWith('/attempts/') && url.searchParams.get('date_from') === '2026-10-02')).toBe(true)
+  })
+
+  it('shows an available original photo beside its unknown assessment and explains a missing photo', async () => {
+    const user = userEvent.setup()
+    const longQuestion = '需要对照来源的作答。'.repeat(20)
+    const response = attempts(longQuestion)
+    response.items[0].sources = [
+      { image_id: 'private-image', region_id: 'private-region', region_revision_id: 'private-region-revision', purpose: 'handwriting', label: '作业照片', page_url: '/web/pages/original/', preview_url: '/web/pages/preview/', region_style: 'left:12.0000%;top:20.0000%;width:30.0000%;height:18.0000%;', missing: false },
+      { image_id: 'missing-image', region_id: 'missing-region', region_revision_id: 'missing-region-revision', purpose: 'other', label: '旧照片', page_url: null, preview_url: null, region_style: '', missing: true },
+    ]
+    response.items[0].assessments = [{
+      assessment_id: 'private-assessment', assessment_revision_id: 'private-assessment-revision', attempt_revision_id: 'revision-private',
+      review_state: 'draft', current: false, review_state_label: '待核对', published: false, reviewer_id: null,
+      dimensions: [{ dimension: 'accuracy', judgment: 'unknown', basis: 'undetermined', dimension_label: '答案正确性', judgment_label: '尚未核实', basis_label: '依据不足', rationale: '', unknown_reason: '照片看不清', sources: [] }],
+    }]
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(response)))
+    render(<EvidenceWorkspace householdId='home-1' learner={learner('learner-1')} activePage='attempts' onUnauthorized={vi.fn()} />)
+
+    const questionText = await screen.findAllByText(longQuestion)
+    expect(questionText.length).toBeGreaterThan(0)
+    expect(questionText[0].className).toContain('whitespace-pre-wrap')
+    const original = screen.getByRole('img', { name: '作业照片，原图' })
+    expect(original).toBeTruthy()
+    const selectedDetails = screen.getByRole('region', { name: '所选作答详情' })
+    const columns = selectedDetails.parentElement
+    expect(columns?.className).toContain('xl:grid-cols-')
+    expect(columns?.querySelector('[aria-labelledby="attempt-list-heading"]')).toBeTruthy()
+    expect(Array.from(columns?.querySelectorAll('div') || []).some((element) => element.className.includes('xl:max-h-[70vh]'))).toBe(true)
+    expect(screen.getByText('选择作答，核对原图与评价。')).toBeTruthy()
+    const imageFrame = original.parentElement
+    expect(imageFrame?.className).toContain('inline-block')
+    expect(original.className).toContain('w-auto')
+    expect(original.className).toContain('max-h-96')
+    expect(original.className).not.toContain('object-contain')
+    const selection = imageFrame?.querySelector('.border-amber-600')
+    expect(selection).toBeTruthy()
+    expect(selection?.parentElement).toBe(imageFrame)
+    await user.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(screen.getByText('原图暂不可用')).toBeTruthy()
+    expect(screen.getByText('尚未核实 · 依据不足')).toBeTruthy()
+    expect(screen.getByText('未确定原因：照片看不清')).toBeTruthy()
+    expect(screen.queryByText('private-image')).toBeNull()
+    expect(screen.queryByText('private-assessment-revision')).toBeNull()
+  })
+
   it('aborts and ignores a stale learner response after selection changes', async () => {
     let resolveFirst: (response: Response) => void = () => undefined
     const firstSignal: { current: AbortSignal | null } = { current: null }
@@ -99,7 +172,7 @@ describe('EvidenceWorkspace', () => {
     const props = { householdId: 'home-1', activePage: 'attempts' as const, onUnauthorized: vi.fn() }
     const view = render(<EvidenceWorkspace {...props} learner={learner('old-learner')} />)
     view.rerender(<EvidenceWorkspace {...props} learner={learner('new-learner')} />)
-    expect((await screen.findByText('new learner record')).textContent).toContain('new learner record')
+    expect((await screen.findAllByText('new learner record')).length).toBeGreaterThan(0)
     expect(firstSignal.current?.aborted).toBe(true)
     await act(async () => { resolveFirst(Response.json(attempts('stale learner record'))) })
     expect(screen.queryByText('stale learner record')).toBeNull()

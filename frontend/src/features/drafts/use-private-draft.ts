@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadPrivateDraft, savePrivateDraft, type PrivateDraft } from './client'
 import { makeRequestKey } from '../materials/request-keys'
+import { userMessage } from '../../lib/user-message'
 
 type DraftPayload<T> = T | { cleared: true }
 
@@ -141,7 +142,7 @@ export function usePrivateDraft<T>({ key, householdId, csrfToken, baseStamp, ena
       loadFailed.current = true
       loaded.current = false
       loadedScope.current = -1
-      setLoadError(cause instanceof Error ? cause.message : '私人草稿暂时无法读取。')
+      setLoadError(userMessage(cause instanceof Error ? cause.message : '', '私人草稿暂时无法读取，请保留当前输入，稍后重试。'))
       setGeneration((value) => value + 1)
     })
     return () => {

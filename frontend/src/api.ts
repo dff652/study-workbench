@@ -1,3 +1,4 @@
+import { userMessage } from './lib/user-message'
 import type {
   AboutResponse,
   AttemptResponse,
@@ -50,7 +51,7 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorBody = body as { error?: { code?: string; message?: string } }
     throw new ApiError(
-      errorBody.error?.message || '请求未完成，请重试。',
+      userMessage(errorBody.error?.message, '请求未完成，请核对输入后重试。'),
       response.status,
       errorBody.error?.code || 'request_failed',
     )
@@ -323,7 +324,7 @@ export const api = {
 }
 
 export function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : '连接暂时不可用，请重试。'
+  return userMessage(error instanceof Error ? error.message : null, '连接暂时不可用，请重试。')
 }
 
 export function getSolutions(materialId: string, signal: AbortSignal) {

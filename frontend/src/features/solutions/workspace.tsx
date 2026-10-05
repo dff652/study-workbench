@@ -4,6 +4,7 @@ import { EmptyState, isUnauthorized, LoadingState, RetryState, sameOriginHref } 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Disclosure } from '../../components/disclosure'
+import { WorkspaceHeading, WorkspacePanel, WorkspaceTabs } from '../../components/workspace-tabs'
 import type { AnySolutionContent, SolutionFigure, SolutionOutput, SolutionOutputActionInput, SolutionQuestion, SolutionWorkspaceResponse, StructuredSolutionContent, StructuredSolutionQuestion } from '../../types'
 import type { PrivateDraft } from '../drafts/client'
 import { usePrivateDraft } from '../drafts/use-private-draft'
@@ -14,8 +15,14 @@ import { contentHasMinimumForGeneration, isAnySolutionContent, outputIsProcessin
 type Remote<T> = { status: 'loading' } | { status: 'loaded'; data: T } | { status: 'error'; message: string }
 type SaveState = 'idle' | 'saving' | 'saved' | 'failed' | 'conflict'
 type ActionName = 'confirm' | 'generate'
+type SolutionTab = 'editor' | 'outputs' | 'history'
 type SolutionDraftPayload = { content: AnySolutionContent; reason: string }
 type SolutionPrivateDraft = PrivateDraft<SolutionDraftPayload | { cleared: true }>
+
+function normalizeSolutionTab(value: string | undefined, legacyPanel: 'editor' | 'outputs'): SolutionTab {
+  if (value === 'outputs' || value === 'history' || value === 'editor') return value
+  return legacyPanel
+}
 
 const EMPTY_SOLUTION_CONTENT: StructuredSolutionContent = {
   schema_version: 'swb.solution.v2', title: '', lectures: [], questions: [],
@@ -31,6 +38,8 @@ export function SolutionWorkspace({
   onBack,
   onUnsavedChange,
   initialPanel = 'editor',
+  initialTab,
+  onTabChange,
 }: {
   materialId: string
   householdId: string
@@ -40,6 +49,8 @@ export function SolutionWorkspace({
   onBack: () => void
   onUnsavedChange?: (unsaved: boolean) => void
   initialPanel?: 'editor' | 'outputs'
+  initialTab?: string
+  onTabChange?: (value: string) => void
 }) {
   const [remote, setRemote] = useState<Remote<SolutionWorkspaceResponse>>({ status: 'loading' })
   const [content, setContent] = useState<StructuredSolutionContent | null>(null)
@@ -71,7 +82,7 @@ export function SolutionWorkspace({
   const [actionError, setActionError] = useState('')
   const [retry, setRetry] = useState(0)
   const [historyId, setHistoryId] = useState<number | null>(null)
-  const [activePanel, setActivePanel] = useState<'editor' | 'outputs' | 'history'>(initialPanel)
+  const [activePanel, setActivePanel] = useState<SolutionTab>(() => normalizeSolutionTab(initialTab, initialPanel))
   const [expandedOutputId, setExpandedOutputId] = useState<string | null>(null)
   const [history, setHistory] = useState<{ status: 'idle' | 'loading' | 'loaded' | 'error'; revision?: SolutionWorkspaceResponse['revision']; message?: string }>({ status: 'idle' })
   const [olderHistory, setOlderHistory] = useState<SolutionWorkspaceResponse['history']>([])
@@ -89,8 +100,13 @@ export function SolutionWorkspace({
   const [pollRetry, setPollRetry] = useState(0)
 
   useEffect(() => {
-    setActivePanel(initialPanel)
-  }, [initialPanel, materialId])
+    setActivePanel(normalizeSolutionTab(initialTab, initialPanel))
+  }, [initialPanel, initialTab])
+
+  const changeTab = (value: SolutionTab) => {
+    setActivePanel(value)
+    onTabChange?.(value)
+  }
 
   useEffect(() => {
     mountedRef.current = true
@@ -365,7 +381,7 @@ export function SolutionWorkspace({
       if (data.revision) expectedVersionRef.current = data.revision.version
       if (nextAction === 'generate') {
         setExpandedOutputId(mergeOutputs(olderOutputs, data.outputs)[0]?.id || null)
-        setActivePanel('outputs')
+        changeTab('outputs')
       }
     } catch (cause) {
       if (isUnauthorized(cause)) onUnauthorized()
@@ -468,15 +484,13 @@ export function SolutionWorkspace({
   const candidateBaseChanged = Boolean(privateDraft.candidate && privateDraft.candidate.base_stamp !== baseStamp)
 
   return <div className='space-y-5'>
-    <div className='flex flex-wrap items-start justify-between gap-3'>
-      <div><h1 className='text-2xl font-semibold'>{data.material.title} · 逐题解析</h1><p className='mt-1 text-sm text-muted-foreground'>按步骤整理讲义解法。解析文档与学习者真实作答分别记录，生成答案不会认定已经掌握。</p></div>
-      <Button type='button' variant='outline' onClick={onBack}>返回文档中心</Button>
-    </div>
+    <WorkspaceHeading title={<span className='break-words'>{data.material.title} · 逐题讲解</span>} actions={<Button type='button' variant='outline' onClick={onBack}>返回文档中心</Button>} />
+    <p className='-mt-3 text-sm text-muted-foreground'>按步骤整理讲义解法。解析文档与学习者真实作答分别记录，生成答案不会认定已经掌握。</p>
 
     {!writable ? <p className='rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground'>当前为只读访问；可以浏览历史版本和已生成文档。</p> : null}
     {data.revision?.confirmed && !dirty ? <p className='rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950'>当前正式版本已明确确认。修改并保存后会形成新的版本。</p> : null}
 
-    {writable && privateDraft.loadError ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950'>私人草稿暂时无法读取：{privateDraft.loadError}。当前页面内容仍保留；请先重试页面，解决后再编辑或正式保存。</p> : null}
+    {writable && privateDraft.loadError ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950'>私人草稿暂时无法读取，自动保存和正式保存已暂停；当前页面内容仍保留。请刷新页面后重试。</p> : null}
     {privateDraft.message ? <p role={privateDraft.message.includes('未保存') || privateDraft.message.includes('未清理') ? 'alert' : 'status'} className='text-sm'>{privateDraft.message}</p> : null}
 
     {writable && privateDraft.candidate ? <Card className='border-amber-300'>
@@ -511,11 +525,13 @@ export function SolutionWorkspace({
 
     {draftCompare && content ? <Card><CardHeader className='flex flex-wrap items-start justify-between gap-3'><div><CardTitle className='text-base'>私人草稿比较</CardTitle><CardDescription>确认要恢复哪一侧；比较不会修改历史或当前输入。</CardDescription></div><Button type='button' size='sm' variant='outline' onClick={() => setDraftCompare(null)}>关闭比较</Button></CardHeader><CardContent><ContentCompare leftTitle={draftCompare.title} left={draftCompare.content} rightTitle='当前页面内容' right={content} workspace={compareWorkspace} /></CardContent></Card> : null}
 
-    <nav aria-label='解析工作区' className='flex flex-wrap gap-2 rounded-xl border bg-muted/10 p-2'>
-      {([['editor', '编辑讲解'], ['outputs', '生成文件'], ['history', '历史版本']] as const).map(([panel, label]) => <Button key={panel} type='button' size='sm' variant={activePanel === panel ? 'default' : 'outline'} aria-pressed={activePanel === panel} onClick={() => setActivePanel(panel)}>{label}</Button>)}
-    </nav>
+    <WorkspaceTabs id='solution' label='讲解工作区' tabs={[
+      { value: 'editor', label: '编辑讲解' },
+      { value: 'outputs', label: '生成文件', count: outputs.length },
+      { value: 'history', label: '历史版本', count: versionHistory.length },
+    ]} value={activePanel} onChange={(value) => changeTab(value as SolutionTab)} />
 
-    <section id='solution-editor-panel' aria-label='编辑讲解' hidden={activePanel !== 'editor'} className='space-y-5'>
+    <WorkspacePanel id='solution' value='editor' active={activePanel}>
     {writable ? <Card>
       <CardHeader className='border-b pb-4'><CardTitle className='text-base'>检查并保存</CardTitle><CardDescription>编辑时只自动保存私人草稿。选择“保存为新版本”才写入正式历史；确认或生成会先保存当前内容，再继续操作。</CardDescription></CardHeader>
       <CardContent className='flex flex-wrap items-end gap-3 p-4'>
@@ -541,9 +557,9 @@ export function SolutionWorkspace({
     <section aria-labelledby='solution-edit-heading' className='space-y-3'><div><h2 id='solution-edit-heading' className='text-xl font-semibold'>一、整理解析</h2><p className='mt-1 text-sm text-muted-foreground'>先核对题干和原图来源，再按步骤填写文字、公式与图示。</p></div>
       <SolutionEditor content={content} workspace={data} materialId={materialId} csrfToken={csrfToken} canWrite={writable && action === null} onChange={changeContent} onAssetsChanged={(assets) => setRemote((current) => current.status === 'loaded' ? { status: 'loaded', data: { ...current.data, assets: mergeAssets(current.data.assets, assets) } } : current)} onUnauthorized={onUnauthorized} />
     </section>
-    </section>
+    </WorkspacePanel>
 
-    <section id='solution-history-panel' aria-label='历史版本' hidden={activePanel !== 'history'} className='space-y-5'>
+    <WorkspacePanel id='solution' value='history' active={activePanel}>
     {historyId !== null ? <Card><CardHeader className='flex flex-wrap items-start justify-between gap-3'><div><CardTitle className='text-base'>历史版本对照</CardTitle><CardDescription>{history.status === 'loading' ? '正在读取该版本的完整内容…' : history.status === 'loaded' ? `版本 ${history.revision?.version} · ${history.revision?.author} · ${history.revision?.reason}` : history.message || '读取失败'}</CardDescription></div><Button type='button' variant='outline' size='sm' onClick={() => setHistoryId(null)}>关闭</Button></CardHeader><CardContent>{history.status === 'loaded' && history.revision?.content ? <ContentCompare leftTitle={`历史版本 ${history.revision.version}`} left={history.revision.content} rightTitle='当前编辑内容' right={content} workspace={compareWorkspace} /> : null}</CardContent></Card> : null}
     <Card>
       <CardHeader className='border-b pb-4'><CardTitle className='text-base'>二、版本历史</CardTitle><CardDescription>历史列表只显示摘要；打开版本可对照完整题目内容。历史版本保持原样。</CardDescription></CardHeader>
@@ -558,9 +574,9 @@ export function SolutionWorkspace({
         {historyBefore !== null ? <Button type='button' size='sm' variant='outline' disabled={historyPageLoading} onClick={() => void loadEarlierHistory()}>{historyPageLoading ? '正在读取更早版本…' : '读取更早版本'}</Button> : null}
       </CardContent>
     </Card>
-    </section>
+    </WorkspacePanel>
 
-    <section id='solution-outputs-panel' aria-label='生成文件' hidden={activePanel !== 'outputs'} className='space-y-5'>
+    <WorkspacePanel id='solution' value='outputs' active={activePanel}>
     <Card>
       <CardHeader className='border-b pb-4'><CardTitle className='text-base'>三、生成与检查</CardTitle><CardDescription>生成任务会检查进度；完成后可预览文档并记录内容、公式与版式检查。</CardDescription></CardHeader>
       <CardContent className='space-y-4 pt-4'>
@@ -571,7 +587,7 @@ export function SolutionWorkspace({
         {outputBefore !== null ? <Button type='button' size='sm' variant='outline' disabled={outputPageLoading} onClick={() => void loadEarlierOutputs()}>{outputPageLoading ? '正在读取更早文档…' : '读取更早文档'}</Button> : null}
       </CardContent>
     </Card>
-    </section>
+    </WorkspacePanel>
   </div>
 }
 

@@ -1,5 +1,31 @@
 {% extends 'web/base.html' %}{% load product %}
-{% block content %}<h1>打印与家长答案</h1><p>仅使用当前已审核题目；家长答案须单独录入并审核。独立练习隐藏分类、方法和答案。<a href="{% url 'printing:arithmetic' %}">算术复算</a></p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button>生成 PDF／Word</button></form>
-<details class="disclosure"><summary>家长核对答案与讲义勘误</summary><div>{% for q in questions %}<p>{{ q.published_revision.payload.working_text|truncatechars:100 }} <a href="{% url 'printing:answer' q.published_revision_id %}">家长答案</a> · <a href="{% url 'printing:erratum' q.published_revision_id %}">讲义勘误</a></p>{% empty %}<p>暂无当前已审核题目。</p>{% endfor %}</div></details>
-<details class="disclosure"><summary>查看以前生成的练习文档</summary><div>{% for s in snapshots %}<p><a href="{% url 'printing:snapshot' s.pk %}">{{ s.title }}</a> {{ s.purpose|ui_label }} · {{ s.created_at }}</p>{% empty %}<p>还没有生成的练习文档。</p>{% endfor %}</div></details>{% endblock %}
+{% block content %}
+<div class="workspace-toolbar"><h1>练习与家长答案</h1><a href="{% url 'printing:arithmetic' %}">算术复算</a></div>
+<div class="workspace-columns">
+  <section>
+    <h2>生成练习文档</h2>
+    <p class="muted">独立练习不含答案、分类或方法提示；家长答案须先单独录入并审核。</p>
+    <form method="post">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="field {% if not form.household.errors %}workspace-scope-field{% endif %}"><label for="{{ form.household.id_for_label }}">{{ form.household.label }}</label>{{ form.household }}{{ form.household.errors }}</div>
+      <div class="field"><label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>{{ form.title }}{{ form.title.errors }}</div>
+      <div class="field"><label for="{{ form.purpose.id_for_label }}">{{ form.purpose.label }}</label>{{ form.purpose }}{{ form.purpose.errors }}</div>
+      <fieldset><legend>{{ form.questions.label }}</legend><div class="workspace-choice-list">{{ form.questions }}</div>{{ form.questions.errors }}</fieldset>
+      <div class="form-actions"><button type="submit">生成 PDF／Word</button></div>
+    </form>
+  </section>
+  <section>
+    <h2>已生成的练习文档</h2>
+    {% if snapshots %}<div class="workspace-table-wrap"><table><thead><tr><th>文档</th><th>用途</th><th>生成时间</th></tr></thead><tbody>
+      {% for s in snapshots %}<tr><td><a href="{% url 'printing:snapshot' s.pk %}">{{ s.title }}</a></td><td>{{ s.purpose|ui_label }}</td><td>{{ s.created_at|date:"Y-m-d H:i" }}</td></tr>{% endfor %}
+    </tbody></table></div>{% else %}<p class="muted">还没有生成的练习文档。</p>{% endif %}
+  </section>
+</div>
+<section>
+  <h2>家长答案与讲义勘误</h2>
+  {% if questions %}<div class="workspace-table-wrap"><table><thead><tr><th>已审核题目</th><th>核对与订正</th></tr></thead><tbody>
+    {% for q in questions %}<tr><td>{{ q.published_revision.payload.working_text|truncatechars:100 }}</td><td><a href="{% url 'printing:answer' q.published_revision_id %}">家长答案</a> · <a href="{% url 'printing:erratum' q.published_revision_id %}">讲义勘误</a></td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="muted">暂无当前已审核题目，请先完成题目核对。</p>{% endif %}
+</section>
+{% endblock %}

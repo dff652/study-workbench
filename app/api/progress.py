@@ -132,7 +132,9 @@ def schedules(actor, household_id, learner_id):
         items.append({"id": row.pk, "question_id": row.target_question_revision.entity.stable_id,
             "question_text": raw["target_question"].get("working_text") or raw["target_question"].get("printed_text") or "题干待补",
             "goal": latest.goal, "prompt_plan": latest.prompt_plan, "due_date": latest.due_date,
-            "state": latest.action, "target_stale": raw["target_stale"], "context": detail["context"],
+            "state": latest.action,
+            "overdue": latest.action in ("planned", "rescheduled") and latest.due_date < today,
+            "target_stale": raw["target_stale"], "context": detail["context"],
             "detail_url": reverse("study:schedule_detail", args=[row.pk]),
             "history": history, "attempt_choices": choices})
     return {"scope": scope(household_id, learner_id), "counts": counts, "items": items}

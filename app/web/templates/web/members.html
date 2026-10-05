@@ -1,15 +1,12 @@
 {% extends "web/base.html" %}{% load product %}
 {% block title %}家庭成员 · 学习资料工作台{% endblock %}
 {% block content %}
-  <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>家庭成员</span></nav>
-  <div class="page-heading">
-    <div><p class="eyebrow">家庭访问</p><h1>成员管理</h1>{% if household %}<p class="muted">当前家庭</p>{% endif %}</div>
-  </div>
+  <div class="workspace-toolbar"><h1>家庭成员</h1></div>
 
   {% if error %}<div class="notice error" role="alert">{{ error }}</div>{% endif %}
 
   {% if household_choices|length > 1 %}
-    <details class="panel disclosure" {% if not household %}open{% endif %}><summary>切换要管理的家庭</summary><div class="disclosure-content">
+    <details class="panel disclosure {% if household %}workspace-scope-field{% endif %}" {% if not household %}open{% endif %}><summary>切换要管理的家庭</summary><div class="disclosure-content">
       <form method="get" action="{% url 'web:members' %}" class="stack-form">
         <div class="field"><label for="id_household_id">家庭</label><select id="id_household_id" name="household_id" required>
           <option value=""{% if not selected_household_id %} selected{% endif %}>请选择家庭</option>
@@ -21,7 +18,11 @@
   {% endif %}
 
   {% if household %}
-    <section class="panel">
+    <div class="workspace-tabs" role="tablist" aria-label="成员管理" data-workspace-tabs>
+      <button type="button" id="members-tab-list" role="tab" aria-controls="members-panel-list" aria-selected="true" data-workspace-tab="members">现有成员</button>
+      <button type="button" id="members-tab-create" role="tab" aria-controls="members-panel-create" aria-selected="false" data-workspace-tab="new-member">创建账号</button>
+    </div>
+    <section class="panel" id="members-panel-list" role="tabpanel" aria-labelledby="members-tab-list" data-workspace-panel>
       <h2>现有成员</h2>
       <p class="muted">移除只撤销当前家庭访问；不会删除登录账号或家庭学习历史。</p>
       {% if member_rows %}
@@ -62,7 +63,7 @@
       {% endif %}
     </section>
 
-    <details class="panel disclosure" {% if create_form.errors %}open{% endif %}><summary>创建家庭成员登录账号</summary><div class="disclosure-content">
+    <section class="panel workspace-reading" id="members-panel-create" role="tabpanel" aria-labelledby="members-tab-create" data-workspace-panel><h2>创建家庭成员登录账号</h2>
       <p class="muted">这里只能创建审核成员或只读成员。密码按账号密码规则验证并安全保存；页面不会回显密码。</p>
       <form method="post" action="{% url 'web:members' %}" class="stack-form">
         {% csrf_token %}{{ create_form.action }}{{ create_form.household_id }}
@@ -73,7 +74,7 @@
         <div class="field"><label for="id_create_role">家庭角色</label>{{ create_form.role }}{{ create_form.role.errors }}</div>
         <button class="primary-button" type="submit">创建账号并加入家庭</button>
       </form>
-    </div></details>
+    </section>
   {% elif not household_choices %}
     <p class="notice warning-notice" role="status">此账号没有可管理的家庭。</p>
   {% else %}

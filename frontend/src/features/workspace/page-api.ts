@@ -1,4 +1,5 @@
 import { safeBusinessPath } from '../../routing/routes'
+import { userMessage } from '../../lib/user-message'
 
 export type WorkspaceWidget = 'regions' | 'order' | 'derivatives'
 
@@ -121,6 +122,6 @@ function messageForStatus(status: number, detail?: string) {
   if (status === 401) return '登录状态已失效，请重新登录后继续。'
   if (status === 403) return '当前账号没有权限查看这个页面。'
   if (status === 404) return '找不到这个页面，可能已移动或当前家庭下不可用。'
-  if (detail && detail.trim()) return detail
+  if (detail && detail.trim()) return userMessage(detail, '页面操作未完成，请核对输入后重试。')
   return '暂时无法打开这个页面，请检查连接后重试。'
 }

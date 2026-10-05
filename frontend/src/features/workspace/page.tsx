@@ -4,6 +4,8 @@ import { Button } from '../../components/ui/button'
 import { usePrivateDraft } from '../drafts/use-private-draft'
 import type { PrivateDraft } from '../drafts/client'
 import { safeBusinessPath } from '../../routing/routes'
+import { userMessage } from '../../lib/user-message'
+import { revealWorkspacePanel, wireWorkspaceTabs } from './native-tabs'
 import { getWorkspacePage, postWorkspaceForm, type WorkspacePageData, type WorkspacePageScope, type WorkspaceWidget } from './page-api'
 import './page.css'
 
@@ -27,6 +29,8 @@ export function WorkspacePage({
   onScopeLoaded,
   onUnauthorized,
   onUnsavedChange,
+  initialTab = '',
+  onTabChange,
 }: {
   url: string
   anchor?: string
@@ -37,6 +41,8 @@ export function WorkspacePage({
   onScopeLoaded?: (scope: WorkspacePageScope, requestedUrl: string) => void
   onUnauthorized: () => void
   onUnsavedChange: (hasChanges: boolean) => void
+  initialTab?: string
+  onTabChange?: (value: string) => void
 }) {
   const [page, setPage] = useState<WorkspacePageData | null>(null)
   const [pageRequestedUrl, setPageRequestedUrl] = useState('')
@@ -58,6 +64,11 @@ export function WorkspacePage({
   const draftPayloadRef = useRef<WorkspaceDraftPayload>({ forms: [], filesNeedReselection: false, notSavedOversize: false })
   const pendingFormRestoreRef = useRef<WorkspaceDraftPayload | null>(null)
   const onScopeLoadedRef = useRef(onScopeLoaded)
+  const onTabChangeRef = useRef(onTabChange)
+  const nativeTabsRef = useRef<ReturnType<typeof wireWorkspaceTabs> | null>(null)
+  const initialTabRef = useRef(initialTab)
+  initialTabRef.current = initialTab
+  onTabChangeRef.current = onTabChange
   onScopeLoadedRef.current = onScopeLoaded
   const activePage = pageRequestedUrl === url ? page : null
   const pageHtml = useMemo(() => activePage ? { __html: activePage.html } : undefined, [activePage])
@@ -107,6 +118,15 @@ export function WorkspacePage({
     unsavedRef.current = false
     onUnsavedChange(false)
   }, [onNavigate, onUnsavedChange, url])
+
+  useEffect(() => {
+    if (!activePage || !contentRef.current) return
+    const tabs = wireWorkspaceTabs(contentRef.current, initialTabRef.current, (value) => onTabChangeRef.current?.(value))
+    nativeTabsRef.current = tabs
+    return () => { tabs.dispose(); nativeTabsRef.current = null }
+  }, [activePage])
+
+  useEffect(() => { nativeTabsRef.current?.select(initialTab) }, [initialTab])
 
   useEffect(() => {
     if (!activePage || !contentRef.current) return
@@ -451,7 +471,7 @@ function widgetLabel(widget: WorkspaceWidget) {
 }
 
 function messageFor(error: unknown) {
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message
+  if (typeof error === 'object' && error !== null && 'message' in error) return userMessage(error.message, '页面请求暂时失败，请重试。')
   return '页面请求暂时失败，请重试。'
 }
 
@@ -569,6 +589,7 @@ function formActionPath(form: HTMLFormElement) {
 }
 
 function expandDetailsForElement(element: Element) {
+  revealWorkspacePanel(element)
   let ancestor: Element | null = element
   while (ancestor) {
     if (ancestor instanceof HTMLDetailsElement) ancestor.open = true
@@ -737,7 +758,7 @@ function WorkspaceDraftRecovery({
   const pendingDraft = hasConflict ? conflict : candidate
   if (!hasConflict && !pendingDraft && !loadError && !message && !invalidDraft) return null
   return <section className='space-y-3 rounded-lg border border-sky-200 bg-sky-50/60 p-4' aria-label='私人草稿'>
-    {loadError ? <div role='alert' className='text-sm text-amber-950'><p>私人草稿暂时无法读取，自动保存已暂停；当前页面输入仍保留。</p><details className='mt-1'><summary className='cursor-pointer text-xs'>诊断详情</summary><p className='mt-1 break-words'>{loadError}</p></details></div> : null}
+    {loadError ? <div role='alert' className='text-sm text-amber-950'><p>私人草稿暂时无法读取，自动保存已暂停；当前页面输入仍保留。</p><p className='mt-1'>{userMessage(loadError, '请保留当前输入，稍后重新打开页面。')}</p></div> : null}
     {invalidDraft ? <div role='alert' className='flex flex-wrap items-center gap-3 text-sm text-amber-950'><span>这份私人草稿格式无法识别，当前页面内容没有被替换。</span><Button type='button' size='sm' variant='outline' onClick={onClearInvalid}>清理不可恢复草稿</Button></div> : null}
     {hasConflict || candidate ? <>
       <div><h2 className='font-semibold'>{hasConflict ? '另一窗口也修改了这项内容' : '发现一份未完成的表单草稿'}</h2><p className='mt-1 text-sm text-muted-foreground'>请先比较两边内容，再选择恢复草稿或保留当前输入；系统不会自动覆盖。</p></div>

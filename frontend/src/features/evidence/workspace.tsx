@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../../api'
 import type { Filters, Learner, OverviewResponse, AttemptResponse } from '../../types'
-import { INITIAL_FILTERS, type Remote } from '../../components/shared'
+import { errorText, INITIAL_FILTERS, type Remote } from '../../components/shared'
+import { WorkspacePanel, WorkspaceTabs } from '../../components/workspace-tabs'
 import { FilterBar } from './filter-bar'
 import { Overview } from './overview'
 import { Attempts } from './attempts'
-import { Disclosure } from '../../components/disclosure'
 
 export type EvidencePage = 'overview' | 'attempts'
 
@@ -13,13 +13,18 @@ export function EvidenceWorkspace({
   householdId,
   learner,
   activePage,
+  initialTab,
+  onTabChange,
   onUnauthorized,
 }: {
   householdId: string
   learner: Learner
   activePage: EvidencePage
+  initialTab?: string
+  onTabChange?: (value: string) => void
   onUnauthorized: () => void
 }) {
+  const [tab, setTab] = useState<EvidencePage>(() => normalizePage(initialTab, activePage))
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
   const [page, setPage] = useState(1)
   const [overview, setOverview] = useState<Remote<OverviewResponse>>({ status: 'loading' })
@@ -28,7 +33,11 @@ export function EvidenceWorkspace({
   const [attemptsRetry, setAttemptsRetry] = useState(0)
 
   useEffect(() => {
-    if (activePage !== 'overview') return
+    setTab(normalizePage(initialTab, activePage))
+  }, [activePage, initialTab])
+
+  useEffect(() => {
+    if (tab !== 'overview') return
     const controller = new AbortController()
     let active = true
     setOverview({ status: 'loading' })
@@ -37,16 +46,16 @@ export function EvidenceWorkspace({
     }).catch((error: unknown) => {
       if (!active) return
       if (error instanceof ApiError && error.status === 401) onUnauthorized()
-      setOverview({ status: 'error', message: messageFor(error) })
+      setOverview({ status: 'error', message: errorText(error) })
     })
     return () => {
       active = false
       controller.abort()
     }
-  }, [activePage, householdId, learner.id, filters, overviewRetry, onUnauthorized])
+  }, [tab, householdId, learner.id, filters, overviewRetry, onUnauthorized])
 
   useEffect(() => {
-    if (activePage !== 'attempts') return
+    if (tab !== 'attempts') return
     const controller = new AbortController()
     let active = true
     setAttempts({ status: 'loading' })
@@ -55,13 +64,13 @@ export function EvidenceWorkspace({
     }).catch((error: unknown) => {
       if (!active) return
       if (error instanceof ApiError && error.status === 401) onUnauthorized()
-      setAttempts({ status: 'error', message: messageFor(error) })
+      setAttempts({ status: 'error', message: errorText(error) })
     })
     return () => {
       active = false
       controller.abort()
     }
-  }, [activePage, householdId, learner.id, filters, page, attemptsRetry, onUnauthorized])
+  }, [tab, householdId, learner.id, filters, page, attemptsRetry, onUnauthorized])
 
   const updateFilters = (next: Filters) => {
     setFilters(next)
@@ -70,35 +79,44 @@ export function EvidenceWorkspace({
     setAttempts({ status: 'loading' })
   }
 
-  if (activePage === 'overview') {
-    return (
-      <div className='space-y-6'>
-        <Disclosure title='查看学习记录与待核对项' description='需要回看时，展开记录概要，再查看具体证据。'>
-          <div className='space-y-5'><Disclosure title='筛选要看的记录' description='按实际作答日期和来源缩小范围。'><FilterBar filters={filters} onChange={updateFilters} /></Disclosure>
-            <Overview remote={overview} onRetry={() => setOverviewRetry((count) => count + 1)} />
-          </div>
-        </Disclosure>
-      </div>
-    )
-  }
-
   return (
-    <div className='space-y-6'>
-      <Disclosure title='筛选作答记录' description='按实际作答日期和来源查找。'><FilterBar filters={filters} onChange={updateFilters} /></Disclosure>
-      <Attempts
-        remote={attempts}
-        page={page}
-        onRetry={() => setAttemptsRetry((count) => count + 1)}
-        onPageChange={(nextPage) => {
-          setPage(nextPage)
-          setAttempts({ status: 'loading' })
+    <div className='space-y-5'>
+      <WorkspaceTabs
+        id='evidence'
+        label='学习档案视图'
+        tabs={[{ value: 'overview', label: '学习概况' }, { value: 'attempts', label: '作答记录' }]}
+        value={tab}
+        onChange={(value) => {
+          if (value !== 'overview' && value !== 'attempts') return
+          setTab(value)
+          onTabChange?.(value)
         }}
       />
+      <FilterBar filters={filters} onChange={updateFilters} />
+      <WorkspacePanel id='evidence' value='overview' active={tab}>
+        <div className='space-y-4'>
+          <div>
+            <h2 className='text-lg font-semibold'>学习概况</h2>
+            <p className='mt-1 text-sm text-muted-foreground'>按当前筛选查看真实作答和待核对证据。</p>
+          </div>
+          <Overview remote={overview} onRetry={() => setOverviewRetry((count) => count + 1)} />
+        </div>
+      </WorkspacePanel>
+      <WorkspacePanel id='evidence' value='attempts' active={tab}>
+        <Attempts
+          remote={attempts}
+          page={page}
+          onRetry={() => setAttemptsRetry((count) => count + 1)}
+          onPageChange={(nextPage) => {
+            setPage(nextPage)
+            setAttempts({ status: 'loading' })
+          }}
+        />
+      </WorkspacePanel>
     </div>
   )
 }
 
-function messageFor(error: unknown) {
-  if (error instanceof Error) return error.message
-  return '连接暂时不可用，请重试。'
+function normalizePage(value: string | undefined, fallback: EvidencePage): EvidencePage {
+  return value === 'overview' || value === 'attempts' ? value : fallback
 }

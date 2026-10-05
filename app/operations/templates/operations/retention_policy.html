@@ -1,8 +1,13 @@
 {% extends "web/base.html" %}
 {% block title %}本机导出保留策略 · 学习资料工作台{% endblock %}
 {% block content %}
-  <nav class="breadcrumbs"><a href="/">资料</a><span aria-hidden="true">/</span><span>本机导出保留策略</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">当前家庭 · 仅本机导出文件</p><h1>本机导出保留策略</h1><p class="muted">策略按版本追加。默认不自动归档或退役；退役前会先验证并保留受控归档副本。</p></div></div>
+  <div class="workspace-toolbar"><h1>导出文件保留策略</h1></div>
+  <p class="muted">默认不自动归档或退役；退役前会先验证并保留归档副本。</p>
+  <div class="workspace-tabs" role="tablist" aria-label="数据保留" data-workspace-tabs>
+    <button type="button" id="retention-tab-policy" role="tab" aria-controls="retention-panel-policy" aria-selected="true" data-workspace-tab="policy">当前策略与修改</button>
+    <button type="button" id="retention-tab-history" role="tab" aria-controls="retention-panel-history" aria-selected="false" data-workspace-tab="policy-history">策略历史与保留范围</button>
+  </div>
+  <section id="retention-panel-policy" role="tabpanel" aria-labelledby="retention-tab-policy" data-workspace-panel class="workspace-reading">
   {% if default_policy %}<div class="notice">当前使用默认保留策略：导出文件不自动归档或退役。原始照片、领域修订历史和模型提案始终保留。</div>{% else %}
     <section class="panel"><h2>当前策略</h2><dl>
       <dt>策略版本</dt><dd>{{ current.revision_no }} · {{ current.created_at|date:"Y-m-d H:i" }}</dd>
@@ -11,9 +16,6 @@
       <dt>策略依据</dt><dd>{{ current.reason }}</dd>
     </dl></section>
   {% endif %}
-  <section class="panel"><h2>各类数据的生命周期</h2><p class="muted">以下是应用当前的默认行为。数据库和资料卷备份应配套管理；本页的可执行保留策略只作用于导出文件。</p>
-    <ul class="history-list">{% for item in data_lifecycle_policy %}<li><strong>{{ item.kind }}</strong><p>{{ item.default }}</p><p class="muted">归档与退役：{{ item.archive_retire }}</p></li>{% endfor %}</ul>
-  </section>
   <section class="panel"><h2>追加策略版本</h2><p class="muted">退役只移除已生成的本机导出文件。归档副本与审计记录继续保留，不影响原始照片、作答、评价、其他领域历史或模型提案。</p>
     <form method="post" class="knowledge-form">{% csrf_token %}{{ form.request_key }}
       {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
@@ -21,6 +23,12 @@
       <div class="form-actions"><button type="submit" class="primary-button">追加策略</button><a class="secondary-button link-button" href="/">返回资料</a></div>
     </form>
   </section>
+  </section>
+  <section id="retention-panel-history" role="tabpanel" aria-labelledby="retention-tab-history" data-workspace-panel>
+  <section class="panel"><h2>各类数据的保留范围</h2><p class="muted">备份须同时保留数据库和资料。本页策略只作用于已生成的导出文件。</p>
+    <ul class="history-list">{% for item in data_lifecycle_policy %}<li><strong>{{ item.kind }}</strong><p>{{ item.default }}</p><p class="muted">归档与退役：{{ item.archive_retire }}</p></li>{% endfor %}</ul>
+  </section>
   {% if history %}<section class="panel"><h2>策略历史</h2><ol>{% for row in history %}<li><strong>版本 {{ row.revision_no }}</strong> · {{ row.created_at|date:"Y-m-d H:i" }} · 归档 {% if row.archive_after_days == 0 %}0 天{% elif row.archive_after_days %}{{ row.archive_after_days }} 天{% else %}关闭{% endif %} · 退役 {% if row.delete_after_days == 0 %}0 天{% elif row.delete_after_days %}{{ row.delete_after_days }} 天{% else %}关闭{% endif %}<br><span class="muted">{{ row.reason }} · 操作人 {{ row.created_by.get_username }}</span></li>{% endfor %}</ol></section>{% endif %}
-  <section class="panel"><h2>保留边界</h2><p>本机操作不代表供应商已删除其副本；供应商侧留存仍为未知。完整保留范围、备份和恢复步骤见本机数据策略文档。</p></section>
+  <section class="panel"><h2>保留边界</h2><p>本机操作不代表供应商已删除其副本；供应商侧留存仍为未知。</p></section>
+  </section>
 {% endblock %}

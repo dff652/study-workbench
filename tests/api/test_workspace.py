@@ -36,6 +36,21 @@ class FragmentTests(SimpleTestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 local_url(value)
 
+    def test_native_tabs_survive_sanitizing_with_panel_relationships(self):
+        raw = """<main><div role="tablist" data-workspace-tabs aria-label="相关记录">
+          <button type="button" id="record-tab" role="tab" aria-controls="record-panel"
+            aria-selected="true" data-workspace-tab="records">记录</button></div>
+          <section id="record-panel" role="tabpanel" aria-labelledby="record-tab"
+            data-workspace-panel><form method="post"><input name="reason"></form></section></main>"""
+        root = html.fragment_fromstring(fragment(raw, "/members/")["html"], create_parent=True)
+        button = root.xpath('.//button[@role="tab"]')[0]
+        panel = root.xpath('.//section[@role="tabpanel"]')[0]
+        self.assertEqual(button.get("aria-selected"), "true")
+        self.assertEqual(button.get("aria-controls"), panel.get("id"))
+        self.assertEqual(panel.get("aria-labelledby"), button.get("id"))
+        self.assertIsNone(panel.get("hidden"))
+        self.assertEqual(root.xpath(".//form/@action"), ["/members/"])
+
 
 class WorkspaceAPITests(TransactionTestCase):
     setUp = fixtures.StudyServiceTests.setUp

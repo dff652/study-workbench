@@ -15,6 +15,8 @@ A1b 的 Django、psycopg 及既有依赖继续按原固定版本使用，本轮�
 
 2026-10-05 的 PC companion 复用本项目的 ReportLab／python-docx／字体工具链。四个纯校验与组织模块来自本项目作者的 [study-material-workflow](https://github.com/dff652/study-material-workflow) 固定提交 `72e9a3d178859d47581db17a71bee3babaa31ee8`，原路径、SHA 及相对导入适配记录在 [SOURCE.json](../app/solutions/vendor/SOURCE.json)。没有引入该 skill 的另一套 PDF 渲染器。运行镜像新增 Debian Bookworm `poppler-utils`，用于 PDF 页数与逐页预览，实际工具版本写入每份生成配方。
 
+本机知识点讲解候选另固定同一上游的提交 `961f966f02f2c00e3c43b2dfd3e17ad19e345fa5`，只增加纯知识校验／组织模型，原路径和原始／适配 SHA 见 [KNOWLEDGE_SOURCE.json](../app/solutions/vendor/KNOWLEDGE_SOURCE.json)。三份共享 helper 的上游字节与旧固定提交一致，继续使用现有相对导入版本；知识模型仅适配相对导入与所保留模块的代码记录。两份来源清单分别保留，旧逐题模块及其固定版本未替换。知识文档由 Workbench 原生打印引擎生成，未引入上游 CLI、第二套渲染器或新的运行依赖；当前实现与验收边界见 [知识集成记录](reviews/knowledge-integration-20261005.md)。
+
 ## B1 开发验证依赖
 
 以下仅固定在 [requirements-dev.txt](../requirements-dev.txt)，没有增加运行依赖或发布浏览器镜像：

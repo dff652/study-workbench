@@ -4,6 +4,9 @@
 
 ## 使用与当前交付
 
+- [三种资料模式与学科契约](knowledge-subject-contract-20261005.md)：知识点讲解、逐题讲解、五册与练习，学校学科和讲解依据分别保存。
+- [知识集成与匿名小批次验收](reviews/knowledge-integration-20261005.md)：本机候选、实际验证和空实例恢复，区分源码、正式运行与 Word 实机状态。
+- [知识源码交付与 review](reviews/knowledge-handoff-20261005.md)：本地源码／文档提交、完整待推送范围、GitHub PR 与独立交付结果。
 - [Web 体验改进方案与任务清单](web-ux-improvement-plan-20261005.md)：导航／空间／任务交互／文案、改进顺序及新产品验收门槛。
 - [Web 体验实施契约](web-ux-implementation-contract-20261005.md)：公共组件、URL／输入保持、业务模板及三个 Luna6 任务的文件归属。
 - [Web 体验改进验收](reviews/web-ux-20261005.md)：当前候选的实际测试、浏览器与独立复核进展，区分真实试用和运行交付。

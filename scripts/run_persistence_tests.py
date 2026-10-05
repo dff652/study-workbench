@@ -117,6 +117,10 @@ def main():
         if args.fusion_browser:
             run([sys.executable, "scripts/verify_fusion.py", "--owner", owner], env=env)
         if args.pc_browser:
+            # Only display/test controls may cross into the owned synthetic run.
+            for key in ('SWB_PC_HEADED', 'SWB_UX_XDOTOOL'):
+                if key in os.environ:
+                    env[key] = os.environ[key]
             run([sys.executable, "scripts/verify_pc.py", "--owner", owner], env=env)
         if args.knowledge_browser:
             run([sys.executable, "scripts/verify_knowledge.py", "--owner", owner], env=env)

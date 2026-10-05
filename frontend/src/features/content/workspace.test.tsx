@@ -167,6 +167,7 @@ describe('ContentWorkspace', () => {
     await screen.findByText('内容已核对并保存；历史版本和来源仍保留。')
     expect(onUnsavedChange).toHaveBeenLastCalledWith(true)
 
+    await user.click(screen.getByRole('tab', { name: '整页阅读' }))
     await user.click(screen.getByRole('button', { name: '保存本页阅读记录' }))
     await screen.findByText('本页阅读记录已保存，历史修订仍保留。')
     expect(onUnsavedChange).toHaveBeenLastCalledWith(false)
@@ -343,6 +344,7 @@ describe('ContentWorkspace', () => {
     }
     const reading: PageReadingResponse = { ...emptyReading(), current, history: [current] }
     const { calls } = mountContent({ reading })
+    await user.click(await screen.findByRole('tab', { name: '整页阅读' }))
     expect(await screen.findByText('未知区域 · 原图区域 [5, 5, 20, 20] px')).toBeTruthy()
     expect(screen.getByText('第 1 次 · 已阅读 · 部分覆盖')).toBeTruthy()
     await user.selectOptions(screen.getByLabelText('阅读覆盖'), 'complete')

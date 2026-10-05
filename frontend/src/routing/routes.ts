@@ -1,3 +1,5 @@
+import { SOURCE_KINDS, type Filters } from '../types'
+
 export const VIEWS = ['materials', 'overview', 'attempts', 'progress', 'knowledge', 'learning', 'documents', 'settings'] as const
 
 export type View = (typeof VIEWS)[number]
@@ -12,6 +14,7 @@ export type AppRoute = {
   materialQuery?: string
   materialPage?: number
   materialSubject?: string
+  evidenceFilters?: Filters
 }
 
 export type LearnerRouteTarget = { id: string; report_url: string }
@@ -39,7 +42,8 @@ export function safeBusinessPath(value: string, origin = window.location.origin)
 export function parseRoute(location: Pick<Location, 'pathname' | 'search'>, origin = window.location.origin): AppRoute {
   const params = new URLSearchParams(location.search)
   const requestedView = params.get('view')
-  const view = isView(requestedView) ? requestedView : DEFAULT_ROUTE.view
+  const migratedProcessing = requestedView === 'progress' && params.get('tab') === 'materials'
+  const view = migratedProcessing ? 'materials' : isView(requestedView) ? requestedView : DEFAULT_ROUTE.view
   const rawScreen = params.get('screen') || ''
   const screen = rawScreen ? safeBusinessPath(rawScreen, origin) || '' : ''
   const screenUrl = screen ? new URL(screen, origin) : null
@@ -57,11 +61,18 @@ export function parseRoute(location: Pick<Location, 'pathname' | 'search'>, orig
     household: screenHousehold || outerHousehold,
     learner: screenLearner || (screenHousehold && screenHousehold !== outerHousehold ? '' : params.get('learner') || ''),
     screen,
-    ...(validTab(params.get('tab')) ? { tab: params.get('tab')! } : {}),
+    ...(migratedProcessing ? { tab: 'processing' } : validTab(params.get('tab')) ? { tab: params.get('tab')! } : {}),
     ...(view === 'materials' && /^[a-z0-9_-]{1,128}$/i.test(materialId) ? { materialId } : {}),
     ...(view === 'materials' && materialQuery ? { materialQuery } : {}),
     ...(view === 'materials' && validSubject(materialSubject) ? { materialSubject } : {}),
     ...(view === 'materials' && Number.isSafeInteger(materialPage) && materialPage > 1 ? { materialPage } : {}),
+    ...((view === 'overview' || view === 'attempts') && ['date_from', 'date_to', 'source_kind'].some((key) => params.has(key)) ? {
+      evidenceFilters: {
+        dateFrom: /^\d{4}-\d{2}-\d{2}$/.test(params.get('date_from') || '') ? params.get('date_from')! : '',
+        dateTo: /^\d{4}-\d{2}-\d{2}$/.test(params.get('date_to') || '') ? params.get('date_to')! : '',
+        sourceKind: SOURCE_KINDS.find((kind) => kind === params.get('source_kind')) || '',
+      },
+    } : {}),
   }
 }
 
@@ -72,6 +83,11 @@ export function routeUrl(route: AppRoute) {
   if (route.learner) params.set('learner', route.learner)
   if (route.screen) params.set('screen', route.screen)
   if (validTab(route.tab)) params.set('tab', route.tab!)
+  if ((route.view === 'overview' || route.view === 'attempts') && route.evidenceFilters) {
+    if (route.evidenceFilters.dateFrom) params.set('date_from', route.evidenceFilters.dateFrom)
+    if (route.evidenceFilters.dateTo) params.set('date_to', route.evidenceFilters.dateTo)
+    if (route.evidenceFilters.sourceKind) params.set('source_kind', route.evidenceFilters.sourceKind)
+  }
   if (route.view === 'materials') {
     if (route.materialId && /^[a-z0-9_-]{1,128}$/i.test(route.materialId)) params.set('material', route.materialId)
     if (route.materialQuery) params.set('q', route.materialQuery.slice(0, 200))

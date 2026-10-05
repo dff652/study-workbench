@@ -99,8 +99,11 @@ def output_file(request, output_id, document_id, name):
     row = jobs.get(request.user, output_id)
     path = rendering.output_file(row, document_id, name)
     media = "application/pdf" if name.endswith(".pdf") else "image/png" if name.endswith(".png") else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    return FileResponse(path.open("rb"), content_type=media, as_attachment=name.endswith(".docx"),
-                        filename=(document_id + ".docx") if name.endswith(".docx") else name)
+    response = FileResponse(path.open("rb"), content_type=media, as_attachment=name.endswith(".docx"),
+                            filename=(document_id + ".docx") if name.endswith(".docx") else name)
+    if media == 'application/pdf':
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
 
 @api()

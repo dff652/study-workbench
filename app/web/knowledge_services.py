@@ -282,7 +282,7 @@ def _home_nodes(household_id):
     return result
 
 
-def _home_question_rows(household_id):
+def _home_question_rows(household_id, *, practice=False):
     labels = _question_labels(household_id)
     legacy_ids = set(LegacyIndexEntry.objects.filter(batch__household_id=household_id)
         .values_list("question_revision__entity_id", flat=True))
@@ -291,8 +291,15 @@ def _home_question_rows(household_id):
     rows = EntityRecord.objects.filter(household_id=household_id, kind="question").select_related(
         "head_revision__review_projection", "published_revision__review_projection").order_by("stable_id")
     result = []
+    sources_by_revision = {}
+    pages = {str(page.pk): page for page in MaterialPage.objects.filter(material__household_id=household_id).select_related('material')}
+    for source in QuestionSource.objects.filter(revision__entity__household_id=household_id):
+        for ref in source.sources:
+            page = pages.get(str(ref.get('page_id', '')))
+            if page:
+                sources_by_revision.setdefault(source.revision_id, []).append(f'{page.material.title} · 第 {page.position} 页')
     for entity in rows:
-        current = entity.head_revision
+        current = entity.published_revision if practice else entity.head_revision
         if current is None:
             continue
         payload = current.payload
@@ -301,6 +308,9 @@ def _home_question_rows(household_id):
             ref.get("region_missing") or ref.get("gaps") for ref in payload.get("evidence_refs", ()))
         legacy = entity.pk in legacy_ids
         state = current.review_projection.state
+        dependencies_changed = any(heads.get((item['kind'], item['stable_id'])) != item['head_revision_id'] for item in current.dependency_heads)
+        if practice and (entity.head_revision_id != current.pk or state != 'accepted' or missing or dependencies_changed or not (payload.get('working_text') or payload.get('printed_text') or '').strip()):
+            continue
         if state == "draft" and any(heads.get((item["kind"], item["stable_id"])) != item["head_revision_id"]
                                      for item in current.dependency_heads):
             state = "stale"
@@ -309,7 +319,8 @@ def _home_question_rows(household_id):
                       (f"旧索引 {number}" if legacy else "题干待补")),
             "state": state,
             "legacy": legacy, "missing": missing,
-            "published_revision_id": entity.published_revision_id})
+            "published_revision_id": entity.published_revision_id,
+            "source_labels": list(dict.fromkeys(sources_by_revision.get(current.pk, ())))})
     return result
 
 
@@ -395,8 +406,9 @@ def _material_question_revision_ids(household_id, material_id, current_revision_
 def index_data(actor, household_id, filters=None):
     house = records.household(actor, household_id)
     nodes = _home_nodes(house.pk)
-    questions = _home_question_rows(house.pk)
     filters = filters or {}
+    practice = filters.get('mode') == 'learn'
+    questions = _home_question_rows(house.pk, practice=practice)
     subject = filters.get("subject")
     if subject:
         from . import subjects
@@ -444,7 +456,7 @@ def index_data(actor, household_id, filters=None):
     materials = list(MaterialSet.objects.filter(household=house).order_by("title", "id"))
     can_write = HouseholdMember.objects.filter(household=house, user=actor,
         role__in=(HouseholdMember.Role.OWNER, HouseholdMember.Role.REVIEWER)).exists()
-    return {"household": house, "can_write": can_write, "nodes": nodes, "questions": questions,
+    return {"household": house, "can_write": can_write, "practice": practice, "nodes": nodes, "questions": questions,
         "method_tree": tree, "materials": materials}
 
 
@@ -699,7 +711,12 @@ def question_detail(actor, entity_id):
     own_revision_ids = set(revision_ids)
     qchoices = [(revision_id, label) for revision_id, label in all_question_choices if revision_id in own_revision_ids]
     current_revision_id = entity.head_revision_id
+    from app.printing.services import accepted_answer
+    reference_answer, _ = accepted_answer(entity.head_revision)
+    can_write = HouseholdMember.objects.filter(household=entity.household, user=actor,
+        user__is_active=True, role__in=('owner', 'reviewer')).exists()
     return {**data, "entity": entity, "history": history, "associations": associations,
+        "reference_answer": reference_answer, "can_write": can_write,
         "current_sources": _source_cards(actor, entity.household_id, entity.head_revision),
         "current_links": associations.get(current_revision_id, []),
         "number": ", ".join(dict.fromkeys(labels.get(entity.pk, ()))) or "—",

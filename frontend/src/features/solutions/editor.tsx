@@ -32,6 +32,7 @@ const nodeRelations = [
 ] as const
 
 export function SolutionEditor({
+  focusItem,
   content,
   workspace,
   materialId,
@@ -42,6 +43,7 @@ export function SolutionEditor({
   onBusyChange,
   onUnauthorized,
 }: {
+  focusItem?: { id: string }
   content: StructuredSolutionContent
   workspace: SolutionWorkspaceResponse
   materialId: string
@@ -53,6 +55,7 @@ export function SolutionEditor({
   onUnauthorized: () => void
 }) {
   const [activeId, setActiveId] = useState(content.questions[0]?.id || '')
+  useEffect(() => { if (focusItem && content.questions.some((item) => item.id === focusItem.id)) setActiveId(focusItem.id) }, [focusItem])
   const [busyAssetQuestions, setBusyAssetQuestions] = useState<Set<string>>(() => new Set())
   useEffect(() => {
     onBusyChange?.(busyAssetQuestions.size > 0)

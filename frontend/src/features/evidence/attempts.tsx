@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import type { Attempt, AttemptResponse, Assessment, EvidenceSource } from '../../types'
+import type { Attempt, AttemptResponse, Assessment, EvidenceSource, Filters } from '../../types'
 import { ApiLink, EmptyState, formatCount, LoadingState, RetryState, sameOriginHref, SOURCE_LABELS, SourceEvidence, type Remote } from '../../components/shared'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
@@ -149,11 +149,17 @@ function AssessmentHistory({ assessment }: { assessment: Assessment }) {
 export function Attempts({
   remote,
   page,
+  filters,
+  recordAttemptUrl,
+  onClearFilters,
   onRetry,
   onPageChange,
 }: {
   remote: Remote<AttemptResponse>
   page: number
+  filters: Filters
+  recordAttemptUrl: string
+  onClearFilters: () => void
   onRetry: () => void
   onPageChange: (nextPage: number) => void
 }) {
@@ -172,7 +178,21 @@ export function Attempts({
   const { total, page_size: pageSize } = remote.data
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   if (items.length === 0) {
-    return <EmptyState title='还没有符合条件的记录' detail='尝试调整日期或来源筛选。没有记录时不生成学习表现或掌握结论。' />
+    const hasFilters = Boolean(filters.dateFrom || filters.dateTo || filters.sourceKind)
+    return (
+      <div className='space-y-3'>
+        <EmptyState
+          title={hasFilters ? '当前筛选范围没有作答记录' : '还没有作答记录'}
+          detail={hasFilters
+            ? '没有记录符合当前日期或来源条件。清除筛选后可查看完整历史。'
+            : '首次记录真实作答后，这里会显示作答、原图和评价历史。'}
+        />
+        <div className='flex flex-wrap justify-center gap-3'>
+          {hasFilters ? <Button type='button' variant='outline' onClick={onClearFilters}>清除筛选</Button> : null}
+          {!hasFilters ? <ApiLink href={recordAttemptUrl}>记录首次作答</ApiLink> : null}
+        </div>
+      </div>
+    )
   }
   const selectedAttempt = items.find((attempt) => attempt.attempt_id === selectedAttemptId) || items[0]
 

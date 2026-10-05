@@ -245,7 +245,7 @@ export function QuestionEditor({
                   </label>
                   <Field label='本次核对原因' value={reason} onChange={(value) => { setReason(value); markQuestionDirty() }} disabled={formDisabled} required />
                   {error ? <p role='alert' className='text-sm text-destructive'>{error}</p> : null}
-                  <div className='flex flex-wrap gap-2'>
+                  <div className='sticky bottom-3 z-10 flex flex-wrap gap-2 rounded-md border bg-background p-3'>
                   <Button type='submit' disabled={busy || workspaceBusy || erratumOpen || !checked || !reason.trim() || !printedText.trim() || sources.length === 0 || !answerHasRequiredText}>
                     <CheckCheck aria-hidden='true' />{busy ? '正在保存…' : '确认并保存题目'}
                   </Button>

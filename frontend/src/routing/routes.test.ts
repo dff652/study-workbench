@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { fragmentOfPath, householdIdForBusinessPath, isFilePath, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, screenForView, safeBusinessPath, solutionMaterialId, withoutFragment } from './routes'
 
 describe('app routing', () => {
+  it('round-trips evidence filters and moves old household processing links', () => {
+    const route = { view: 'overview' as const, household: 'home', learner: 'child', screen: '',
+      evidenceFilters: { dateFrom: '2026-10-01', dateTo: '', sourceKind: 'independent_answer' as const } }
+    expect(parseRoute(new URL(routeUrl(route), 'https://study.test'))).toEqual(route)
+    expect(parseRoute(new URL('https://study.test/app/?view=materials&date_from=2026-10-01')).evidenceFilters).toBeUndefined()
+    expect(parseRoute(new URL('https://study.test/app/?view=progress&tab=materials&household=home&learner=child')))
+      .toMatchObject({ view: 'materials', tab: 'processing', household: 'home', learner: 'child' })
+  })
   it('restores material selection, submitted search and page within the material scope', () => {
     const route = { view: 'materials' as const, household: 'home', learner: 'child', screen: '', tab: 'content',
       materialId: 'material-2', materialQuery: '分数', materialPage: 2 }

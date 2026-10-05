@@ -23,11 +23,27 @@ class RequestForm(forms.Form):
 class ProfileForm(RequestForm):
     household_id = forms.ChoiceField(label="家庭", choices=())
     display_name = forms.CharField(max_length=120, label="学习者称呼")
-    grade = forms.CharField(max_length=80, required=False, label="年级（可选）")
+    GRADE_CHOICES = [("", "未指定"), *((f"{year}年级", f"小学{year}年级") for year in "一二三四五六"),
+                     *((f"初{year}", f"初{year}") for year in "一二三"),
+                     *((f"高{year}", f"高{year}") for year in "一二三"), ("__other__", "其他（请填写）")]
+    grade = forms.ChoiceField(required=False, label="年级（可选）", choices=GRADE_CHOICES)
+    other_grade = forms.CharField(max_length=80, required=False, label="其他年级")
 
     def __init__(self, *args, households=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["household_id"].choices = household_choices(households)
+        legacy = self.initial.get('grade')
+        if legacy and legacy not in dict(self.GRADE_CHOICES):
+            self.fields['grade'].choices = [*self.GRADE_CHOICES, (legacy, f'{legacy}（旧值，请确认）')]
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('grade') == '__other__':
+            if not cleaned.get('other_grade'):
+                self.add_error('other_grade', '选择其他年级时请填写原始年级名称。')
+            else:
+                cleaned['grade'] = cleaned['other_grade']
+        return cleaned
 
 
 class SourceFieldsMixin:

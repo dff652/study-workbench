@@ -1,3 +1,4 @@
+import { PdfPreview } from './components/pdf-preview'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BookOpenCheck,
@@ -13,6 +14,7 @@ import {
 import { api, getErrorMessage } from './api'
 import { AboutPanel } from './components/about-panel'
 import { LearningStart } from './components/learning-start'
+import { LearningTasks } from './components/learning-tasks'
 import { WorkspacePanel, WorkspaceTabs } from './components/workspace-tabs'
 import { NavButton } from './components/nav-button'
 import { EmptyState, isUnauthorized, type Remote } from './components/shared'
@@ -21,6 +23,7 @@ import { Button } from './components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './components/ui/card'
 import { EvidenceWorkspace } from './features/evidence/workspace'
 import { MaterialWorkspace } from './features/materials/workspace'
+import { MaterialProcessing } from './features/materials/processing'
 import { ProgressWorkspace } from './features/progress/workspace'
 import { WorkspacePage } from './features/workspace/page'
 import { SolutionWorkspace } from './features/solutions/workspace'
@@ -110,7 +113,7 @@ export default function App() {
     const target = event.target
     if (!(target instanceof Element)) return
     const anchor = target.closest('a[href]')
-    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download')) return
+    if (!(anchor instanceof HTMLAnchorElement) || anchor.hasAttribute('download') || anchor.target === '_blank') return
     const href = anchor.getAttribute('href') || ''
     if (!href) return
     let targetUrl: URL
@@ -132,7 +135,7 @@ export default function App() {
       setFilePreview({
         kind: previewKind,
         src: `${previewUrl.pathname}${previewUrl.search}`,
-        title: previewTitle(targetUrl.pathname, previewKind),
+        title: anchor.dataset.previewTitle || previewTitle(targetUrl.pathname, previewKind),
       })
       return
     }
@@ -356,9 +359,9 @@ export default function App() {
   const isBusinessScreen = Boolean(effectiveScreen) && (route.view === 'knowledge' || route.view === 'learning'
     || route.view === 'documents' || route.view === 'settings' || Boolean(route.screen))
   const needsLearner = viewNeedsLearner(route.view)
-  const needsNativeLearner = needsLearner && !isBusinessScreen
   const hasLearnerWorkspace = route.view === 'overview' || route.view === 'attempts'
     || route.view === 'learning' || route.view === 'progress'
+  const needsNativeLearner = hasLearnerWorkspace && !isBusinessScreen
 
   const selectHousehold = (nextId: string) => {
     navigateRoute({
@@ -469,7 +472,7 @@ export default function App() {
             </div>
           </header>
 
-          <Main id='content' fluid className='w-full min-w-0 space-y-4 px-4 py-4 sm:px-6'>
+          <Main id='content' className={`min-w-0 space-y-6 px-4 py-6 sm:px-6 ${route.view === 'settings' ? 'max-w-4xl' : route.view === 'materials' || route.view === 'knowledge' ? 'max-w-[90rem]' : 'max-w-7xl'}`}>
             {!isBusinessScreen || (isDocumentsLanding && documentsTab !== 'practice') || isSolutionScreen || isKnowledgeScreen || isKnowledgeLauncher ? <h1 className='text-xl font-semibold tracking-tight'>{isSolutionScreen ? '逐题讲解' : isKnowledgeScreen || isKnowledgeLauncher ? '知识点讲解' : title}</h1> : null}
 
             {households.length === 0 ? (
@@ -479,13 +482,14 @@ export default function App() {
             {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningStart
               learnerName={learner?.display_name || ''}
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
-              onPractice={() => navigateBusinessPath(`/knowledge/?household_id=${encodeURIComponent(householdId)}#question-index`)}
+              onPractice={() => navigateBusinessPath(`/knowledge/?household_id=${encodeURIComponent(householdId)}&mode=learn#question-index`)}
               onExplanation={() => selectView('documents')}
               onReview={() => selectView('progress')}
               onMaterials={() => selectView('materials')}
               onRecord={() => learner && navigateBusinessPath(`/learning/profile/${encodeURIComponent(learner.id)}/attempt/new/`)}
               onHistory={() => selectView('learning')}
             /> : null}
+            {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningTasks key={`${householdId}:${learner?.id || ''}`} householdId={householdId} learnerId={learner?.id || ''} onUnauthorized={handleUnauthorized} /> : null}
 
             {route.view === 'settings' && settingsLinks.length > 0 ? (
               <nav aria-label='设置导航' className='flex flex-wrap gap-2'>
@@ -498,7 +502,7 @@ export default function App() {
             {households.length > 0 && isDocumentsLanding ? <WorkspaceTabs
               id='document-center'
               label='文档分类'
-              tabs={[{ value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '逐题讲解' }, { value: 'practice', label: '五册与练习' }]}
+              tabs={[{ value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '家长解析' }, { value: 'practice', label: '练习与整套五册' }]}
               value={documentsTab}
               onChange={handleWorkspaceTab}
             /> : null}
@@ -568,7 +572,7 @@ export default function App() {
               /></DocumentPracticePanel>
             ) : null}
             {households.length > 0 && !isBusinessScreen && route.view === 'materials' ? (
-              <MaterialWorkspace
+              route.tab === 'processing' ? <MaterialProcessing householdId={householdId} onUnauthorized={handleUnauthorized} onReturn={() => navigateRoute({ ...routeRef.current, tab: 'pages' })} /> : <MaterialWorkspace
                 key={householdId}
                 householdId={householdId}
                 householdName={selectedHousehold?.name || ''}
@@ -580,6 +584,7 @@ export default function App() {
                 onUnauthorized={handleUnauthorized}
                 onOpenSolutions={(materialId) => navigateBusinessPath(solutionScreen(materialId))}
                 initialTab={route.tab || 'pages'}
+                onProcessingProgress={() => navigateRoute({ ...routeRef.current, tab: 'processing' })}
                 onTabChange={handleWorkspaceTab}
                 initialMaterialId={route.materialId || ''}
                 initialQuery={route.materialQuery || ''}
@@ -592,7 +597,7 @@ export default function App() {
               <Card className='border-amber-300/70 bg-amber-50/70'><CardContent className='flex flex-wrap items-center justify-between gap-3 p-5'><p className='text-sm'>{learners.message}</p><Button type='button' variant='outline' onClick={() => setLearnersRetry((count) => count + 1)}>重试</Button></CardContent></Card>
             ) : null}
             {households.length > 0 && needsNativeLearner && learners.status === 'loaded' && learners.data.items.length === 0 ? (
-              <EmptyState title='这个家庭还没有学习者' detail='添加学习者后，这里会显示真实的作答和证据记录。' icon={GraduationCap} />
+              <div className='space-y-3'><EmptyState title='这个家庭还没有学习者' detail='添加学习者后，这里会显示真实的作答和证据记录。资料整理可以独立进行。' icon={GraduationCap} />{selectedHousehold?.role !== 'viewer' ? <Button type='button' onClick={() => navigateBusinessPath(`/learning/profile/new/?household=${encodeURIComponent(householdId)}`)}>添加首位学习者</Button> : <p className='text-sm text-muted-foreground'>请家庭所有者或审核成员添加学习档案。</p>}</div>
             ) : null}
             {households.length > 0 && needsNativeLearner && hasLearnerWorkspace && learner ? (
               route.view === 'progress' ? (
@@ -608,7 +613,7 @@ export default function App() {
                   onTabChange={handleWorkspaceTab}
                 />
               ) : (
-                <EvidenceWorkspace key={`${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} initialTab={route.tab || undefined} onTabChange={handleWorkspaceTab} onUnauthorized={handleUnauthorized} />
+                <EvidenceWorkspace key={`${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} initialTab={route.tab || undefined} onTabChange={handleWorkspaceTab} initialFilters={route.evidenceFilters} onFiltersChange={(evidenceFilters) => navigateRoute({ ...routeRef.current, evidenceFilters })} onUnauthorized={handleUnauthorized} />
               )
             ) : null}
           </Main>
@@ -624,7 +629,7 @@ export default function App() {
             {filePreview.kind === 'image' ? (
               <div className='flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black/5 p-2 sm:p-4'><img src={filePreview.src} alt={filePreview.title} className='max-h-[calc(100vh-7rem)] max-w-full object-contain' /></div>
             ) : (
-              <iframe title={filePreview.title} src={filePreview.src} className='min-h-[60vh] flex-1 border-0 sm:min-h-[75vh]' />
+              <div className='flex min-h-0 flex-1 flex-col overflow-auto p-3'><PdfPreview title={filePreview.title} src={filePreview.src} /></div>
             )}
           </section>
         </div>

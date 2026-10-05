@@ -117,6 +117,9 @@ export type AttemptResponse = {
 
 export type OverviewResponse = {
   schema_version: 'swb.api.v1'
+  history_attempt_count?: number
+  recent_attempts?: Attempt[]
+  finding_attempts?: Attempt[]
   scope: AttemptResponse['scope']
   metrics: {
     attempt_count: number
@@ -179,6 +182,7 @@ export type OverviewResponse = {
     }>
   }
   links: {
+    record_attempt_url?: string | null
     profile_url: string | null
     report_url: string | null
     schedule_url: string | null
@@ -209,6 +213,10 @@ export type MaterialRow = {
   material_url: string
   prepare_url: string
   classification?: { subject: string; version: number }
+  processing?: ProgressMaterial
+  available_outputs?: Array<{ mode: 'solution' | 'knowledge'; created_at: string; revision_version: number; state: string;
+    documents: Array<{ id: string; title: string; page_count: number; pdf_url: string | null; docx_url: string | null }>;
+    zip_url: string | null }>
 }
 
 export type MaterialListResponse = {
@@ -265,6 +273,7 @@ export type LearnerProgressGroup = {
   unknown_evidence_count: number
   source_counts: Partial<Record<SourceKind, number>>
   node_url: string | null
+  recent_attempts?: Attempt[]
 }
 
 export type LearnerProgressResponse = {
@@ -310,6 +319,10 @@ export type ReviewSchedule = {
   target_stale: boolean
   context: unknown
   detail_url: string | null
+  question_url?: string | null
+  record_attempt_url?: string | null
+  attempt_count?: number
+  latest_attempt?: Attempt | null
   history: ScheduleHistoryEntry[]
   attempt_choices: ScheduleAttemptChoice[]
 }
@@ -319,6 +332,7 @@ export type SchedulesResponse = {
   scope: {
     household_id: string
     learner_id: string
+    as_of?: string
   }
   counts: {
     pending: number
@@ -479,6 +493,9 @@ export type ReadinessQuestion = {
   text: string
   confirmed: boolean
   answer_ready: boolean
+  edit_url?: string
+  association_url?: string
+  answer_url?: string | null
 }
 
 export type Readiness = {

@@ -1,12 +1,12 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { CalendarClock, CircleHelp, Plus } from 'lucide-react'
 import { api } from '../../api'
-import { ApiLink, EmptyState, errorText, formatCount, isUnauthorized, LoadingState, RetryState, SOURCE_LABELS, type Remote } from '../../components/shared'
+import { ApiLink, EmptyState, errorText, formatCount, isUnauthorized, LoadingState, RetryState, SOURCE_LABELS, SourceEvidence, type Remote } from '../../components/shared'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { WorkspaceHeading } from '../../components/workspace-tabs'
-import type { CreateScheduleInput, ReviewSchedule, ScheduleAction, ScheduleActionInput, ScheduleOptionsResponse, SchedulesResponse } from '../../types'
+import type { Attempt, Assessment, CreateScheduleInput, ReviewSchedule, ScheduleAction, ScheduleActionInput, ScheduleOptionsResponse, SchedulesResponse } from '../../types'
 import { requestKeyFor, type RequestKeyState } from '../materials/request-keys'
 
 const STATE_LABELS = {
@@ -24,11 +24,16 @@ const ACTION_LABELS = {
 } as const
 
 const FILTERS = [
-  { value: 'pending', label: '待复测' },
+  { value: 'today', label: '今天' },
+  { value: 'upcoming', label: '近期（7天内）' },
   { value: 'overdue', label: '逾期' },
-  { value: 'completed', label: '完成' },
-  { value: 'cancelled', label: '取消' },
+  { value: 'completed', label: '已完成' },
+  { value: 'later', label: '之后' },
+  { value: 'unscheduled', label: '日期未记录' },
+  { value: 'cancelled', label: '已取消' },
 ] as const
+
+type ScheduleView = typeof FILTERS[number]['value']
 
 export function Schedules({
   remote,
@@ -53,7 +58,7 @@ export function Schedules({
 }) {
   const [createOpen, setCreateOpen] = useState(false)
   const [notice, setNotice] = useState('')
-  const [filter, setFilter] = useState<typeof FILTERS[number]['value']>('pending')
+  const [filter, setFilter] = useState<ScheduleView>('today')
   const dirtyFormsRef = useRef(new Set<string>())
   const reportedDirtyRef = useRef(false)
   const mountedRef = useRef(false)
@@ -88,14 +93,18 @@ export function Schedules({
   if (remote.status === 'loading') return <LoadingState label='正在读取复测计划…' />
   if (remote.status === 'error') return <RetryState message={remote.message} onRetry={onRefresh} />
 
-  const { counts, items } = remote.data
-  const filterLabels = Object.fromEntries(FILTERS.map(({ value, label }) => [value, label])) as Record<typeof filter, string>
+  const { items } = remote.data
+  const today = remote.data.scope.as_of || localDateToday()
+  const groups = groupSchedules(items, today)
+  const visibleItems = groups[filter]
   return (
     <section className='space-y-4' aria-labelledby='schedules-title'>
       <WorkspaceHeading title={<span id='schedules-title'>复测计划</span>} actions={<>
         {canWrite ? <Button type='button' size='sm' onClick={toggleCreateForm}><Plus aria-hidden='true' />{createOpen ? '收起新计划' : '新增复测计划'}</Button> : null}
       </>} />
-      <p className='text-sm text-muted-foreground'>计划保留逐次变更；完成时必须选择一条已保存的真实作答。</p>
+      <p className='text-sm text-muted-foreground'>
+        {remote.data.scope.as_of ? `按服务端日期 ${today}` : `服务端日期未提供，暂按本地日期 ${today}`} 区分计划时间。计划保留逐次变更；完成时必须选择同一题目版本的已保存作答。
+      </p>
 
       {notice ? <p role='status' className='rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'>{notice}</p> : null}
       {createOpen ? (
@@ -117,7 +126,7 @@ export function Schedules({
       ) : null}
 
       {items.length === 0 ? (
-        <EmptyState title='当前没有复测计划' detail='可从已确认题目创建计划；没有计划时不会补造复测记录。' icon={CalendarClock} />
+        <EmptyState title='还没有复测计划' detail='有真实复测安排后会按日期显示在这里。可从已确认题目创建计划；不会补造安排或学习记录。' icon={CalendarClock} />
       ) : (
         <div className='space-y-3'>
           <div className='flex flex-wrap gap-2' role='group' aria-label='按计划状态筛选'>
@@ -127,23 +136,28 @@ export function Schedules({
               aria-pressed={filter === value}
               className={filter === value ? 'min-h-9 rounded-md border border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground' : 'min-h-9 rounded-md border bg-background px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground'}
               onClick={() => setFilter(value)}
-            >{label} <span className='ml-1 tabular-nums'>{formatCount(counts[value])}</span></button>)}
+            >{label} <span className='ml-1 tabular-nums'>{formatCount(groups[value].length)}</span></button>)}
           </div>
-          <div className='workspace-table-wrap max-w-full overflow-x-auto'>
-            <table className='w-full min-w-[44rem] border-collapse text-sm'>
-              <thead><tr className='border-b text-left text-muted-foreground'>
-                <th scope='col' className='px-2 py-2 font-medium'>题目</th>
-                <th scope='col' className='whitespace-nowrap px-2 py-2 font-medium'>复测日期</th>
-                <th scope='col' className='px-2 py-2 font-medium'>目标</th>
-                <th scope='col' className='px-2 py-2 font-medium'>状态</th>
-                <th scope='col' className='relative px-2 py-2 font-medium'><span className='sr-only'>详情</span></th>
-              </tr></thead>
-              <tbody className='divide-y'>
-                {items.every((item) => !matchesFilter(item, filter)) ? <tr><td colSpan={5} className='px-2 py-4 text-muted-foreground'>暂无{filterLabels[filter]}计划。</td></tr> : null}
+          {visibleItems.length === 0 ? (
+            <ScheduleEmptyState
+              filter={filter}
+              counts={{ today: groups.today.length, upcoming: groups.upcoming.length, overdue: groups.overdue.length }}
+              onSelect={setFilter}
+            />
+          ) : null}
+            <div hidden={visibleItems.length === 0} className='workspace-table-wrap max-w-full overflow-x-auto'>
+              <table className='w-full min-w-[54rem] border-collapse text-sm'>
+                <thead><tr className='border-b text-left text-muted-foreground'>
+                  <th scope='col' className='px-2 py-2 font-medium'>题目与最近作答</th>
+                  <th scope='col' className='px-2 py-2 font-medium'>复测安排</th>
+                  <th scope='col' className='px-2 py-2 font-medium'>状态</th>
+                  <th scope='col' className='px-2 py-2 font-medium'>操作</th>
+                </tr></thead>
+                <tbody className='divide-y'>
                   {items.map((item) => <ScheduleRow
                     key={item.id}
                     item={item}
-                    visible={matchesFilter(item, filter)}
+                    visible={visibleItems.includes(item)}
                     csrfToken={csrfToken}
                     canWrite={canWrite}
                     onDirtyChange={(dirty) => reportFormDirty(`schedule:${item.id}`, dirty)}
@@ -154,27 +168,182 @@ export function Schedules({
                       onChanged()
                     }}
                     onUnauthorized={onUnauthorized}
-                />)}
-              </tbody>
-            </table>
-          </div>
+                  />)}
+                </tbody>
+              </table>
+            </div>
         </div>
       )}
     </section>
   )
 }
 
-function matchesFilter(item: ReviewSchedule, filter: typeof FILTERS[number]['value']) {
-  switch (filter) {
-    case 'pending': return item.state === 'planned' || item.state === 'rescheduled'
-    case 'overdue': return isScheduleOverdue(item)
-    case 'completed': return item.state === 'completed'
-    case 'cancelled': return item.state === 'cancelled'
+function isScheduleOverdue(item: ReviewSchedule) {
+  return item.overdue
+}
+
+type ScheduleGroups = Record<ScheduleView, ReviewSchedule[]>
+
+function groupSchedules(items: ReviewSchedule[], asOf: string): ScheduleGroups {
+  const active = items.filter((item) => item.state === 'planned' || item.state === 'rescheduled')
+  const upcomingEnd = addCalendarDays(asOf, 7)
+  return {
+    today: active.filter((item) => !item.overdue && item.due_date === asOf),
+    upcoming: active.filter((item) => !item.overdue && item.due_date > asOf && item.due_date <= upcomingEnd),
+    overdue: active.filter((item) => isScheduleOverdue(item) || (Boolean(item.due_date) && item.due_date < asOf)),
+    completed: items.filter((item) => item.state === 'completed'),
+    later: active.filter((item) => !item.overdue && item.due_date > upcomingEnd),
+    unscheduled: active.filter((item) => !item.due_date),
+    cancelled: items.filter((item) => item.state === 'cancelled'),
   }
 }
 
-function isScheduleOverdue(item: ReviewSchedule) {
-  return item.overdue
+function ScheduleEmptyState({
+  filter,
+  counts,
+  onSelect,
+}: {
+  filter: ScheduleView
+  counts: { today: number; upcoming: number; overdue: number }
+  onSelect: (filter: ScheduleView) => void
+}) {
+  const copy: Record<ScheduleView, { title: string; detail: string }> = {
+    today: {
+      title: '今天没有安排的复测',
+      detail: `近期有 ${formatCount(counts.upcoming)} 项计划，逾期有 ${formatCount(counts.overdue)} 项。计划为空不代表没有待办。`,
+    },
+    upcoming: { title: '近期没有待到期计划', detail: '之后安排的计划和已逾期计划分别查看；这里不会推测新的复测安排。' },
+    overdue: { title: '当前没有逾期计划', detail: '按服务端日期与计划日期判断；其他待复测安排可在“今天”或“近期”查看。' },
+    completed: { title: '还没有已完成计划', detail: '完成状态只会在计划绑定真实作答后显示。' },
+    later: { title: '暂无更晚安排', detail: '超过近期范围的计划会列在这里。' },
+    unscheduled: { title: '没有日期未记录的计划', detail: '日期缺失会单独列出，不会猜测到期时间。' },
+    cancelled: { title: '没有已取消计划', detail: '取消的计划和有效待复测计划分开显示。' },
+  }
+  const actions: Array<{ value: ScheduleView; label: string; count: number }> = [
+    { value: 'upcoming', label: '查看近期计划', count: counts.upcoming },
+    { value: 'overdue', label: '查看逾期计划', count: counts.overdue },
+  ]
+  return (
+    <div className='space-y-3'>
+      <EmptyState title={copy[filter].title} detail={copy[filter].detail} icon={CalendarClock} />
+      {filter === 'today' && actions.some((action) => action.count > 0) ? (
+        <div className='flex flex-wrap justify-center gap-2'>
+          {actions.filter((action) => action.count > 0).map((action) => (
+            <Button key={action.value} type='button' variant='outline' onClick={() => onSelect(action.value)}>
+              {action.label} · {formatCount(action.count)} 项
+            </Button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function localDateToday() {
+  const date = new Date()
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+}
+
+function addCalendarDays(value: string, days: number) {
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
+}
+
+function latestAttemptSummary(attempt: Attempt) {
+  const date = attempt.actual_date_state === 'known' && attempt.actual_date
+    ? attempt.actual_date
+    : '实际日期未知'
+  const source = attempt.source_kind_label || SOURCE_LABELS[attempt.source_kind] || '来源未确定'
+  const independence = attempt.independence_label || independenceLabel(attempt.independence)
+  const prompt = attempt.prompt_status_label || promptLabel(attempt.prompt_status)
+  const accepted = attempt.assessments.filter(isCurrentAcceptedAssessment)
+  const result = accepted.flatMap((assessment) => assessment.dimensions)
+    .slice(0, 2)
+    .map((dimension) => `${dimension.dimension_label || '评价项目'}：${dimension.judgment_label || '判断未提供'}`)
+  return [date, source, independence, prompt, result.length ? `评价 ${result.join('；')}` : '当前无已接受评价'].join(' · ')
+}
+
+function latestAttemptResult(attempt: Attempt) {
+  const accepted = attempt.assessments.filter(isCurrentAcceptedAssessment)
+  if (accepted.length === 0) return ['当前没有已接受并发布的评价']
+  const dimensions = accepted.flatMap((assessment) => assessment.dimensions)
+  if (dimensions.length === 0) return ['已接受评价未记录维度']
+  return dimensions.map((dimension) => `${dimension.dimension_label || '评价项目未命名'}：${dimension.judgment_label || '判断未提供'} · ${dimension.basis_label || '依据未提供'}`)
+}
+
+function isCurrentAcceptedAssessment(assessment: Assessment) {
+  return assessment.current && assessment.published && assessment.review_state === 'accepted'
+}
+
+function independenceLabel(value: string) {
+  const labels: Record<string, string> = {
+    confirmed_independent: '人工确认独立',
+    not_independent: '确认非独立',
+    unknown: '独立性未知',
+  }
+  return labels[value] || '独立性未确定'
+}
+
+function promptLabel(value: string) {
+  const labels: Record<string, string> = {
+    none_confirmed: '人工确认无提示',
+    given: '有提示',
+    unknown: '提示情况未知',
+  }
+  return labels[value] || '提示情况未确定'
+}
+
+function recordedAtLabel(value: string) {
+  if (!value) return '未记录'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).format(date)
+}
+
+function LatestAttemptDetails({ attempt, attemptCount }: { attempt?: Attempt | null; attemptCount?: number }) {
+  if (!attempt) return <p className='mt-2 text-sm text-muted-foreground'>暂无最近作答摘要；未记录不等于没有作答。</p>
+  return (
+    <div className='mt-3 rounded-md border px-3 py-2'>
+      <div className='flex flex-wrap items-baseline justify-between gap-2'>
+        <h4 className='text-sm font-semibold'>最近真实作答</h4>
+        {attemptCount === undefined ? <span className='text-xs text-muted-foreground'>总次数未提供</span> : <span className='text-xs text-muted-foreground'>此稳定题目历版本 {formatCount(attemptCount)} 次有效作答</span>}
+      </div>
+      <p className='mt-1 text-sm'>{attempt.question_text || '题目未记录'}</p>
+      <p className='mt-1 text-xs leading-5 text-muted-foreground'>{latestAttemptSummary(attempt)}</p>
+      {attempt.prompts.length ? <p className='mt-1 text-xs text-muted-foreground'>记录的提示：{attempt.prompts.join('、')}</p> : null}
+      <ul className='mt-2 space-y-1 text-sm'>
+        {latestAttemptResult(attempt).map((result, index) => <li key={`${index}:${result}`}>{result}</li>)}
+      </ul>
+      <div className='mt-2 flex flex-wrap gap-x-4 gap-y-1'>
+        <ApiLink href={attempt.attempt_url}>查看本次作答</ApiLink>
+        <ApiLink href={attempt.question_url}>查看题目</ApiLink>
+      </div>
+      <details className='mt-2 border-t pt-2'>
+        <summary className='cursor-pointer text-xs font-medium text-primary'>展开评价维度与原图来源</summary>
+        <div className='mt-2 space-y-3'>
+          {attempt.assessments.filter(isCurrentAcceptedAssessment).map((assessment) => (
+            <section key={assessment.assessment_revision_id} className='space-y-2'>
+              {assessment.dimensions.length ? assessment.dimensions.map((dimension) => (
+                <div key={dimension.dimension} className='border-l-2 pl-3 text-sm'>
+                  <p className='font-medium'>{dimension.dimension_label || '评价项目未命名'} · {dimension.judgment_label || '判断未提供'} · {dimension.basis_label || '依据未提供'}</p>
+                  {dimension.rationale ? <p className='mt-1 whitespace-pre-wrap text-muted-foreground'>{dimension.rationale}</p> : null}
+                  <SourceEvidence sources={dimension.sources} />
+                </div>
+              )) : <p className='text-sm text-muted-foreground'>评价未记录维度。</p>}
+            </section>
+          ))}
+          <div>
+            <p className='mb-1 text-xs font-semibold text-muted-foreground'>本次作答来源</p>
+            <SourceEvidence sources={attempt.sources} />
+          </div>
+        </div>
+      </details>
+    </div>
+  )
 }
 
 function ScheduleRow({
@@ -207,6 +376,7 @@ function ScheduleRow({
   const actionKey = useRef<RequestKeyState>(null)
   const dirtyRef = useRef(false)
   const terminal = item.state === 'completed' || item.state === 'cancelled'
+  const currentReason = item.history.filter((entry) => entry.action === 'planned' || entry.action === 'rescheduled').at(-1)?.reason || '安排原因未记录'
 
   const markDirty = () => {
     if (dirtyRef.current) return
@@ -269,30 +439,42 @@ function ScheduleRow({
 
   return <>
     <tr hidden={!visible}>
-      <td className='px-2 py-1.5 align-top'>
+      <td className='max-w-lg px-2 py-2 align-top'>
         <button type='button' className='min-h-8 h-auto whitespace-normal break-words p-0 text-left font-medium hover:underline' aria-expanded={expanded} aria-controls={`schedule-details-${item.id}`} onClick={() => setExpanded((value) => !value)}>
           {item.question_text || '题干未记录'}
         </button>
+        <p className='mt-1 text-xs text-muted-foreground'>
+          {item.attempt_count === undefined ? '作答次数未提供' : `此题历版本共 ${formatCount(item.attempt_count)} 次有效作答`}
+        </p>
+        {item.latest_attempt ? <p className='mt-1 text-xs leading-5 text-muted-foreground'>最近记录：{latestAttemptSummary(item.latest_attempt)}</p> : null}
       </td>
-      <td className='whitespace-nowrap px-2 py-1.5 align-top tabular-nums'>{item.due_date || '未安排'}</td>
-      <td className='px-2 py-1.5 align-top'>{item.goal || '未记录'}</td>
-      <td className='px-2 py-1.5 align-top'>
+      <td className='max-w-sm px-2 py-2 align-top'>
+        <p className='font-medium tabular-nums'>{item.due_date || '计划日期未记录'}</p>
+        <p className='mt-1'>{item.goal || '复测目标未记录'}</p>
+        <p className='mt-1 text-xs leading-5 text-muted-foreground'>安排原因：{currentReason}</p>
+      </td>
+      <td className='px-2 py-2 align-top'>
         <div className='flex flex-wrap gap-1'>
           <Badge variant={item.state === 'completed' ? 'secondary' : item.state === 'cancelled' ? 'outline' : 'default'}>{STATE_LABELS[item.state] || '未确定状态'}</Badge>
           {isScheduleOverdue(item) ? <Badge variant='outline'>已逾期</Badge> : null}
         </div>
       </td>
-      <td className='px-2 py-1.5 align-top'>
-        <Button type='button' variant='outline' size='sm' aria-expanded={expanded} aria-controls={`schedule-details-${item.id}`} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '详情'}</Button>
+      <td className='px-2 py-2 align-top'>
+        <div className='flex min-w-28 flex-col items-start gap-1.5'>
+          <ApiLink href={item.question_url}>打开题目</ApiLink>
+          {!terminal ? <ApiLink href={item.record_attempt_url}>记录复测</ApiLink> : null}
+          <Button type='button' variant='outline' size='sm' aria-expanded={expanded} aria-controls={`schedule-details-${item.id}`} onClick={() => setExpanded((value) => !value)}>{expanded ? '收起' : '详情'}</Button>
+        </div>
       </td>
     </tr>
     <tr hidden={!visible || !expanded}>
-      <td colSpan={5} className='border-b bg-muted/15 px-3 py-4'>
+      <td colSpan={4} className='border-b bg-muted/15 px-3 py-4'>
         <div id={`schedule-details-${item.id}`} className='grid gap-5 xl:grid-cols-2'>
           <section className='space-y-3'>
             <div>
               <h3 className='font-semibold'>复测详情</h3>
               <p className='mt-1 text-sm'><span className='font-medium'>提示安排：</span>{item.prompt_plan || '未记录'}</p>
+              <LatestAttemptDetails attempt={item.latest_attempt} attemptCount={item.attempt_count} />
               {item.target_stale ? <p className='mt-2 text-sm text-amber-900'>计划保留原题目版本；当前题目内容已更新。</p> : null}
               <ApiLink href={item.detail_url}>查看复测历史</ApiLink>
             </div>
@@ -312,7 +494,7 @@ function ScheduleRow({
                   <p className='font-medium'>第 {entry.revision_no} 次 · {ACTION_LABELS[entry.action] || '未确定状态'} · 计划日期 {entry.due_date || '未安排'}</p>
                   {entry.action === 'completed' ? <p className='mt-1 text-muted-foreground'>实际作答日期：{entry.actual_date || '未知'}{entry.attempt_revision_id === null ? ' · 未关联作答版本' : ' · 已关联真实作答'}。</p> : null}
                   <p className='mt-1 text-muted-foreground'>原因：{entry.reason || '未记录'}</p>
-                  <p className='mt-1 text-xs text-muted-foreground'>记录时间：{entry.recorded_at || '未记录'}</p>
+                  <p className='mt-1 text-xs text-muted-foreground'>记录时间（本地）：{recordedAtLabel(entry.recorded_at)}</p>
                 </li>
               ))}
             </ol> : <p className='mt-2 text-sm text-muted-foreground'>暂无可显示的历史记录。</p>}
@@ -334,7 +516,7 @@ function ScheduleRow({
             <label className='mb-1 block text-sm font-medium' htmlFor={`attempt-${item.id}`}>选择这次复测对应的真实作答</label>
             <select id={`attempt-${item.id}`} className='h-10 w-full rounded-md border bg-background px-3 text-sm' value={attemptId} onChange={(event) => { setAttemptId(event.target.value); markDirty() }} required disabled={busy}>
               <option value=''>请选择已保存的作答</option>
-              {item.attempt_choices.map((choice) => <option key={choice.revision_id} value={String(choice.revision_id)}>{choice.label} · {choice.actual_date || '实际作答日期未知'} · {SOURCE_LABELS[choice.source_kind] || '来源未知'}</option>)}
+              {item.attempt_choices.map((choice) => <option key={choice.revision_id} value={String(choice.revision_id)}>{choice.label}</option>)}
             </select>
             {item.attempt_choices.length === 0 ? <p className='mt-2 text-sm text-amber-900'>暂无可关联的真实作答。先保存作答记录后再完成计划。</p> : null}
           </div> : null}

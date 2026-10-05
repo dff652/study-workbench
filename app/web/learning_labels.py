@@ -66,3 +66,16 @@ def label(mapping, value):
     """Return the Chinese display label while preserving unknown future values."""
     raw = getattr(value, "value", value)
     return mapping.get(raw, raw or "未知")
+
+
+def attempt_choice_label(attempt_id, revision, question_title=""):
+    """Describe one real event without changing its selected revision or date."""
+    known_date = getattr(revision.actual_date_state, "value", revision.actual_date_state) == "known"
+    day = str(revision.actual_date) if known_date and revision.actual_date else "日期未知"
+    answer = " ".join((revision.answer_text or "").split())[:40] or "答案未记录"
+    conditions = f"{label(INDEPENDENCE_LABELS, revision.independence)}／{label(PROMPT_STATUS_LABELS, revision.prompt_status)}"
+    parts = [day, label(ATTEMPT_KIND_LABELS, revision.attempt_kind), label(SOURCE_KIND_LABELS, revision.source_kind)]
+    if question_title:
+        parts.append(question_title[:40])
+    parts.extend([conditions, answer, f"#{attempt_id[-8:]}"])
+    return " · ".join(parts)

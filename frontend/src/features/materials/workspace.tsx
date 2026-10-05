@@ -15,7 +15,7 @@ import { ContentWorkspace } from '../content/workspace'
 import { MaterialUploadQueue } from './page'
 import { usePrivateDraft } from '../drafts/use-private-draft'
 import type { PrivateDraft } from '../drafts/client'
-import { SubjectEditor, SubjectSelect } from './subjects'
+import { SubjectEditor, SubjectSelect, SUBJECTS } from './subjects'
 
 type Remote<T> = { status: 'loading' } | { status: 'loaded'; data: T } | { status: 'error'; message: string }
 const MATERIAL_PAGE_SIZE = 20
@@ -40,6 +40,7 @@ export function MaterialWorkspace({
   initialSubject = '',
   initialPage = 1,
   onLocationChange,
+  onProcessingProgress,
 }: {
   householdId: string
   householdName: string
@@ -57,6 +58,7 @@ export function MaterialWorkspace({
   initialSubject?: string
   initialPage?: number
   onLocationChange?: (location: { materialId: string; query: string; page: number; subject?: string }) => void
+  onProcessingProgress?: () => void
 }) {
   const [materials, setMaterials] = useState<Remote<MaterialListResponse>>({ status: 'loading' })
   const [materialsScope, setMaterialsScope] = useState('')
@@ -436,6 +438,7 @@ export function MaterialWorkspace({
     <div className='grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.28fr)_minmax(0,1fr)]'>
       <section className='min-w-0 space-y-3' aria-label='资料列表'>
           <WorkspaceHeading title='资料列表' actions={<>
+          {onProcessingProgress ? <Button type='button' variant='outline' size='sm' onClick={onProcessingProgress} disabled={scopeBusy}>处理进度</Button> : null}
           <Button type='button' variant='outline' size='sm' onClick={refreshMaterials}><RefreshCw className='size-4' aria-hidden='true' />刷新</Button>
           <Button type='button' size='sm' onClick={() => setCreateFormHouseholdId(createOpen ? '' : householdId)} disabled={!canWrite || scopeBusy}><FilePlus2 className='size-4' aria-hidden='true' />新建资料</Button>
         </>} />
@@ -454,7 +457,7 @@ export function MaterialWorkspace({
             <ul className='max-h-[min(62vh,48rem)] space-y-1 overflow-y-auto pr-1'>
               {currentMaterials.data.items.map((item) => <li key={item.id}>
                 <button type='button' aria-pressed={selectedMaterialId === item.id} onClick={() => selectMaterial(item.id)} disabled={scopeBusy} className={`flex min-h-11 w-full items-center justify-between gap-3 border-b px-2 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selectedMaterialId === item.id ? 'border-l-2 border-l-primary bg-primary/[0.05] font-semibold' : 'hover:bg-muted/40'}`}>
-                  <span className='min-w-0 break-words'>{item.title}</span><span className='shrink-0 text-xs text-muted-foreground'>{item.page_count} 页</span>
+                  <span className='min-w-0 break-words'>{item.title}<span className='mt-1 block text-xs font-normal text-muted-foreground'>{SUBJECTS.find(([id]) => id === item.classification?.subject)?.[1] || '未分类'} · {item.page_count} 页{item.processing ? ` · 待整理 ${item.processing.pages_unread} 页 / 待核对 ${item.processing.questions_pending} 题` : ''}</span></span>
                 </button>
               </li>)}
             </ul>
@@ -490,6 +493,7 @@ export function MaterialWorkspace({
       </section>
 
       <section className='min-w-0 space-y-4' aria-label='当前资料详情'>
+        {selectedMaterialId && currentMaterials.status === 'loaded' && !currentMaterials.data.items.some((item) => item.id === selectedMaterialId) ? <p role='status' className='rounded-md border border-amber-300 p-3 text-sm'>当前打开的资料不在本页筛选结果中，右侧仍保留该资料及输入。可调整搜索／学科、返回上一页，或继续当前工作。</p> : null}
         {!selectedMaterialId ? <EmptyState title='选择一份资料' detail='资料名称、原图和整理状态会显示在这里。' /> : <>
           <WorkspaceHeading
             title={currentDetail.status === 'loaded' ? currentDetail.data.material.title : materialTitle(currentMaterials, selectedMaterialId)}
@@ -524,8 +528,10 @@ export function MaterialWorkspace({
             <div key={selectedMaterialId} className='min-w-0'>
               <WorkspacePanel id='materials' value='pages' active={activeTab}>
                 {visitedTabs.has('pages') ? <>
-                  <MaterialUploadQueue materialId={selectedMaterialId} csrfToken={csrfToken} canWrite={canWrite} onUnauthorized={onUnauthorized} onBusyChange={setUploadQueueBusy} onUploaded={() => { refreshDetail(false); refreshMaterials() }} />
-                  <MaterialReadiness detail={currentDetail.data} />
+                  {currentDetail.data.pages.length ? <>
+                    <MaterialReadiness detail={currentDetail.data} onContinue={() => changeTab('content')} />
+                    <details className='rounded-md border p-3'><summary className='cursor-pointer text-sm font-medium'>添加原图照片</summary><div className='mt-3'><MaterialUploadQueue materialId={selectedMaterialId} csrfToken={csrfToken} canWrite={canWrite} onUnauthorized={onUnauthorized} onBusyChange={setUploadQueueBusy} onUploaded={() => { refreshDetail(false); refreshMaterials() }} /></div></details>
+                  </> : <><MaterialUploadQueue materialId={selectedMaterialId} csrfToken={csrfToken} canWrite={canWrite} onUnauthorized={onUnauthorized} onBusyChange={setUploadQueueBusy} onUploaded={() => { refreshDetail(false); refreshMaterials() }} /><MaterialReadiness detail={currentDetail.data} onContinue={() => changeTab('content')} /></>}
                 </> : null}
               </WorkspacePanel>
               <WorkspacePanel id='materials' value='content' active={activeTab}>

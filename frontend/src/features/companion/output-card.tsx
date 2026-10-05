@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/button'
 import { Disclosure } from '../../components/disclosure'
 import { outputIsProcessing } from '../solutions/model'
 import type { CompanionOutput } from './types'
+import { PdfPreview } from '../../components/pdf-preview'
 
 export function OutputCard<O extends CompanionOutput>({ checkNames, output, expanded, onToggleExpanded, checks, writable, onCheckChange, onAction }: {
   output: O
@@ -29,7 +30,7 @@ export function OutputCard<O extends CompanionOutput>({ checkNames, output, expa
       {output.documents.map((document) => <section key={document.id} className='space-y-3 rounded-md border p-3'>
         <div className='flex flex-wrap items-center justify-between gap-2'><div><h4 className='font-medium'>{document.title}</h4><p className='text-xs text-muted-foreground'>{organizationLabel(document.organization)} · {document.page_count} 页</p></div>
           {document.docx_url ? <a className='rounded-md border px-3 py-2 text-sm font-medium underline-offset-4 hover:bg-muted hover:underline' href={safeLink(document.docx_url) || undefined} download>下载 Word</a> : null}</div>
-        {document.pdf_url ? <div className='space-y-2'><h5 className='text-sm font-medium'>PDF 预览</h5><iframe title={`${document.title} PDF 预览`} src={safeLink(document.pdf_url) || undefined} className='h-[32rem] w-full rounded-md border bg-muted' /></div> : null}
+        {document.pdf_url ? <PdfPreview title={document.title} src={document.pdf_url} /> : null}
         {document.previews.length ? <div className='grid gap-2 sm:grid-cols-2 lg:grid-cols-3'>{document.previews.map((preview, index) => <figure key={`${preview}:${index}`} className='overflow-hidden rounded-md border'><img src={safeLink(preview) || undefined} alt={`${document.title} 第 ${index + 1} 页预览`} className='h-auto w-full' loading='lazy' /><figcaption className='px-2 py-1 text-xs text-muted-foreground'>第 {index + 1} 页</figcaption></figure>)}</div> : null}
       </section>)}
       {output.documents.length === 0 && !outputIsProcessing(output.state) ? <p className='text-sm text-muted-foreground'>当前输出没有可预览的文档。</p> : null}

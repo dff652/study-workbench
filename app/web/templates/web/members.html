@@ -18,11 +18,7 @@
   {% endif %}
 
   {% if household %}
-    <div class="workspace-tabs" role="tablist" aria-label="成员管理" data-workspace-tabs>
-      <button type="button" id="members-tab-list" role="tab" aria-controls="members-panel-list" aria-selected="true" data-workspace-tab="members">现有成员</button>
-      <button type="button" id="members-tab-create" role="tab" aria-controls="members-panel-create" aria-selected="false" data-workspace-tab="new-member">创建账号</button>
-    </div>
-    <section class="panel" id="members-panel-list" role="tabpanel" aria-labelledby="members-tab-list" data-workspace-panel>
+    <section class="panel" id="members-panel-list">
       <h2>现有成员</h2>
       <p class="muted">移除只撤销当前家庭访问；不会删除登录账号或家庭学习历史。</p>
       {% if member_rows %}
@@ -38,6 +34,7 @@
                   · {% if item.membership.user.is_active %}账号可登录{% else %}账号已停用{% endif %}
                 </span>
               </div>
+              <div class="member-permissions"><p class="small-text">关联学习者：未记录（账号与学习档案分别保存）</p><p class="small-text">权限：{% if item.membership.role == "owner" %}查看、整理、审核、成员与模型配置管理{% elif item.membership.role == "reviewer" %}查看、整理与审核；成员和模型配置由所有者管理{% else %}查看家庭资料与学习记录{% endif %}</p><p class="small-text">最近活动：{% if item.membership.user.last_login %}最近登录 {{ item.membership.user.last_login|date:"Y-m-d H:i" }}{% else %}尚无登录记录{% endif %}</p></div>
               {% if item.protected %}
                 <span class="muted">此成员的账号或家庭权限受保护</span>
               {% else %}
@@ -63,7 +60,7 @@
       {% endif %}
     </section>
 
-    <section class="panel workspace-reading" id="members-panel-create" role="tabpanel" aria-labelledby="members-tab-create" data-workspace-panel><h2>创建家庭成员登录账号</h2>
+    <details class="panel workspace-reading" id="members-panel-create" {% if create_form.errors %}open{% endif %}><summary class="primary-button">＋ 添加家庭成员</summary><div class="disclosure-content"><h2>添加家庭成员</h2>
       <p class="muted">这里只能创建审核成员或只读成员。密码按账号密码规则验证并安全保存；页面不会回显密码。</p>
       <form method="post" action="{% url 'web:members' %}" class="stack-form">
         {% csrf_token %}{{ create_form.action }}{{ create_form.household_id }}
@@ -72,9 +69,9 @@
         <div class="field"><label for="id_create_password1">密码</label>{{ create_form.password1 }}{{ create_form.password1.errors }}</div>
         <div class="field"><label for="id_create_password2">再次输入密码</label>{{ create_form.password2 }}{{ create_form.password2.errors }}</div>
         <div class="field"><label for="id_create_role">家庭角色</label>{{ create_form.role }}{{ create_form.role.errors }}</div>
-        <button class="primary-button" type="submit">创建账号并加入家庭</button>
+        <button class="primary-button" type="submit">添加成员并创建登录账号</button>
       </form>
-    </section>
+    </div></details>
   {% elif not household_choices %}
     <p class="notice warning-notice" role="status">此账号没有可管理的家庭。</p>
   {% else %}

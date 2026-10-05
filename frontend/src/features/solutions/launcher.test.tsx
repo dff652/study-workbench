@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SolutionsLauncher } from './launcher'
@@ -25,16 +25,14 @@ describe('SolutionsLauncher', () => {
     }))
 
     render(<SolutionsLauncher householdId='home-1' onOpen={onOpen} onPrepareDocuments={onPrepareDocuments} onMaterials={vi.fn()} onUnauthorized={vi.fn()} />)
-    expect(await screen.findByRole('heading', { name: '选择资料' })).toBeTruthy()
-    await user.selectOptions(screen.getByRole('combobox', { name: '选择资料' }), 'material-2')
-    expect((screen.getByRole('combobox', { name: '选择资料' }) as HTMLSelectElement).value).toBe('material-2')
-    expect(screen.getByText('已选资料')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: '查看讲解文档' }))
-    await user.click(screen.getByRole('button', { name: '制作五册资料' }))
+    const row = (await screen.findByRole('heading', { name: materials[1].title })).closest('li')!
+    expect(screen.queryByRole('combobox', { name: '选择资料' })).toBeNull()
+    await user.click(within(row).getByRole('button', { name: '整理家长解析' }))
+    await user.click(within(row).getByRole('button', { name: '制作整套五册' }))
     expect(onOpen).toHaveBeenCalledWith('material-2')
     expect(onPrepareDocuments).toHaveBeenCalledWith('material-2')
 
-    await user.type(screen.getByPlaceholderText('输入资料名称'), '几何')
+    await user.type(screen.getByPlaceholderText('输入资料或文档名称'), '几何')
     await user.click(screen.getByRole('button', { name: '搜索' }))
     await waitFor(() => expect(calls.some((url) => url.searchParams.get('q') === '几何' && url.searchParams.get('page') === '1')).toBe(true))
     await user.click(await screen.findByRole('button', { name: '下一页' }))
@@ -45,6 +43,6 @@ describe('SolutionsLauncher', () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({ schema_version: 'swb.api.v1', items: [materials[0]], total: 1, page: 1, page_size: 20, has_next: false })))
     render(<SolutionsLauncher householdId='home-1' onOpen={vi.fn()} onMaterials={vi.fn()} onUnauthorized={vi.fn()} />)
     expect(await screen.findByText('当前成员可查看讲解文档；制作练习册由家庭所有者或审核成员操作。')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: '制作五册资料' })).toBeNull()
+    expect(screen.queryByRole('button', { name: '制作整套五册' })).toBeNull()
   })
 })

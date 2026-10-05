@@ -353,6 +353,14 @@ class SolutionTests(TransactionTestCase):
             self.assertEqual(len(document['previews']), document['page_count'])
             for name in ('document.pdf', 'document.docx', *document['previews']):
                 self.assertTrue(rendering.output_file(row, document['id'], name).is_file())
+        self.client.force_login(self.viewer)
+        file_url = f"/api/v1/solutions/outputs/{row.pk}/files/{generated['documents'][0]['id']}/document.pdf/"
+        response = self.client.get(file_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['X-Frame-Options'], 'SAMEORIGIN')
+        response.close()
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(file_url).status_code, 404)
         with zipfile.ZipFile(rendering.archive(row)) as archive:
             self.assertEqual(len([name for name in archive.namelist() if name.endswith('.docx')]), 5)
             self.assertFalse(any('original' in name or name.endswith('.png') for name in archive.namelist()))

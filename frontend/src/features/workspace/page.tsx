@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { KnowledgeFormulaTools } from '../../components/knowledge-formula-tools'
 import { AlertCircle, LoaderCircle, RotateCcw } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { usePrivateDraft } from '../drafts/use-private-draft'
@@ -57,6 +59,7 @@ export function WorkspacePage({
   const [filesNeedReselection, setFilesNeedReselection] = useState(false)
   const filesNeedReselectionRef = useRef(false)
   const contentRef = useRef<HTMLDivElement>(null)
+  const [formulaHost, setFormulaHost] = useState<HTMLElement | null>(null)
   const widgetRef = useRef<HTMLDivElement>(null)
   const submitControllerRef = useRef<AbortController | null>(null)
   const loadControllerRef = useRef<AbortController | null>(null)
@@ -178,6 +181,25 @@ export function WorkspacePage({
     unsavedRef.current = true
     onUnsavedChange(true)
   }, [onUnsavedChange])
+
+  useLayoutEffect(() => {
+    const root = contentRef.current
+    if (!root || !activePage) return
+    const openRow = (event: MouseEvent | KeyboardEvent) => {
+      if (event.defaultPrevented || !(event.target instanceof Element)) return
+      if (event instanceof MouseEvent && (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)) return
+      const row = event.target.closest<HTMLElement>('[data-row-href]')
+      if (!row || !root.contains(row) || event.target.closest('a, button, input, select, textarea, summary')) return
+      if (event instanceof KeyboardEvent && (event.key !== 'Enter' || event.target !== row)) return
+      const path = safeBusinessPath(row.dataset.rowHref || '')
+      if (!path) return
+      event.preventDefault()
+      onNavigate(path)
+    }
+    root.addEventListener('click', openRow)
+    root.addEventListener('keydown', openRow)
+    return () => { root.removeEventListener('click', openRow); root.removeEventListener('keydown', openRow) }
+  }, [activePage, onNavigate])
 
   const handleFormEdit = useCallback((event: Event) => {
     const target = event.target
@@ -381,6 +403,16 @@ export function WorkspacePage({
     }
   }, [onUnsavedChange, privateDraft.message])
 
+  useLayoutEffect(() => {
+    const root = contentRef.current
+    const field = root?.querySelector('#id_display_markup')
+    if (!root || !field || !root.querySelector('#id_definition')) { setFormulaHost(null); return }
+    const host = document.createElement('div')
+    field.parentElement?.appendChild(host)
+    setFormulaHost(host)
+    return () => { host.remove() }
+  }, [activePage])
+
   const retry = () => {
     if (unsavedRef.current && !window.confirm('页面有未保存的更改。确定重新读取页面吗？')) return
     loadControllerRef.current?.abort()
@@ -432,6 +464,7 @@ export function WorkspacePage({
       />
       {activePage ? <>
         <div ref={contentRef} className='workspace-page min-w-0 space-y-4' aria-busy={submitPending} inert={submitPending} dangerouslySetInnerHTML={pageHtml} />
+        {formulaHost && contentRef.current ? createPortal(<KnowledgeFormulaTools root={contentRef.current} csrfToken={csrfToken} />, formulaHost) : null}
         <div ref={widgetRef} aria-hidden='true' className='hidden' />
       </> : null}
     </section>

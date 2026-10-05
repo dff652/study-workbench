@@ -54,6 +54,58 @@
 .workspace-page .simple-list li { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; min-height: 2.75rem; padding-block: 0.5rem; border-bottom: 1px solid var(--border); }
 .workspace-page .status-badge { display: inline-block; font-size: 0.75rem; color: var(--muted-foreground); }
 
+/* The source widget is rendered in the PC shell without the native app.css. */
+.workspace-page .region-editor { display: grid; gap: 1rem; min-width: 0; }
+.workspace-page .source-page-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); align-items: start; gap: 1rem; }
+.workspace-page .region-card { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; }
+.workspace-page .image-wrap { position: relative; width: 100%; max-width: 32rem; overflow: hidden; border: 1px solid var(--border); background: var(--muted); }
+.workspace-page .region-viewport { touch-action: none; }
+.workspace-page .region-stage { position: absolute; inset: 0; transform-origin: 0 0; }
+.workspace-page .region-image { display: block; width: 100%; height: auto; }
+.workspace-page .region-stage > .region-image { position: absolute; inset: 0; height: 100%; object-fit: fill; pointer-events: none; user-select: none; }
+.workspace-page .region-canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.workspace-page :is(.region-image-tools, .rotation-row, .coordinate-fallback, .selected-source-list li) { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-block: 0.5rem; }
+.workspace-page .coordinate-fallback label { flex: 0 1 6rem; }
+.workspace-page .region-mode-status { flex-basis: 100%; color: var(--muted-foreground); }
+.workspace-page .region-tool-button[aria-pressed='true'] { background: var(--accent); border-color: var(--primary); }
+.workspace-page .selected-source-list { list-style: none; padding: 0; }
+.workspace-page .history-source-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); align-items: start; gap: 1rem; }
+.workspace-page .history-source { min-width: 0; margin: 0; }
+.workspace-page .history-image-wrap { position: relative; display: block; overflow: hidden; }
+.workspace-page .history-image-wrap img { display: block; width: 100%; height: auto; }
+.workspace-page .history-region-box { position: absolute; border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 15%, transparent); pointer-events: none; }
+/* Saved knowledge sources use a separate immutable-reference preview. */
+.workspace-page .evidence-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); align-items: start; gap: 1rem; padding: 0; list-style: none; }
+.workspace-page .evidence-preview { position: relative; display: block; max-width: 32rem; margin-block: 0.5rem; overflow: hidden; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--muted); }
+.workspace-page .evidence-preview img { display: block; width: 100%; height: auto; }
+.workspace-page .evidence-box { position: absolute; border: 2px solid var(--primary); background: color-mix(in srgb, var(--primary) 15%, transparent); pointer-events: none; }
+.workspace-page .history-source figcaption { font-size: 0.8125rem; color: var(--muted-foreground); }
+.workspace-page .learner-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); align-items: start; gap: 1rem; }
+.workspace-page .learner-card { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+.workspace-page .learner-card p { margin-block: 0.5rem; }
+.workspace-page :is(.learning-filter, .stack-form fieldset) { max-width: 60rem; }
+.workspace-page .learning-filter { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.5rem 1rem; align-items: end; }
+.workspace-page .learning-filter details { grid-column: 1 / -1; }
+.workspace-page .learning-filter details .filter-grid { padding-top: 0.75rem; }
+.workspace-page .status-badge { border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.6rem; color: var(--foreground); background: var(--muted); }
+.workspace-page .status-accepted { color: #166534; background: #f0fdf4; border-color: #86efac; }
+.workspace-page :is(.status-draft, .status-stale, .warning) { color: #854d0e; background: #fefce8; border-color: #fde047; }
+.workspace-page :is(.status-rejected, .status-withdrawn) { color: var(--destructive); background: var(--muted); }
+.workspace-page :is(a.primary-button, a.secondary-button, a.quiet-button) { display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0.5rem 0.75rem; border-radius: 0.375rem; text-decoration: none; }
+.workspace-page a.primary-button { background: var(--primary); color: var(--primary-foreground); }
+.workspace-page a.secondary-button { border: 1px solid var(--border); }
+.workspace-page tr[data-row-href] { cursor: pointer; }
+.workspace-page tr[data-row-href]:hover { background: var(--muted); }
+.workspace-page tr[data-row-href]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.workspace-page .member-list { padding: 0; list-style: none; display: grid; gap: 1rem; }
+.workspace-page .member-list > li { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; display: grid; gap: 0.75rem; }
+.workspace-page .member-summary { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
+.workspace-page .member-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; }
+.workspace-page .member-actions form { max-width: 22rem; }
+.workspace-page .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 1rem; }
+.workspace-page .summary-grid dt { color: var(--muted-foreground); font-size: 0.8125rem; }
+.workspace-page .summary-grid dd { margin: 0.25rem 0 0; font-weight: 600; }
+
 .workspace-page :is(.field, .form-row) { margin-block: 0.75rem; }
 
 .workspace-page :is(label, legend) {

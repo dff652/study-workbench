@@ -177,7 +177,7 @@
       ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
     };
 
-    const render = () => {
+    const render = (notify = false) => {
       if (sourcesField) {
         sourcesField.value = JSON.stringify(sources.map(source => ({
           page_id: source.page_id,
@@ -186,6 +186,7 @@
           display_bbox: source.display_bbox,
           ...(partitionMode ? {kind: source.kind} : {}),
         })));
+        if (notify) sourcesField.dispatchEvent(new Event('input', { bubbles: true }));
       }
       if (root.hasAttribute("data-page-editor")) storeSources();
       if (sourceList) {
@@ -199,14 +200,14 @@
           remove.className = "quiet-button remove-source";
           remove.textContent = "移除";
           remove.setAttribute("aria-label", `移除第 ${index + 1} 个来源区域`);
-          remove.addEventListener("click", () => { sources.splice(index, 1); render(); });
+          remove.addEventListener("click", () => { sources.splice(index, 1); render(true); });
           row.append(label, remove);
           if (partitionMode) {
             const selector = root.querySelector(".partition-kind").cloneNode(true);
             selector.className = "saved-partition-kind";
             selector.setAttribute("aria-label", `第 ${index + 1} 个分区类型`);
             selector.value = source.kind;
-            selector.addEventListener("change", () => { source.kind = selector.value; render(); });
+            selector.addEventListener("change", () => { source.kind = selector.value; render(true); });
             row.append(selector);
           }
           sourceList.append(row);
@@ -236,7 +237,7 @@
       });
       if (feedback) feedback.textContent = "";
       card.currentRect = null;
-      render();
+      render(true);
     };
 
     root.querySelectorAll(".region-card").forEach(card => {

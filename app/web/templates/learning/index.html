@@ -4,6 +4,18 @@
   <nav class="breadcrumbs"><a href="{% url 'web:index' %}">资料集</a><span aria-hidden="true">/</span><span>学习档案</span></nav>
   <div class="page-heading workspace-toolbar"><h1>学习档案</h1>{% if household_id and writable %}<div class="button-row"><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">新增来源观察</a></div>{% endif %}</div>
   <p class="muted">观察、实际作答与评价分开保存。未知信息会保留为未知。</p>
+  {% if profiles %}
+    <section class="panel" aria-labelledby="learner-list-title">
+      <div class="workspace-toolbar"><h2 id="learner-list-title">学习者</h2>{% if writable %}<a class="primary-button" href="{% url 'learning:profile_new' %}?household={{ household_id|urlencode }}">＋ 新建学习者</a>{% endif %}</div>
+      <div class="learner-grid">{% for item in profile_cards %}<article class="learner-card">
+        <h3><a href="{% url 'learning:profile_detail' item.profile.learner_id %}">{{ item.profile.display_name }}</a></h3>
+        <p class="muted">{{ item.profile.grade|default:"年级未指定" }}</p>
+        <p>{{ item.attempt_count }} 次作答 · {% if item.recent_date %}最近已知作答 {{ item.recent_date }}{% elif item.attempt_count %}实际作答日期未知{% else %}尚无作答记录{% endif %}</p>
+        <p>{{ item.plan_count }} 项待复测{% if item.next_due %} · 最早 {{ item.next_due }}{% endif %}</p>
+        <a href="{% url 'learning:profile_detail' item.profile.learner_id %}">查看记录与证据</a>
+      </article>{% endfor %}</div>
+    </section>
+  {% endif %}
   {% if households %}
     <section class="panel {% if household_id %}workspace-scope-field{% endif %}">
       <form method="get" class="inline-form">
@@ -11,24 +23,20 @@
         <noscript><button class="secondary-button" type="submit">切换家庭</button></noscript>
       </form>
     </section>
-    {% if writable %}
-      <details class="panel disclosure" {% if form.errors %}open{% endif %}><summary>家长新建学习者档案</summary><div class="disclosure-content">
+    {% if writable and not profiles %}
+      <details class="panel disclosure" open><summary>家长新建学习者档案</summary><div class="disclosure-content">
         <h2>新建学习者档案</h2>
         <form method="post" action="{% url 'learning:profile_new' %}" class="stack-form">
           {% csrf_token %}{{ form.request_key }}{{ form.household_id }}
           <div class="field"><label for="id_display_name">学习者称呼</label>{{ form.display_name }}{{ form.display_name.errors }}<span class="help-text">可使用昵称，不需要真实姓名。</span></div>
           <div class="field"><label for="id_grade">年级（可选）</label>{{ form.grade }}{{ form.grade.errors }}</div>
+          <div class="field"><label for="id_other_grade">其他年级（选择“其他”时填写）</label>{{ form.other_grade }}{{ form.other_grade.errors }}</div>
           {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
           <button class="primary-button" type="submit">创建档案</button>
         </form>
       </div></details>
-    {% else %}<p class="notice">当前家庭为只读成员，不能新建或修改学习记录。</p>{% endif %}
+    {% elif not writable %}<p class="notice">当前家庭为只读成员，不能新建或修改学习记录。</p>{% endif %}
   {% else %}<section class="panel"><p>当前账号尚未加入可访问的家庭。</p></section>{% endif %}
-  <section class="panel">
-    <h2>已有档案</h2>
-    {% if profiles %}<ul class="material-list">{% for profile in profiles %}<li><a href="{% url 'learning:profile_detail' profile.learner_id %}"><strong>{{ profile.display_name }}</strong></a><span class="muted">{{ profile.grade|default:"年级未填写" }}</span></li>{% endfor %}</ul>
-    {% else %}<p class="muted">此家庭还没有学习者档案。</p>{% endif %}
-  </section>
   <details class="panel disclosure"><summary>查看来源观察</summary><div class="disclosure-content">
     <h2>来源观察</h2>
     {% if observations %}<ul class="history-list">{% for observation in observations %}<li><a href="{% url 'learning:observation_detail' observation.observation_id %}">来源观察 {{ forloop.counter }}</a><span class="muted">{{ observation.revisions.0.actual_date|default:"发生日期未知" }} · {{ observation.revisions.0.legibility.value|ui_label }} · {{ observation.revisions.0.notes|truncatechars:100 }}</span></li>{% endfor %}</ul>

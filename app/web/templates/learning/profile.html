@@ -14,10 +14,12 @@
       <div class="field"><label for="filter-from">实际日期从</label><input id="filter-from" type="date" name="from" value="{{ filters.from }}"></div>
       <div class="field"><label for="filter-to">至</label><input id="filter-to" type="date" name="to" value="{{ filters.to }}"></div>
       <div class="field"><label for="filter-question">题目</label><select id="filter-question" name="question"><option value="">全部</option>{% for item in question_options %}<option value="{{ item.question_id }}" {% if filters.question == item.question_id %}selected{% endif %}>{{ item.label|truncatechars:90 }}</option>{% endfor %}</select></div>
+      <details class="disclosure" {% if filters.knowledge or filters.type or filters.review or filters.error %}open{% endif %}><summary>更多筛选：知识、题型与评价</summary><div class="filter-grid">
       <div class="field"><label for="filter-knowledge">知识点</label><select id="filter-knowledge" name="knowledge"><option value="">全部</option>{% for item in knowledge_options %}<option value="{{ item.stable_id }}" {% if filters.knowledge == item.stable_id %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select></div>
       <div class="field"><label for="filter-type">题型</label><select id="filter-type" name="type"><option value="">全部</option>{% for item in type_options %}<option value="{{ item.stable_id }}" {% if filters.type == item.stable_id %}selected{% endif %}>{{ item.label }}</option>{% endfor %}</select></div>
       <div class="field"><label for="filter-review">评价审核状态</label><select id="filter-review" name="review"><option value="">全部</option>{% for item in review_options %}<option value="{{ item }}" {% if filters.review == item %}selected{% endif %}>{{ item|ui_label }}</option>{% endfor %}</select></div>
       <div class="field"><label for="filter-error">已有错误判断</label><select id="filter-error" name="error"><option value="">全部</option><option value="yes" {% if filters.error == "yes" %}selected{% endif %}>包含部分或错误判断</option></select></div>
+      </div></details>
       <div class="workspace-actions"><button class="secondary-button" type="submit">应用筛选</button><a class="quiet-button" href="{% url 'learning:profile_detail' profile.learner_id %}">清除</a></div>
     </form>
   </section>
@@ -41,7 +43,7 @@
           </tbody>
         </table>
       </div>
-    {% else %}<p class="muted">没有符合筛选条件的作答记录。未知观察仍可在下方回看。</p>{% endif %}
+    {% else %}<p class="muted">{% if has_attempt_history and has_filters %}当前筛选没有匹配的作答，历史记录仍保留。{% else %}还没有作答记录。选择题目后可记录一次实际作答。{% endif %}</p>{% if has_attempt_history and has_filters %}<a href="{% url 'learning:profile_detail' profile.learner_id %}">清除筛选查看历史</a>{% else %}<a href="{% url 'learning:attempt_new' profile.learner_id %}">记录一次作答</a>{% endif %}{% endif %}
   </section>
 
   <section class="panel" aria-labelledby="profile-observations-heading">

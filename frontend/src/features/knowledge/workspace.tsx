@@ -1,3 +1,4 @@
+import { documentOutputSummary } from '../../components/document-output-summary'
 import { sameOriginHref } from '../../components/shared'
 import { CompanionWorkspace } from '../companion/workspace'
 import type { CompanionConfig, CompanionWorkspaceProps } from '../companion/types'
@@ -18,6 +19,7 @@ const config: CompanionConfig<KnowledgeContent, KnowledgeOutput, KnowledgeWorksp
     && content.knowledge.every((item) => item.title.trim() && item.statement.trim() && item.definitions.trim()
       && (item.origin !== 'source' || item.sources.length)
       && ['thinking', 'construction', 'derivation', 'conclusion', 'pitfall'].every((section) => item.steps.some((step) => step.section === section && step.text.trim())))),
+  outputSummary: (content) => documentOutputSummary(content.outputs, {inventory:'知识目录',per_knowledge:'逐知识点',per_lecture:'按讲次',combined:'知识合集'}),
   checkNames: [['content', '内容与来源'], ['subject', '学科依据与完整讲解'], ['pdf_visual', 'PDF 页面版式'], ['word_pc', 'Windows Word 实机'], ['word_macos', 'macOS Word 实机']],
   api: knowledgeApi,
   editor: KnowledgeEditor,

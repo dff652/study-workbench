@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
+from urllib.parse import urlencode
 
 from app.domain import SourceKind
 from app.persistence.adapter import ObjectKey
@@ -24,14 +25,18 @@ def scope(household_id, learner_id=None):
 
 
 @transaction.atomic
-def materials(actor, household_id):
+def materials(actor, household_id, material_ids=None):
     records.household(actor, household_id)
     rows = MaterialSet.objects.filter(household_id=household_id).prefetch_related(
         "pages__reading_revisions").order_by("-created_at", "pk")
+    if material_ids is not None:
+        rows = rows.filter(pk__in=material_ids)
     question_counts = {}
     sources = QuestionSource.objects.filter(material__household_id=household_id,
         revision_id=F("revision__entity__head_revision_id")).select_related(
             "revision__entity", "revision__review_projection")
+    if material_ids is not None:
+        sources = sources.filter(material_id__in=material_ids)
     for source in sources:
         revision = source.revision
         if revision.review_projection.state == "withdrawn":
@@ -62,6 +67,8 @@ def materials(actor, household_id):
         if len(result) < 200:
             result.append(row)
     jobs = WorkflowJob.objects.filter(material__household_id=household_id)
+    if material_ids is not None:
+        jobs = jobs.filter(material_id__in=material_ids)
     totals["completed_workflows"] = jobs.filter(state="complete").count()
     totals["open_workflows"] = jobs.exclude(state__in=("complete", "cancelled")).count()
     return {"scope": scope(household_id), "counts": totals, "materials": result,
@@ -89,7 +96,8 @@ def learner(actor, household_id, learner_id):
             "independent_success_count": sum(row["independent_success"] for row in attempts),
             "unknown_evidence_count": sum(row["attempt_id"] in insufficient for row in attempts),
             "source_counts": {kind.value: sum(row["source_kind"] == kind.value for row in attempts) for kind in SourceKind},
-            "node_url": reverse("knowledge:node_detail", args=[node.pk])})
+            "node_url": reverse("knowledge:node_detail", args=[node.pk]),
+            "recent_attempts": _recent(attempts)[:3]})
     return {"scope": scope(household_id, learner_id), "groups": groups}
 
 
@@ -99,6 +107,8 @@ def schedules(actor, household_id, learner_id):
     items = []
     counts = dict.fromkeys(("pending", "overdue", "completed", "cancelled"), 0)
     today = timezone.localdate()
+    report = evidence.projection(actor, household_id, learner_id, {})
+    active = [item for item in report['items'] if item['state'] == 'active']
     for raw in study.home(actor, household_id)["schedules"]:
         row, latest = raw["schedule"], raw["latest"]
         if row.learner_id != profile.pk or latest is None:
@@ -117,10 +127,8 @@ def schedules(actor, household_id, learner_id):
         for choice in study.schedule_attempt_choices(actor, row.pk)["choices"]:
             revision = choice["revision"]
             kind = revision.source_kind.value
-            label = {"independent_answer": "独立作答", "classroom_note": "课堂笔记",
-                     "assisted_answer": "提示后完成"}.get(kind, "来源未知")
             choices.append({"revision_id": revision.header.revision_id,
-                "label": f"{choice['actual_date'] or '实际日期未知'} · {label}",
+                "label": choice['label'],
                 "actual_date": choice["actual_date"], "source_kind": kind})
         if latest.action in ("planned", "rescheduled"):
             counts["pending"] += 1
@@ -129,12 +137,25 @@ def schedules(actor, household_id, learner_id):
             counts["cancelled"] += 1
         elif latest.action == "completed" and latest.completed_attempt_revision_id:
             counts["completed"] += 1
-        items.append({"id": row.pk, "question_id": row.target_question_revision.entity.stable_id,
+        target = row.target_question_revision.entity
+        attempts = [item for item in active if item['question_id'] == target.stable_id]
+        recent = _recent(attempts)
+        items.append({"id": row.pk, "question_id": target.stable_id,
             "question_text": raw["target_question"].get("working_text") or raw["target_question"].get("printed_text") or "题干待补",
             "goal": latest.goal, "prompt_plan": latest.prompt_plan, "due_date": latest.due_date,
             "state": latest.action,
             "overdue": latest.action in ("planned", "rescheduled") and latest.due_date < today,
             "target_stale": raw["target_stale"], "context": detail["context"],
             "detail_url": reverse("study:schedule_detail", args=[row.pk]),
+            "question_url": reverse('knowledge:question_detail', args=[target.pk]),
+            "record_attempt_url": reverse('learning:attempt_new', args=[learner_id]) + '?' + urlencode(
+                {'question': target.stable_id, 'kind': 'retest'}),
+            "attempt_count": len(attempts), "latest_attempt": recent[0] if recent else None,
             "history": history, "attempt_choices": choices})
     return {"scope": scope(household_id, learner_id), "counts": counts, "items": items}
+
+
+def _recent(attempts):
+    # Unknown actual dates must never become a recent learning event via recorded_at.
+    return sorted(attempts, key=lambda row: (row['actual_date_state'] == 'known' and bool(row['actual_date']),
+        row['actual_date'] if row['actual_date_state'] == 'known' and row['actual_date'] else '', row['attempt_id']), reverse=True)

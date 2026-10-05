@@ -2,6 +2,8 @@
 from django.http import FileResponse, Http404, HttpResponse
 from django.urls import reverse
 from django.db import transaction
+from django.db.models import Q, OuterRef, Subquery, F
+from app.persistence.models import EntityRecord
 from urllib.parse import urlencode
 from app.web import services as materials
 from app.web import subjects
@@ -10,6 +12,9 @@ from app.web.models import PageReadingRevision
 from app.printing import packets
 from app.workflows import services as workflows, exchange
 from .views import api, household
+from . import progress
+from app.solutions.models import SolutionOutput
+from app.solutions.queries import output_row
 
 
 def body(request, fields):
@@ -26,13 +31,23 @@ def material_row(row):
             "prepare_url": reverse("printing:packet_prepare", args=[row.pk])}
 
 
+def available_outputs():
+    failed = Q()
+    for name in ('content', 'math', 'subject', 'pdf_visual', 'word_pc', 'word_macos'):
+        failed |= Q(result__contains={'checks': {name: {'status': 'fail'}}})
+    return SolutionOutput.objects.filter(state__in=('output_check', 'complete'), result__has_key='documents').exclude(
+        result__documents=[]).exclude(failed)
+
+
 @api()
 def material_list(request):
     hid = household(request)
     rows = materials.list_materials(request.user).filter(household_id=hid)
     query = request.GET.get("q", "").strip()[:200]
     if query:
-        rows = rows.filter(title__icontains=query)
+        document_materials = SolutionOutput.objects.filter(revision__material__household_id=hid,
+            result__documents__icontains=query).values('revision__material_id')
+        rows = rows.filter(Q(title__icontains=query) | Q(pk__in=document_materials))
     subject = request.GET.get("subject", "")
     if subject:
         subjects.validate(subject)
@@ -44,10 +59,32 @@ def material_list(request):
             raise ValueError
     except (ValueError, TypeError):
         raise ValueError("Invalid material page")
-    rows = rows.order_by("-created_at", "-pk")
+    document_mode = request.GET.get('document_mode', '')
+    if document_mode:
+        if document_mode not in ('solution', 'knowledge'):
+            raise ValueError('Invalid document type')
+        recent = available_outputs().filter(revision__material_id=OuterRef('pk'), revision__mode=document_mode
+            ).order_by('-created_at', '-pk').values('created_at')[:1]
+        rows = rows.annotate(latest_document_at=Subquery(recent)).order_by(F('latest_document_at').desc(nulls_last=True), '-created_at', '-pk')
+    else:
+        rows = rows.order_by("-created_at", "-pk")
     total = rows.count()
     start = (page - 1) * page_size
-    return {"items": [material_row(row) for row in rows[start:start + page_size]], "total": total,
+    selected = list(rows[start:start + page_size])
+    selected_ids = [row.pk for row in selected]
+    processing = {row['id']: row for row in progress.materials(request.user, hid, selected_ids)['materials']}
+    outputs = {}
+    latest = available_outputs().filter(revision__material_id__in=selected_ids).select_related('revision').order_by(
+        'revision__material_id', 'revision__mode', '-created_at', '-pk').distinct('revision__material_id', 'revision__mode')
+    for output in latest:
+        serialized = output_row(output)
+        if serialized['documents'] and not any(check.get('status') == 'fail' for check in serialized['checks'].values()):
+            outputs.setdefault(str(output.revision.material_id), []).append({
+                'mode': output.revision.mode, 'created_at': output.created_at,
+                'revision_version': output.revision.version, 'state': output.state,
+                'documents': serialized['documents'], 'zip_url': serialized['zip_url']})
+    return {"items": [{**material_row(row), 'processing': processing.get(str(row.pk)),
+                       'available_outputs': outputs.get(str(row.pk), [])} for row in selected], "total": total,
             "page": page, "page_size": page_size, "has_next": start + page_size < total, "query": query, "subject": subject}
 
 
@@ -94,7 +131,12 @@ def ready_row(actor, material_id):
         reading = PageReadingRevision.objects.filter(page=page).order_by("-revision_no").first()
         if not reading or reading.reading != "read" or reading.coverage != "complete" or reading.pending_items:
             content_gaps.append(f"第 {page.position} 页：整页阅读、分区或待补项尚未齐备；本任务只交付已确认题目，不代表整页整理完成。")
-    return {"ready": state["ready"], "gaps": state["gaps"], "content_gaps": content_gaps, "questions": state["questions"]}
+    questions = [{**row, 'edit_url': reverse('web:question_detail', args=[row['question_id']]),
+                  'answer_url': reverse('printing:answer', args=[row['revision_id']]) if row['confirmed'] else None,
+                  'association_url': reverse('knowledge:question_detail', args=[
+                      EntityRecord.objects.get(kind='question', stable_id=row['question_id'],
+                          household=state['material'].household).pk])} for row in state['questions']]
+    return {"ready": state["ready"], "gaps": state["gaps"], "content_gaps": content_gaps, "questions": questions}
 
 
 @api()

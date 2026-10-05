@@ -107,8 +107,11 @@ def download(request,pk,name):
                 'message':'此导出文件已按本地策略退役，来源版本及退役账本仍保留。'},status=410)
         return _failure(request,exc)
     inline_pdf = name == 'document.pdf' and request.GET.get('preview') == '1'
-    return FileResponse(path.open('rb'), as_attachment=not inline_pdf, filename=name,
+    response = FileResponse(path.open('rb'), as_attachment=not inline_pdf, filename=name,
         content_type='application/pdf' if inline_pdf else None)
+    if inline_pdf:
+        response['X-Frame-Options'] = 'SAMEORIGIN'
+    return response
 
 
 @login_required

@@ -10,6 +10,7 @@
     <div class="field"><label for="id_household_id">家庭</label>{{ form.household_id }}{{ form.household_id.errors }}</div>
     <div class="field"><label for="id_display_name">学习者称呼</label>{{ form.display_name }}{{ form.display_name.errors }}</div>
     <div class="field"><label for="id_grade">年级（可选）</label>{{ form.grade }}{{ form.grade.errors }}</div>
+    <div class="field"><label for="id_other_grade">其他年级（选择“其他”时填写）</label>{{ form.other_grade }}{{ form.other_grade.errors }}</div>
     <div class="form-actions"><button class="primary-button" type="submit">创建档案</button><a class="secondary-button link-button" href="{% url 'learning:index' %}">取消</a></div>
   </form>
 {% endblock %}

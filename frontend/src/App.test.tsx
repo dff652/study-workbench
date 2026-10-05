@@ -50,6 +50,7 @@ function installRouteAppApi({
   const learnerHouseholdRequests: string[] = []
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
     const url = new URL(String(input), window.location.origin)
+    if (url.pathname.endsWith('.pdf')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
     if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
       schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1', households,
     }))
@@ -111,8 +112,8 @@ describe('App URL navigation', () => {
     const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>练习准备</h1></main>' })
     render(<App />)
     const knowledge = await screen.findByRole('tab', { name: '知识点讲解' })
-    expect(screen.getByRole('tab', { name: '逐题讲解' })).toBeTruthy()
-    expect(screen.getByRole('tab', { name: '五册与练习' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '家长解析' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: '练习与整套五册' })).toBeTruthy()
     await user.click(knowledge)
     const filter = await screen.findByRole('combobox', { name: '资料学科' })
     await user.selectOptions(filter, 'english')
@@ -254,6 +255,7 @@ describe('App URL navigation', () => {
     const requestedPages: string[] = []
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-a', name: '甲家庭', role: 'viewer' }, { id: 'home-b', name: '乙家庭', role: 'owner' }],
@@ -317,6 +319,7 @@ describe('App URL navigation', () => {
     window.history.replaceState({}, '', '/app/?view=knowledge&household=home-1&screen=%2Fknowledge%2F%3Fhousehold_id%3Dhome-1')
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }],
@@ -556,6 +559,7 @@ describe('App URL navigation', () => {
     vi.stubGlobal('confirm', confirmMock)
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }],
@@ -593,6 +597,7 @@ describe('App URL navigation', () => {
     const requestedPages: string[] = []
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }],
@@ -640,6 +645,7 @@ describe('App URL navigation', () => {
     const requestedPages: string[] = []
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }],
@@ -671,6 +677,7 @@ describe('App URL navigation', () => {
     const requestedOverviewLearners: string[] = []
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }],
@@ -751,6 +758,7 @@ describe('App URL navigation', () => {
     const requestedPages: string[] = []
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
+      if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }, { id: 'home-2', name: '乙家庭', role: 'reviewer' }],
@@ -765,7 +773,7 @@ describe('App URL navigation', () => {
           url: path,
           title: '知识与题库',
           html: anchoredPage
-            ? '<main><h1>锚点详情</h1><section id="revision-9">第九版</section><a href="/prints/snapshots/12/document.pdf/?token=check">PDF 文档</a><a href="/page/123e4567-e89b-12d3-a456-426614174000/preview/90/">原图</a><a href="/knowledge/?household_id=home-2">切换家庭</a><a href="/knowledge/?household_id=unknown">无效家庭</a></main>'
+            ? '<main><h1>锚点详情</h1><section id="revision-9">第九版</section><a href="/prints/snapshots/12/document.pdf/?token=check" data-preview-title="合成 PDF 标题">PDF 文档</a><a href="/page/123e4567-e89b-12d3-a456-426614174000/preview/90/">原图</a><a href="/knowledge/?household_id=home-2">切换家庭</a><a href="/knowledge/?household_id=unknown">无效家庭</a></main>'
             : path.includes('household_id=home-2')
               ? '<main><h1>知识列表</h1><a href="/knowledge/?household_id=unknown">无效家庭</a></main>'
               : '<main><h1>知识列表</h1><a href="#revision-current">本页版本</a><section id="revision-current">当前版</section><a href="/knowledge/entity/12/?household_id=home-1#revision-9">跨页版本</a></main>',
@@ -792,9 +800,14 @@ describe('App URL navigation', () => {
       expect(requestedPages).toContain('/knowledge/entity/12/?household_id=home-1')
 
       await user.click(screen.getByRole('link', { name: 'PDF 文档' }))
-      expect(screen.getByRole('dialog', { name: 'document.pdf' })).toBeTruthy()
-      expect(screen.getByTitle('document.pdf').tagName).toBe('IFRAME')
-      expect(screen.getByTitle('document.pdf').getAttribute('src')).toBe('/prints/snapshots/12/document.pdf/?token=check&preview=1')
+      expect(screen.getByRole('dialog', { name: '合成 PDF 标题' })).toBeTruthy()
+      expect((await screen.findByTitle('合成 PDF 标题 PDF 预览')).tagName).toBe('IFRAME')
+      expect(screen.getByTitle('合成 PDF 标题 PDF 预览').getAttribute('src')).toBe('/prints/snapshots/12/document.pdf/?token=check&preview=1')
+      const openPdf = screen.getByRole('link', { name: '打开 PDF' })
+      expect(openPdf.getAttribute('target')).toBe('_blank')
+      const popupEvent = new MouseEvent('click', { bubbles: true, cancelable: true })
+      openPdf.dispatchEvent(popupEvent)
+      expect(popupEvent.defaultPrevented).toBe(false)
       await user.click(screen.getByRole('button', { name: '关闭预览' }))
       await user.click(screen.getByRole('link', { name: '原图' }))
       expect(screen.getByRole('dialog', { name: '原图预览' })).toBeTruthy()

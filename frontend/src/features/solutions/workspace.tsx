@@ -1,3 +1,4 @@
+import { documentOutputSummary } from '../../components/document-output-summary'
 import type { ReactNode } from 'react'
 import { getSolutionHistory, getSolutionOutput, getSolutionOutputs, getSolutionRevision, getSolutions, saveSolution, solutionAction, solutionOutputAction } from '../../api'
 import type { AnySolutionContent, SolutionFigure, SolutionOutput, SolutionQuestion, SolutionWorkspaceResponse, StructuredSolutionQuestion } from '../../types'
@@ -15,6 +16,7 @@ const config: CompanionConfig<AnySolutionContent, SolutionOutput, SolutionWorksp
   empty: { schema_version: 'swb.solution.v3', school_subject: 'unknown', title: '', lectures: [], questions: [], outputs: { per_question: [], per_lecture: [], combined: [] } },
   normalize: toStructuredSolutionContent, isContent: isAnySolutionContent,
   hasItems: (content) => content.questions.length > 0, canGenerate: contentHasMinimumForGeneration,
+  outputSummary: (content) => documentOutputSummary(content.outputs, {per_question:'逐题解析',per_lecture:'按讲次解析',combined:'解析合集'}),
   checkNames: [['content', '内容与来源'], ['math', '数学正确性'], ['pdf_visual', 'PDF 页面版式'], ['word_pc', 'Windows Word 实机'], ['word_macos', 'macOS Word 实机']],
   api: { workspace: getSolutions, save: saveSolution, action: solutionAction, revision: getSolutionRevision,
     history: getSolutionHistory, outputs: getSolutionOutputs, output: getSolutionOutput, outputAction: solutionOutputAction },

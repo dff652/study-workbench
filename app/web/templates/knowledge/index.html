@@ -3,11 +3,13 @@
 {% block title %}知识与题库{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
-  <div class="workspace-toolbar"><h1>知识与题库</h1></div>
+  <div class="workspace-toolbar"><h1>{% if home.practice %}选题练习{% else %}知识与题库{% endif %}</h1></div>
   {% if not has_households %}
     <p>当前账号尚未加入家庭，无法查看或维护知识条目。</p>
   {% else %}
     {% if home %}
+      <nav class="workspace-actions" aria-label="题库使用方式"><a class="{% if home.practice %}primary-button{% else %}secondary-button{% endif %}" href="?household_id={{ home.household.pk|urlencode }}&mode=learn">选题练习</a><a class="{% if not home.practice %}primary-button{% else %}secondary-button{% endif %}" href="?household_id={{ home.household.pk|urlencode }}&mode=manage">管理题库</a></nav>
+      <p class="muted">{% if home.practice %}只显示题干、来源完整且已核定的有效版本。答案和提示按需展开；练习选择不会建立作答记录。{% else %}管理视图包含草稿、待核对与历史版本；已核定题干不代表已经掌握。{% endif %}</p>
       <div class="workspace-tabs" role="tablist" aria-label="题库与分类" data-workspace-tabs>
         <button type="button" id="knowledge-tab-questions" role="tab" aria-controls="knowledge-panel-questions" aria-selected="true" data-workspace-tab="questions">题目</button>
         <button type="button" id="knowledge-tab-knowledge" role="tab" aria-controls="knowledge-panel-knowledge" aria-selected="false" data-workspace-tab="knowledge">知识点</button>
@@ -17,14 +19,14 @@
       <section id="knowledge-panel-questions" role="tabpanel" aria-labelledby="knowledge-tab-questions" data-workspace-panel>
     {% endif %}
     <form method="post" class="knowledge-filters">
-      {% csrf_token %}
+      {% csrf_token %}<input type="hidden" name="mode" value="{% if home.practice %}learn{% else %}manage{% endif %}">
       {% if form.non_field_errors %}<div role="alert">{{ form.non_field_errors }}</div>{% endif %}
       <div class="filter-grid">
         <div class="field {% if home and not form.household_id.errors %}workspace-scope-field{% endif %}"><label for="id_household_id">家庭</label>{{ form.household_id }}{{ form.household_id.errors }}</div>
         {% if home %}
           <div class="field"><label for="id_material_id">资料</label>{{ form.material_id }}{{ form.material_id.errors }}</div>
           <div class="field"><label for="id_subject">题目资料学科</label>{{ form.subject }}{{ form.subject.errors }}</div>
-          <div class="field"><label for="id_review">审核状态</label>{{ form.review }}{{ form.review.errors }}</div>
+          <div class="field" {% if home.practice %}hidden{% endif %}><label for="id_review">审核状态</label>{{ form.review }}{{ form.review.errors }}</div>
           <div class="field"><label for="id_number">题号</label>{{ form.number }}{{ form.number.errors }}</div>
         {% endif %}
       </div>
@@ -44,29 +46,29 @@
     {% if home %}
         <div class="workspace-toolbar" id="question-index"><h2>题目</h2><span class="muted">{{ home.questions|length }} 条符合条件</span></div>
         {% if home.questions %}
-          <div class="workspace-table-wrap"><table class="knowledge-table"><thead><tr><th>题号</th><th>题目</th><th>审核</th><th>内容与来源</th><th>版本</th></tr></thead><tbody>
-            {% for item in home.questions %}<tr>
+          <div class="workspace-table-wrap"><table class="knowledge-table"><thead><tr><th>题号</th><th>题目</th><th>审核</th><th>来源页</th><th>版本</th><th>操作</th></tr></thead><tbody>
+            {% for item in home.questions %}<tr data-row-href="{% url 'knowledge:question_detail' entity_id=item.entity.pk %}" tabindex="0" aria-label="查看题目 {{ item.number }}">
               <td>{{ item.number }}{% if item.legacy %}<span class="status-badge warning">旧索引</span>{% endif %}</td>
               <td><a href="{% url 'knowledge:question_detail' entity_id=item.entity.pk %}">{{ item.title|truncatechars:100 }}</a></td>
-              <td><span class="status-badge">{{ item.state|ui_label }}</span></td>
-              <td>{% if item.missing %}<span class="status-badge warning">题干或来源区域待补</span>{% else %}题干与来源区域已录入{% endif %}</td>
-              <td>第 {{ item.revision.revision_no }} 版</td>
+              <td><span class="status-badge status-{{ item.state }}">{% if home.practice %}可练习{% else %}{{ item.state|ui_label }}{% endif %}</span></td>
+              <td>{% for label in item.source_labels %}<p class="small-text">{{ label }}</p>{% empty %}<span class="muted">来源页未关联</span>{% endfor %}{% if item.missing %}<span class="status-badge warning">题干或来源区域待补</span>{% endif %}</td>
+              <td>第 {{ item.revision.revision_no }} 版</td><td><a href="{% url 'knowledge:question_detail' entity_id=item.entity.pk %}">查看题目</a></td>
             </tr>{% endfor %}
           </tbody></table></div>
         {% else %}<p class="muted">没有符合筛选条件的题目，请调整条件或先整理资料。</p>{% endif %}
       </section>
       <section id="knowledge-panel-knowledge" role="tabpanel" aria-labelledby="knowledge-tab-knowledge" data-workspace-panel>
         <div class="workspace-toolbar"><h2>知识点</h2>{% if home.can_write %}<a href="{% url 'knowledge:node_new' kind='knowledge' %}?household_id={{ home.household.pk }}">新建知识点</a>{% endif %}</div>
-        {% if home.nodes.knowledge %}<ul class="simple-list">{% for node in home.nodes.knowledge %}<li><a href="{% url 'knowledge:node_detail' entity_id=node.entity.pk %}">{{ node.name }}</a><span class="status-badge">{{ node.state|ui_label }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">还没有知识点。</p>{% endif %}
+        {% if home.nodes.knowledge %}<ul class="simple-list">{% for node in home.nodes.knowledge %}<li><a href="{% url 'knowledge:node_detail' entity_id=node.entity.pk %}">{{ node.name }}</a><span class="status-badge">{{ node.state|ui_label }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">还没有知识点。知识点记录“需要理解什么”，例如分数的意义。可从资料原图整理定义与条件。</p>{% endif %}
       </section>
       <section id="knowledge-panel-methods" role="tabpanel" aria-labelledby="knowledge-tab-methods" data-workspace-panel>
         <div class="workspace-toolbar"><h2>方法分类</h2>{% if home.can_write %}<a href="{% url 'knowledge:node_new' kind='method' %}?household_id={{ home.household.pk }}">新建方法</a>{% endif %}</div>
-        {% if home.method_tree %}<ul class="method-tree">{% include "knowledge/_method_tree.html" with tree=home.method_tree only %}</ul>{% else %}<p class="muted">还没有方法条目。</p>{% endif %}
+        {% if home.method_tree %}<ul class="method-tree">{% include "knowledge/_method_tree.html" with tree=home.method_tree only %}</ul>{% else %}<p class="muted">还没有方法条目。方法记录“怎么解决”，例如画线段图、列方程；关联题目后可回看实际使用证据。</p>{% endif %}
         <p class="muted">上级方法更新后，原有关联仍保留，并标明需要重新核对。</p>
       </section>
       <section id="knowledge-panel-types" role="tabpanel" aria-labelledby="knowledge-tab-types" data-workspace-panel>
         <div class="workspace-toolbar"><h2>题型</h2>{% if home.can_write %}<a href="{% url 'knowledge:node_new' kind='question_type' %}?household_id={{ home.household.pk }}">新建题型</a>{% endif %}</div>
-        {% if home.nodes.question_type %}<ul class="simple-list">{% for node in home.nodes.question_type %}<li><a href="{% url 'knowledge:node_detail' entity_id=node.entity.pk %}">{{ node.name }}</a><span class="status-badge">{{ node.state|ui_label }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">还没有题型。</p>{% endif %}
+        {% if home.nodes.question_type %}<ul class="simple-list">{% for node in home.nodes.question_type %}<li><a href="{% url 'knowledge:node_detail' entity_id=node.entity.pk %}">{{ node.name }}</a><span class="status-badge">{{ node.state|ui_label }}</span></li>{% endfor %}</ul>{% else %}<p class="muted">还没有题型。题型记录“题目结构”，例如和差问题，与知识和解题方法分开管理。</p>{% endif %}
       </section>
       {% if not home.can_write %}<p class="muted">当前账号为只读成员，新增或修改需由有编辑权限的成员完成。</p>{% endif %}
     {% else %}<p>请选择当前账号有权访问的家庭。</p>{% endif %}

@@ -400,4 +400,14 @@ describe('WorkspacePage', () => {
       else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView')
     }
   })
+  it.each([true, false])('offers definition formula insertion only when a definition field exists: %s', async (hasDefinition) => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...initialPage, page: { ...initialPage.page,
+      html: `<main><h1>合成内容表单</h1>${hasDefinition ? '<textarea id="id_definition" name="definition"></textarea>' : ''}<label for="id_display_markup">排版文本</label><textarea id="id_display_markup" name="display_markup"></textarea></main>`,
+    } })))
+    render(<WorkspacePage url='/synthetic-content/' householdId='home-1' canWrite={false} csrfToken='csrf-1'
+      onNavigate={vi.fn()} onUnauthorized={vi.fn()} onUnsavedChange={vi.fn()} />)
+    await screen.findByLabelText('排版文本')
+    await waitFor(() => expect(screen.queryByLabelText('公式辅助') !== null).toBe(hasDefinition))
+  })
+
 })

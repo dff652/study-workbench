@@ -114,6 +114,8 @@ class PrintTests(TransactionTestCase):
         self.assertEqual(preview.status_code,200)
         self.assertEqual(preview['Content-Type'],'application/pdf')
         self.assertIn('inline',preview['Content-Disposition'])
+        self.assertEqual(preview['X-Frame-Options'], 'SAMEORIGIN')
+        self.assertEqual(response['X-Frame-Options'], 'DENY')
         self.assertIn('no-store',preview['Cache-Control']);preview.close()
         word=self.client.get(f'/prints/snapshots/{practice.pk}/document.docx/?preview=1')
         self.assertEqual(word.status_code,200)

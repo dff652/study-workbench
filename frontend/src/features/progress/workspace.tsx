@@ -4,9 +4,8 @@ import { api } from '../../api'
 import { errorText, isUnauthorized, type Remote } from '../../components/shared'
 import { Button } from '../../components/ui/button'
 import { WorkspacePanel, WorkspaceTabs } from '../../components/workspace-tabs'
-import type { Learner, LearnerProgressResponse, ProgressResponse, SchedulesResponse } from '../../types'
+import type { Learner, LearnerProgressResponse, SchedulesResponse } from '../../types'
 import { LearnerProgress } from './learner-progress'
-import { MaterialProgress } from './material-progress'
 import { Schedules } from './schedules'
 
 export function ProgressWorkspace({
@@ -28,7 +27,6 @@ export function ProgressWorkspace({
   onTabChange?: (value: string) => void
   onUnsavedChange?: (dirty: boolean) => void
 }) {
-  const [progress, setProgress] = useState<Remote<ProgressResponse>>({ status: 'loading' })
   const [learnerProgress, setLearnerProgress] = useState<Remote<LearnerProgressResponse>>({ status: 'loading' })
   const [schedules, setSchedules] = useState<Remote<SchedulesResponse>>({ status: 'loading' })
   const [refresh, setRefresh] = useState(0)
@@ -43,21 +41,10 @@ export function ProgressWorkspace({
     return () => { mountedRef.current = false }
   }, [])
 
-  useEffect(() => { setTab(progressTab(initialTab)) }, [initialTab])
-
   useEffect(() => {
-    const controller = new AbortController()
-    let active = true
-    setProgress({ status: 'loading' })
-    api.progress(householdId, controller.signal).then((data) => {
-      if (active) setProgress({ status: 'loaded', data })
-    }).catch((cause: unknown) => {
-      if (!active || isAbortError(cause)) return
-      if (isUnauthorized(cause)) onUnauthorized()
-      setProgress({ status: 'error', message: errorText(cause) })
-    })
-    return () => { active = false; controller.abort() }
-  }, [householdId, refresh, onUnauthorized])
+    setTab(progressTab(initialTab))
+    if (initialTab === 'materials') onTabChange?.('plans')
+  }, [initialTab, onTabChange])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -130,7 +117,6 @@ export function ProgressWorkspace({
           tabs={[
             { value: 'plans', label: '复测计划' },
             { value: 'evidence', label: '学习证据' },
-            { value: 'materials', label: '资料进度' },
           ]}
           value={tab}
           onChange={selectTab}
@@ -155,14 +141,11 @@ export function ProgressWorkspace({
       <WorkspacePanel id='progress-workspace' value='evidence' active={tab}>
         <LearnerProgress remote={learnerProgress} onRetry={refreshAll} />
       </WorkspacePanel>
-      <WorkspacePanel id='progress-workspace' value='materials' active={tab}>
-        <MaterialProgress remote={progress} onRetry={refreshAll} />
-      </WorkspacePanel>
     </div>
   )
 }
 
-const PROGRESS_TABS = ['plans', 'evidence', 'materials'] as const
+const PROGRESS_TABS = ['plans', 'evidence'] as const
 
 function isProgressTab(value: string): value is typeof PROGRESS_TABS[number] {
   return (PROGRESS_TABS as readonly string[]).includes(value)

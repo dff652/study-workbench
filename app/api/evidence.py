@@ -37,6 +37,7 @@ def projection(actor, household_id, learner_id, query):
     learner = scope(actor, household_id, learner_id)
     selected = filters(query)
     report = study.evidence_report(actor, learner.pk)
+    history_count = sum(row['state'] == 'active' for row in report['attempts'])
     question_pks = dict(EntityRecord.objects.filter(household_id=household_id, kind="question")
                         .values_list("stable_id", "pk"))
     rows = []
@@ -84,9 +85,15 @@ def projection(actor, household_id, learner_id, query):
         "repeated_error_count": len(findings["repeated_errors"]),
         "insufficient_evidence_count": len({row["attempt_id"] for row in findings["insufficient_evidence"]}),
     }
-    return {"scope": {"household_id": str(household_id), "learner_id": learner_id,
+    recent = sorted(active, key=lambda row: (row['actual_date_state'] == 'known' and bool(row['actual_date']), row['actual_date'] if row['actual_date_state'] == 'known' and row['actual_date'] else '', row['attempt_id']), reverse=True)[:6]
+    finding_ids = {row['attempt_id'] for key in ('observed_correct_methods', 'insufficient_evidence')
+                   for row in findings[key]}
+    return {"history_attempt_count": history_count, "recent_attempts": recent,
+            "finding_attempts": [row for row in active if row['attempt_id'] in finding_ids],
+            "scope": {"household_id": str(household_id), "learner_id": learner_id,
                        **selected, "metric_version": "evidence.v1"},
             "metrics": metrics, "findings": findings, "items": rows,
             "links": {"profile_url": reverse("learning:profile_detail", args=[learner_id]),
+                "record_attempt_url": reverse("learning:attempt_new", args=[learner_id]),
                 "report_url": reverse("study:report", args=[learner.pk]),
                 "schedule_url": reverse("study:schedule_new", args=[learner.pk])}}

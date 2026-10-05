@@ -8,8 +8,10 @@ import { workflowStateLabel, localDateTime } from './workflow-labels'
 
 export function MaterialReadiness({
   detail,
+  onContinue,
 }: {
   detail: MaterialDetailResponse
+  onContinue?: () => void
 }) {
   const { material, pages, readiness } = detail
   return (
@@ -21,8 +23,9 @@ export function MaterialReadiness({
             <CardDescription className='mt-1'>原图保持原样。仅显示当前资料中的已保存页面。</CardDescription>
           </div>
           <div className='flex flex-wrap gap-3 text-sm'>
-            <ApiLink href={material.material_url}>旧版资料页：编辑题面和来源</ApiLink>
-            <ApiLink href={material.prepare_url}>旧版五册准备页</ApiLink>
+            {onContinue && pages.length ? <Button type='button' size='sm' onClick={onContinue}>继续核对题面</Button> : null}
+            <ApiLink href={material.prepare_url}>生成五册资料</ApiLink>
+            <details><summary className='cursor-pointer text-sm'>更多操作</summary><ApiLink href={material.material_url}>编辑题面与来源（兼容页）</ApiLink></details>
           </div>
         </CardHeader>
         <CardContent className='pt-5'>
@@ -32,6 +35,7 @@ export function MaterialReadiness({
             <ul className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'>
               {pages.map((page) => (
                 <li key={page.id} className='rounded-lg border bg-muted/10 p-4'>
+                  <img src={page.preview_url} alt={`资料页 ${page.position} 缩略图`} loading='lazy' className='mb-3 h-36 w-full object-contain' />
                   <div className='flex items-center justify-between gap-2'>
                     <span className='font-medium'>资料页 {page.position}</span>
                     <Badge variant='outline'>{page.width} × {page.height}</Badge>
@@ -51,8 +55,8 @@ export function MaterialReadiness({
         <CardHeader className='border-b pb-4'>
           <div className='flex flex-wrap items-center justify-between gap-3'>
             <div>
-              <CardTitle className='flex items-center gap-2 text-base'><ListChecks className='size-4 text-primary' aria-hidden='true' />五册生成前检查</CardTitle>
-              <CardDescription className='mt-1'>完整度仅针对当前资料和检查项，不代表整页内容都已完成。</CardDescription>
+              <CardTitle className='flex items-center gap-2 text-base'><ListChecks className='size-4 text-primary' aria-hidden='true' />整理完整性检查</CardTitle>
+              <CardDescription className='mt-1'>可在原图、题面、关联与任务之间回看，不必按固定顺序操作。此处显示已登记缺项，生成前还会再次检查具体内容。</CardDescription>
             </div>
             <Badge variant={readiness.ready ? 'secondary' : 'outline'}>{readiness.ready ? '可进入输出检查' : '仍有待核对项'}</Badge>
           </div>
@@ -62,13 +66,13 @@ export function MaterialReadiness({
             <h3 className='mb-2 flex items-center gap-2 text-sm font-semibold'><CircleAlert className='size-4 text-amber-700' aria-hidden='true' />阻塞项</h3>
             {readiness.gaps.length === 0 ? <p className='rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900'>当前没有阻塞项。</p> : (
               <ul className='space-y-2'>
-                {readiness.gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950'>{gap}</li>)}
+                {readiness.gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
               </ul>
             )}
             <h3 className='mb-2 mt-5 flex items-center gap-2 text-sm font-semibold'><FileText className='size-4 text-sky-700' aria-hidden='true' />待补内容与页面覆盖</h3>
             {readiness.content_gaps.length === 0 ? <p className='rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground'>当前没有待补提示。</p> : (
               <ul className='space-y-2'>
-                {readiness.content_gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-sky-50 px-3 py-2 text-sm leading-5 text-sky-950'>{gap}</li>)}
+                {readiness.content_gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-sky-50 px-3 py-2 text-sm leading-5 text-sky-950'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
               </ul>
             )}
           </section>
@@ -86,6 +90,7 @@ export function MaterialReadiness({
                       <Badge variant={question.confirmed ? 'secondary' : 'outline'}>{question.confirmed ? '题面已确认' : '题面待确认'}</Badge>
                       <Badge variant={question.answer_ready ? 'secondary' : 'outline'}>{question.answer_ready ? '答案已准备' : '答案待补'}</Badge>
                     </div>
+                    <div className='mt-3 flex flex-wrap gap-3 text-sm'><ApiLink href={question.edit_url}>补充题面、来源与答案</ApiLink><ApiLink href={question.answer_url}>核对家长答案与依据</ApiLink><ApiLink href={question.association_url}>补充知识与方法关联</ApiLink></div>
                   </li>
                 ))}
               </ul>
@@ -96,6 +101,14 @@ export function MaterialReadiness({
       </Card>
     </div>
   )
+}
+
+function GapActions({ gap, detail }: { gap: string; detail: MaterialDetailResponse }) {
+  const questions = detail.readiness.questions.filter((question) => gap.startsWith(`${question.number || '未编号题目'}：`))
+  const page = detail.pages.find((row) => gap.startsWith(`第 ${row.position} 页：`))
+  if (page) return <div className='mt-2'><ApiLink href={page.page_url}>整理此页阅读与分区</ApiLink></div>
+  if (questions.length) return <div className='mt-2 flex flex-wrap gap-3'>{questions.map((question) => <ApiLink key={question.question_id} href={gap.includes('答案') ? question.answer_url || question.edit_url : gap.includes('关联') ? question.association_url : question.edit_url}>修复题目 {question.number || '未编号'}：{question.text.slice(0, 30)}</ApiLink>)}</div>
+  return <div className='mt-2'><ApiLink href={detail.material.material_url}>打开本资料修复缺项</ApiLink></div>
 }
 
 export function MaterialTaskHistory({ jobs, selectedJobId, onSelectJob, busy }: {

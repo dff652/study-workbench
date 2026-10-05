@@ -12,12 +12,13 @@ import type { KnowledgeContent, KnowledgeItem, KnowledgeWorkspaceResponse, RuleP
 
 const field = 'mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm font-normal'
 
-export function KnowledgeEditor({ content, workspace, materialId, csrfToken, writable, onChange, onAssetsChanged, onBusyChange, onUnauthorized }: {
-  content: KnowledgeContent; workspace: KnowledgeWorkspaceResponse; materialId: string; csrfToken: string; writable: boolean
+export function KnowledgeEditor({ focusItem, content, workspace, materialId, csrfToken, writable, onChange, onAssetsChanged, onBusyChange, onUnauthorized }: {
+  focusItem?: { id: string }; content: KnowledgeContent; workspace: KnowledgeWorkspaceResponse; materialId: string; csrfToken: string; writable: boolean
   onChange: (content: KnowledgeContent) => void; onAssetsChanged: (assets: KnowledgeWorkspaceResponse['assets']) => void
   onBusyChange: (busy: boolean) => void; onUnauthorized: () => void
 }) {
   const [activeId, setActiveId] = useState(content.knowledge[0]?.id || '')
+  useEffect(() => { if (focusItem && content.knowledge.some((item) => item.id === focusItem.id)) setActiveId(focusItem.id) }, [focusItem])
   const [assetBusy, setAssetBusy] = useState(false)
   useEffect(() => { if (!content.knowledge.some((item) => item.id === activeId)) setActiveId(content.knowledge[0]?.id || '') }, [activeId, content.knowledge])
   const active = content.knowledge.find((item) => item.id === activeId)

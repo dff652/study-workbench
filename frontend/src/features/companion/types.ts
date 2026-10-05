@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { SolutionOutput, SolutionWorkspaceResponse } from '../../types'
 
-export type RevisionSummary = { id: number; version: number; author: string; reason: string; created_at: string; confirmed: boolean }
+export type RevisionSummary = { id: number; version: number; author: string; reason: string; created_at: string; confirmed: boolean; gaps?: Array<{ question_id?: string; knowledge_id?: string; message: string }> }
 export type CompanionOutput = Omit<SolutionOutput, 'checks' | 'documents'> & {
   checks: Record<string, { status: 'pass' | 'fail' | 'not_tested'; notes: string }>
   documents: Array<Omit<SolutionOutput['documents'][number], 'organization'> & { organization: string }>
@@ -27,6 +27,7 @@ export type CompanionConfig<C, O extends CompanionOutput, W extends CompanionRes
   mode: 'solution' | 'knowledge'; title: string; defaultReason: string; introduction: string; generationHint: string
   empty: C; normalize: (content: C) => C; isContent: (value: unknown) => value is C
   hasItems: (content: C) => boolean; canGenerate: (content: C) => boolean
+  outputSummary: (content: C) => { label: string; detail: string }
   checkNames: Array<[keyof O['checks'] & string, string]>
   api: {
     workspace: (id: string, signal: AbortSignal) => Promise<W>
@@ -38,7 +39,7 @@ export type CompanionConfig<C, O extends CompanionOutput, W extends CompanionRes
     output: (id: string, signal: AbortSignal) => Promise<{ output: O }>
     outputAction: (id: string, input: { action: 'cancel' | 'retry' | 'check'; expected_version: number; request_key: string; reason: string; checks?: O['checks'] }, csrf: string) => Promise<W>
   }
-  editor: (props: { content: C; workspace: W; materialId: string; csrfToken: string; writable: boolean
+  editor: (props: { focusItem?: { id: string }; content: C; workspace: W; materialId: string; csrfToken: string; writable: boolean
     onChange: (content: C) => void; onAssetsChanged: (assets: W['assets']) => void
     onBusyChange: (busy: boolean) => void; onUnauthorized: () => void }) => ReactNode
   compare: (props: { left: C; leftTitle: string; right: C; rightTitle: string; workspace: W }) => ReactNode

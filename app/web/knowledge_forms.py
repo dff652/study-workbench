@@ -14,6 +14,7 @@ NODE_KINDS = (
 
 
 class IndexForm(forms.Form):
+    mode = forms.ChoiceField(label='使用方式', required=False, choices=(('', '管理题库'), ('manage', '管理题库'), ('learn', '选题练习')))
     household_id = forms.ChoiceField(label="家庭", choices=())
     material_id = forms.ChoiceField(label="资料", required=False, choices=(("", "全部资料"),))
     subject = forms.ChoiceField(label="题目资料学科", required=False, choices=(("", "全部学科"),) + SUBJECT_CHOICES)

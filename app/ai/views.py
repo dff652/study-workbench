@@ -83,7 +83,15 @@ def config(request, household_id):
             if config else {"cloud_enabled": False, "batch_budget": 0,
                 "outbound_scope": "reviewed_text", "non_billable_gateway": False})
         form = ModelConfigForm(initial=initial)
-    return render(request, "ai/config.html", {**data, "form": form})
+    groups = [
+        ('连接与启用', ('provider_label', 'base_url', 'model', 'cloud_enabled', 'outbound_scope', 'confirm_external_processing'), False),
+        ('费用与预算', ('batch_budget', 'input_price_per_million', 'output_price_per_million', 'reserved_per_call', 'non_billable_gateway'), True),
+        ('上游与留存说明', ('connection_route', 'upstream_state', 'known_upstream_providers', 'retention_state', 'retention_description'), True),
+        ('调用限制', ('timeout_seconds', 'max_output_tokens', 'max_input_chars', 'max_calls'), True),
+    ]
+    config_groups = [{'title': title, 'fields': [form[name] for name in names], 'advanced': advanced,
+                      'has_errors': any(name in form.errors for name in names)} for title, names, advanced in groups]
+    return render(request, "ai/config.html", {**data, "form": form, 'config_groups': config_groups})
 
 
 @_not_found

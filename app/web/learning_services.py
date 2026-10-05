@@ -22,6 +22,7 @@ from app.web import services as material_services
 from app.web.models import MaterialPage, PagePreview, QuestionSource
 from . import records
 from .presentation import ui_label
+from .learning_labels import attempt_choice_label
 
 
 DIMENSIONS = (
@@ -97,10 +98,24 @@ def profile_list(actor, household_id=None):
     bundle = core.read_snapshot_bundle(actor, household.pk)
     memberships = {str(row.household_id): row for row in rows}
     membership = memberships.get(str(household.pk))
+    from app.study.models import StudySchedule
+    plans = {}
+    for schedule in StudySchedule.objects.filter(household=household).select_related('learner').prefetch_related('revisions'):
+        latest = max(schedule.revisions.all(), key=lambda row: row.revision_no, default=None)
+        if latest and latest.action in ('planned', 'rescheduled'):
+            plans.setdefault(schedule.learner.stable_id, []).append(latest.due_date)
+    profile_cards = []
+    for profile in sorted(bundle.learners, key=lambda item: (item.display_name.casefold(), item.learner_id)):
+        attempts = [item.revisions[-1] for item in bundle.attempts if item.learner_id == profile.learner_id and item.revisions[-1].state is AttemptState.ACTIVE]
+        dates = [item.actual_date for item in attempts if item.actual_date_state is ActualDateState.KNOWN and item.actual_date]
+        due = plans.get(profile.learner_id, [])
+        profile_cards.append({'profile': profile, 'attempt_count': len(attempts), 'recent_date': max(dates, default=None),
+                              'plan_count': len(due), 'next_due': min(due, default=None)})
     return {
         "households": rows,
         "household_id": str(household.pk),
         "profiles": sorted(bundle.learners, key=lambda item: (item.display_name.casefold(), item.learner_id)),
+        "profile_cards": profile_cards,
         "observations": sorted(bundle.observations, key=lambda item: item.revisions[-1].header.recorded_at, reverse=True),
         "questions": _published_question_choices(actor, household.pk, bundle),
         "materials": list(material_services.list_materials(actor).filter(household_id=household.pk)),
@@ -240,7 +255,7 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
             "type_ids": frozenset(item["stable_id"] for item in type_nodes),
             "assessments": assessment_rows,
             "independent_success": _independent_success(actor, household_id, bundle, attempt, assessment_rows),
-            "sort_date": current.actual_date or current.header.recorded_at[:10],
+            "sort_date": str(current.actual_date) if current.actual_date_state is ActualDateState.KNOWN and current.actual_date else '',
         })
     obs_infos = []
     for observation in observations:
@@ -415,11 +430,13 @@ def _attempt_choices(actor, household_id, bundle, learner_id=None):
         observation_choices.append((value, label))
         obs_heads[observation.observation_id] = latest.header.revision_id
     prior = []
+    question_labels = {item['question_id']: item['label'] for item in questions}
     for attempt in bundle.attempts:
         if learner_id and attempt.learner_id != learner_id:
             continue
         current = attempt.revisions[-1]
-        prior.append((attempt.attempt_id, f"{attempt.question_id} · {current.attempt_kind.value} · {current.actual_date or '日期未知'}"))
+        title = question_labels.get(attempt.question_id, '历史题目')
+        prior.append((attempt.attempt_id, attempt_choice_label(attempt.attempt_id, current, title)))
     token_context = {
         "question_versions": {item["question_id"]: item["revision_id"] for item in questions},
         "question_heads": {item["question_id"]: item["head_revision_id"] for item in questions},

@@ -101,7 +101,7 @@ export function ImageBoxPicker({
 
   return (
     <div className='space-y-3'>
-      <div className='relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-lg border bg-muted/20'>
+      <div className='relative isolate mx-auto w-full overflow-hidden rounded-lg border bg-muted/20' style={{ maxWidth: `min(100%, max(16rem, calc((100vh - 14rem) * ${page.width / page.height})))` }}>
         {previewUrl ? (
           <img
             ref={imageRef}

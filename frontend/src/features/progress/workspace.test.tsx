@@ -1,25 +1,11 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProgressWorkspace } from './workspace'
-import type { LearnerProgressResponse, ProgressResponse, ReviewSchedule, SchedulesResponse } from '../../types'
+import type { Attempt, LearnerProgressResponse, ReviewSchedule, SchedulesResponse } from '../../types'
 
 const learner = { id: 'learner-1', display_name: '小林', grade: '五年级', profile_url: '/profile/', report_url: '/report/' }
 const opaqueContext = { version: 4, stamp: 'context-must-stay-private' }
-
-const progress: ProgressResponse = {
-  schema_version: 'swb.api.v1',
-  scope: { household_id: 'home-1', metric_version: 'progress.v1', as_of: '2026-10-04' },
-  counts: {
-    material_count: 1, page_count: 3, pages_complete: 1, pages_unread: 1, pages_need_retake: 1,
-    questions_confirmed: 2, questions_pending: 1, open_workflows: 1, completed_workflows: 0,
-  },
-  materials: [{
-    id: 'material-1', title: '分数练习', page_count: 3, pages_complete: 1, pages_unread: 1,
-    pages_need_retake: 1, questions_confirmed: 2, questions_pending: 1, material_url: '/materials/1/',
-  }],
-  total: 1,
-}
 
 const learnerProgress: LearnerProgressResponse = {
   schema_version: 'swb.api.v1',
@@ -33,9 +19,23 @@ const learnerProgress: LearnerProgressResponse = {
 
 const plannedSchedule: ReviewSchedule = {
   id: 21, question_id: 44, question_text: '计算 1/3 + 1/6', goal: '独立完成通分', prompt_plan: '先不提示，卡住后观察步骤',
-  due_date: '2026-10-12', state: 'planned', overdue: false, target_stale: false, context: opaqueContext,
-  detail_url: '/learning/schedules/21/',
-  history: [{ revision_no: 1, action: 'planned', due_date: '2026-10-12', reason: '本周复习', attempt_revision_id: null, actual_date: null, recorded_at: '2026-10-04T08:00:00+08:00' }],
+  due_date: '2026-10-06', state: 'planned', overdue: false, target_stale: false, context: opaqueContext,
+  detail_url: '/learning/schedules/21/', question_url: '/knowledge/questions/44/', record_attempt_url: '/learning/attempts/new/?question=44&kind=retest',
+  attempt_count: 3,
+  latest_attempt: {
+    attempt_id: 'attempt-1', attempt_revision_id: 'attempt-revision-old', attempt_kind: 'retest', attempt_kind_label: '复测',
+    source_kind: 'independent_answer', source_kind_label: '独立作答', independence: 'confirmed_independent', independence_label: '人工确认独立',
+    prompt_status: 'none_confirmed', prompt_status_label: '人工确认无提示', prompts: [], actual_date_state: 'unknown', actual_date: null,
+    legibility: 'readable', legibility_label: '清楚可辨', answer_text: '解题过程摘要', state: 'active', state_label: '有效',
+    question_id: '44', question_revision_id: 'question-rev-44-old', question_text: '计算 1/3 + 1/6', independent_success: true,
+    sources: [], assessments: [{ assessment_id: 'assessment-1', assessment_revision_id: 'assessment-rev-1', attempt_revision_id: 'attempt-revision-old',
+      review_state: 'accepted', current: true, review_state_label: '已接受', published: true, reviewer_id: 'reviewer-1', dimensions: [{
+        dimension: 'method', judgment: 'correct', basis: 'source_verified', dimension_label: '解题过程', judgment_label: '正确', basis_label: '原图核实',
+        rationale: '通分步骤与来源一致。', unknown_reason: '', sources: [],
+      }] }],
+    attempt_url: '/learning/attempts/old/', question_url: '/knowledge/questions/44/', previous_attempt_id: null,
+  } satisfies Attempt,
+  history: [{ revision_no: 1, action: 'planned', due_date: '2026-10-06', reason: '本周复习', attempt_revision_id: null, actual_date: null, recorded_at: '2026-10-04T08:00:00+08:00' }],
   attempt_choices: [{ revision_id: 'attempt-revision-1', label: '一次已保存的独立作答', actual_date: null, source_kind: 'independent_answer' }],
 }
 
@@ -50,7 +50,7 @@ const completedSchedule: ReviewSchedule = {
 }
 
 const schedules: SchedulesResponse = {
-  schema_version: 'swb.api.v1', scope: { household_id: 'home-1', learner_id: 'learner-1' },
+  schema_version: 'swb.api.v1', scope: { household_id: 'home-1', learner_id: 'learner-1', as_of: '2026-10-06' },
   counts: { pending: 1, overdue: 0, completed: 1, cancelled: 0 }, items: [plannedSchedule, completedSchedule],
 }
 
@@ -74,7 +74,6 @@ function mountWorkspace(
       if (postResponse) return postResponse()
       return Response.json({ schema_version: 'swb.api.v1', schedule_id: 88 })
     }
-    if (url.pathname === '/api/v1/progress/') return Response.json(progress)
     if (url.pathname === '/api/v1/learners/learner-1/progress/') return Response.json(learnerProgress)
     if (url.pathname === '/api/v1/learners/learner-1/schedules/options/') {
       return Response.json({ schema_version: 'swb.api.v1', questions: [{ revision_id: 'question-revision-7', label: '第 7 题 · 分数加法' }], context: opaqueContext })
@@ -90,27 +89,34 @@ function mountWorkspace(
 describe('ProgressWorkspace', () => {
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-  it('shows server progress counts and unknown evidence without inventing mastery rates', async () => {
+  it('keeps materials processing out of learner progress and reads only learner evidence and schedules', async () => {
     const { calls } = mountWorkspace()
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('tab', { name: '资料进度' }))
-    expect(await screen.findByRole('heading', { name: '资料进度' })).toBeTruthy()
-    expect(screen.getByText('待整理页面')).toBeTruthy()
-    expect(screen.getByText('分数练习')).toBeTruthy()
-    expect(screen.getByText('知识、方法与题型进度')).toBeTruthy()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['复测计划', '学习证据'])
+    expect(screen.queryByRole('tab', { name: '资料进度' })).toBeNull()
+    await user.click(screen.getByRole('tab', { name: '学习证据' }))
+    expect(await screen.findByRole('heading', { name: '知识、方法与题型进度' })).toBeTruthy()
     expect(screen.getByText('分数运算')).toBeTruthy()
     expect(screen.getByText('通分')).toBeTruthy()
     expect(screen.getByText('异分母加法')).toBeTruthy()
-    expect(screen.getAllByText('未知或待核实')).toHaveLength(3)
-    expect(screen.getByText('尚无作答记录，当前状态为未测。')).toBeTruthy()
+    await user.click(screen.getByRole('tab', { name: '复测计划' }))
+    await screen.findByRole('button', { name: '详情' })
+    await user.click(screen.getByRole('button', { name: '详情' }))
+    const eventRows = screen.getAllByRole('row', { name: /计算 1\/3 \+ 1\/6/ })
+    const plannedRow = eventRows[0]
+    const plannedDetailsRow = eventRows[1]
+    expect(within(plannedRow).getByText(/实际日期未知.*独立作答.*人工确认独立/)).toBeTruthy()
+    expect(within(plannedDetailsRow).getByText(/解题过程：正确 · 原图核实/)).toBeTruthy()
+    expect(within(plannedDetailsRow).getByRole('link', { name: '查看本次作答' }).getAttribute('href')).toBe('/learning/attempts/old/')
+    expect(screen.getByRole('link', { name: '打开题目' }).getAttribute('href')).toBe('/knowledge/questions/44/')
+    expect(screen.getByRole('link', { name: '记录复测' }).getAttribute('href')).toContain('kind=retest')
     expect(screen.queryByText(/掌握率|掌握百分比|context-must-stay-private/)).toBeNull()
     await user.click(screen.getByRole('tab', { name: '学习证据' }))
     expect(await screen.findByRole('heading', { name: '知识、方法与题型进度' })).toBeTruthy()
-    await waitFor(() => expect(calls).toHaveLength(3))
+    await waitFor(() => expect(calls).toHaveLength(2))
     expect(calls.map(({ url }) => url.pathname).sort()).toEqual([
       '/api/v1/learners/learner-1/progress/',
       '/api/v1/learners/learner-1/schedules/',
-      '/api/v1/progress/',
     ])
     expect(calls.every(({ url }) => url.searchParams.get('household') === 'home-1')).toBe(true)
     expect(calls.every(({ init }) => init?.cache === 'no-store' && init?.credentials === 'same-origin')).toBe(true)
@@ -128,7 +134,9 @@ describe('ProgressWorkspace', () => {
     await user.click(screen.getByRole('button', { name: '详情' }))
     expect(screen.getByRole('heading', { name: '计划与完成历史' })).toBeTruthy()
     expect(screen.getByText('实际作答日期：未知 · 已关联真实作答。')).toBeTruthy()
-    expect(screen.getByText('记录时间：2026-10-04T09:30:00+08:00')).toBeTruthy()
+    const recordTimes = screen.getAllByText(/记录时间（本地）：2026/)
+    expect(recordTimes).toHaveLength(2)
+    expect(recordTimes.some((node) => node.textContent?.includes('09:30'))).toBe(true)
     expect(screen.queryByRole('button', { name: '新增复测计划' })).toBeNull()
     expect(screen.queryByRole('button', { name: '改期' })).toBeNull()
     expect(screen.queryByRole('button', { name: '记录复测完成' })).toBeNull()
@@ -346,6 +354,25 @@ describe('ProgressWorkspace', () => {
     expect(body.request_key).toMatch(/^[0-9a-f-]{36}$/i)
   })
 
+  it('keeps distinct same-day event labels and binds the explicitly selected revision', async () => {
+    const choices = ['首次', '重做', '复测'].map((kind, index) => ({
+      revision_id: `same-day-revision-${index}`,
+      label: `2026-10-01 · ${kind} · 独立作答 · 人工确认独立／人工确认无提示 · 8 · #event00${index}`,
+      actual_date: '2026-10-01', source_kind: 'independent_answer' as const,
+    }))
+    const { calls } = mountWorkspace('owner', undefined, { ...schedules, items: [{ ...plannedSchedule, attempt_choices: choices }] })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '详情' }))
+    await user.click(screen.getByRole('button', { name: '记录复测完成' }))
+    for (const choice of choices) expect(screen.getByRole('option', { name: choice.label }).textContent).toBe(choice.label)
+    await user.selectOptions(screen.getByLabelText('选择这次复测对应的真实作答'), choices[1].revision_id)
+    await user.type(screen.getByLabelText('本次操作原因（必填）'), '明确选择第二次真实作答')
+    await user.click(screen.getByRole('button', { name: '确认关联作答并完成' }))
+    await waitFor(() => expect(calls.some(({ init }) => init?.method === 'POST')).toBe(true))
+    const body = JSON.parse(String(calls.find(({ init }) => init?.method === 'POST')?.init?.body))
+    expect(body.attempt_revision_id).toBe(choices[1].revision_id)
+  })
+
   it('sends the same native context, reason and unique request key for reschedule and cancellation', async () => {
     const user = userEvent.setup()
     const { calls } = mountWorkspace()
@@ -380,7 +407,6 @@ describe('ProgressWorkspace', () => {
         return oldResponse
       }
       if (url.pathname === '/api/v1/learners/new/progress/') return Promise.resolve(Response.json({ ...learnerProgress, scope: { ...learnerProgress.scope, learner_id: 'new' } }))
-      if (url.pathname === '/api/v1/progress/') return Promise.resolve(Response.json(progress))
       if (url.pathname.endsWith('/schedules/')) return Promise.resolve(Response.json(schedules))
       throw new Error(`unexpected request: ${url.pathname}`)
     })
@@ -428,10 +454,9 @@ describe('ProgressWorkspace', () => {
     const mounted = mountWorkspace('owner', undefined, schedules, { initialTab: 'materials', onTabChange })
     const view = mounted.view
     const props = { householdId: 'home-1', learner, csrfToken: 'csrf-test', canWrite: true, onUnauthorized: mounted.unauthorized, onTabChange }
-    expect((await screen.findByRole('tab', { name: '资料进度' })).getAttribute('aria-selected')).toBe('true')
-    await user.click(screen.getByRole('tab', { name: '复测计划' }))
+    expect((await screen.findByRole('tab', { name: '复测计划' })).getAttribute('aria-selected')).toBe('true')
     expect(onTabChange).toHaveBeenLastCalledWith('plans')
-    await user.click(screen.getByRole('button', { name: '新增复测计划' }))
+    await user.click(await screen.findByRole('button', { name: '新增复测计划' }))
     await user.selectOptions(await screen.findByLabelText('题目'), 'question-revision-7')
     await user.type(screen.getByLabelText('复测日期（必填）'), '2026-10-20')
     await user.type(screen.getByLabelText('复测目标（必填）'), '独立完成两题')
@@ -444,11 +469,14 @@ describe('ProgressWorkspace', () => {
     await user.click(await screen.findByRole('button', { name: '详情' }))
     await user.click(screen.getByRole('button', { name: '改期' }))
     await user.type(screen.getByLabelText('本次操作原因（必填）'), '调整后的说明')
-    await user.click(screen.getByRole('tab', { name: '资料进度' }))
+    await user.click(screen.getByRole('tab', { name: '学习证据' }))
     await user.click(screen.getByRole('tab', { name: '复测计划' }))
     expect((screen.getByLabelText('本次操作原因（必填）') as HTMLInputElement).value).toBe('调整后的说明')
-    await user.click(screen.getByRole('button', { name: /完成\s+1/ }))
-    await user.click(screen.getByRole('button', { name: /待复测\s+1/ }))
+    await user.click(screen.getByRole('button', { name: /近期（7天内）/ }))
+    expect(screen.getByText('近期没有待到期计划')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /今天\s+1/ }))
+    await user.click(screen.getByRole('button', { name: /已完成\s+1/ }))
+    await user.click(screen.getByRole('button', { name: /今天\s+1/ }))
     expect((screen.getByLabelText('本次操作原因（必填）') as HTMLInputElement).value).toBe('调整后的说明')
 
     await user.click(screen.getByRole('button', { name: '返回' }))
@@ -467,12 +495,12 @@ describe('ProgressWorkspace', () => {
     const user = userEvent.setup()
     const empty: SchedulesResponse = { ...schedules, counts: { pending: 0, overdue: 0, completed: 0, cancelled: 0 }, items: [] }
     const mounted = mountWorkspace('viewer', undefined, empty)
-    expect(await screen.findByText('当前没有复测计划')).toBeTruthy()
+    expect(await screen.findByText('还没有复测计划')).toBeTruthy()
 
     const one: SchedulesResponse = { ...schedules, counts: { pending: 1, overdue: 0, completed: 0, cancelled: 0 }, items: [plannedSchedule] }
     mounted.setScheduleResponse(one)
     mounted.view.rerender(<ProgressWorkspace householdId='home-2' learner={learner} csrfToken='csrf-test' canWrite={false} onUnauthorized={mounted.unauthorized} />)
-    await screen.findByText('计算 1/3 + 1/6')
+    await screen.findByRole('button', { name: '计算 1/3 + 1/6' })
     expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(1)
 
     const twentyItems = Array.from({ length: 20 }, (_, index): ReviewSchedule => ({
@@ -485,9 +513,11 @@ describe('ProgressWorkspace', () => {
     const twenty: SchedulesResponse = { ...schedules, counts: { pending: 10, overdue: 5, completed: 5, cancelled: 5 }, items: twentyItems }
     mounted.setScheduleResponse(twenty)
     mounted.view.rerender(<ProgressWorkspace householdId='home-3' learner={learner} csrfToken='csrf-test' canWrite={false} onUnauthorized={mounted.unauthorized} />)
-    await screen.findByText('第 1 项复测')
-    expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(10)
-    await user.click(screen.getByRole('button', { name: /完成\s+5/ }))
+    await screen.findByText('第 6 项复测')
+    expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(5)
+    await user.click(screen.getByRole('button', { name: /已完成\s+5/ }))
+    expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(5)
+    await user.click(screen.getByRole('button', { name: /逾期\s+5/ }))
     expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(5)
 
     const items = Array.from({ length: 100 }, (_, index): ReviewSchedule => {
@@ -504,10 +534,53 @@ describe('ProgressWorkspace', () => {
     mounted.setScheduleResponse(many)
     mounted.view.rerender(<ProgressWorkspace householdId='home-4' learner={learner} csrfToken='csrf-test' canWrite={false} onUnauthorized={mounted.unauthorized} />)
     await screen.findByText('百项第 1 项复测')
-    await user.click(screen.getByRole('button', { name: /待复测\s+50/ }))
-    expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(50)
+    await user.click(screen.getByRole('button', { name: /今天\s+25/ }))
+    expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(25)
     await user.click(screen.getByRole('button', { name: /逾期\s+25/ }))
     expect(screen.getAllByRole('button', { name: '详情' })).toHaveLength(25)
     expect(screen.getAllByText('已逾期')).toHaveLength(25)
+  }, 15000)
+
+  it('groups plans by the service date and lets an empty today view reach real upcoming work', async () => {
+    const user = userEvent.setup()
+    const upcoming: ReviewSchedule = { ...plannedSchedule, id: 31, question_text: '近期复测题', due_date: '2026-10-08' }
+    const overdue: ReviewSchedule = { ...plannedSchedule, id: 32, question_text: '逾期复测题', due_date: '2026-10-05', overdue: true }
+    const mounted = mountWorkspace('viewer', undefined, { ...schedules, items: [upcoming, overdue] })
+
+    expect(await screen.findByText('今天没有安排的复测')).toBeTruthy()
+    expect(screen.getByText(/计划为空不代表没有待办/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /查看近期计划/ }))
+    expect(await screen.findByRole('button', { name: '近期复测题' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /逾期\s+1/ }))
+    expect(screen.getByRole('button', { name: '逾期复测题' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '近期复测题' })).toBeNull()
+    mounted.view.unmount()
+  })
+
+  it('separates today, near-term, later, unscheduled, completed and cancelled plans', async () => {
+    const user = userEvent.setup()
+    const today = { ...plannedSchedule, id: 41, question_text: '今天复测题' }
+    const upcoming = { ...plannedSchedule, id: 42, question_text: '近期复测题', due_date: '2026-10-08' }
+    const later = { ...plannedSchedule, id: 43, question_text: '之后复测题', due_date: '2026-10-20' }
+    const unscheduled = { ...plannedSchedule, id: 44, question_text: '日期未知复测题', due_date: '' }
+    const overdue = { ...plannedSchedule, id: 45, question_text: '逾期复测题', due_date: '2026-10-05', overdue: true }
+    const completed = { ...completedSchedule, question_text: '已完成复测题' }
+    const cancelled = { ...plannedSchedule, id: 46, question_text: '已取消复测题', state: 'cancelled' as const }
+    const { view } = mountWorkspace('viewer', undefined, { ...schedules, items: [today, upcoming, later, unscheduled, overdue, completed, cancelled] })
+    expect(await screen.findByRole('button', { name: '今天复测题' })).toBeTruthy()
+    const filters: Array<[RegExp, string]> = [
+      [/近期（7天内）\s+1/, '近期复测题'],
+      [/逾期\s+1/, '逾期复测题'],
+      [/之后\s+1/, '之后复测题'],
+      [/日期未记录\s+1/, '日期未知复测题'],
+      [/已完成\s+1/, '已完成复测题'],
+      [/已取消\s+1/, '已取消复测题'],
+    ]
+    for (const [filter, question] of filters) {
+      await user.click(screen.getByRole('button', { name: filter }))
+      expect(screen.getByRole('button', { name: question })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: '今天复测题' })).toBeNull()
+    }
+    view.unmount()
   })
 })

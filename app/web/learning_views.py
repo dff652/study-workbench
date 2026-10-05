@@ -144,7 +144,9 @@ def index(request):
 def profile_new(request):
     households = services.household_options(request.user)
     if request.method == "GET":
-        form = ProfileForm(initial={"request_key": uuid4()}, households=households)
+        selected = request.GET.get('household')
+        selected = selected if selected in {str(item.household_id) for item in households} else None
+        form = ProfileForm(initial={"request_key": uuid4(), "household_id": selected}, households=households)
     else:
         form = ProfileForm(request.POST, households=households)
         if form.is_valid():
@@ -210,7 +212,9 @@ def profile_detail(request, learner_id):
         attempts = [item for item in attempts if item["revision"].actual_date_state.value == "known"
             and item["revision"].actual_date
             and date.fromisoformat(item["revision"].actual_date) <= to_date_value]
-    data.update({"attempts": sorted(attempts, key=lambda item: item["sort_date"], reverse=True),
+    data.update({"has_attempt_history": bool(data['attempts']),
+        "has_filters": bool(question_filter or knowledge_filter or type_filter or review_filter or error_filter or from_date or to_date),
+        "attempts": sorted(attempts, key=lambda item: item["sort_date"], reverse=True),
         "filters": {"question": question_filter, "knowledge": knowledge_filter, "type": type_filter,
             "review": review_filter, "error": error_filter, "from": from_date, "to": to_date}})
     for item in data["attempts"]:
@@ -354,6 +358,11 @@ def attempt_new(request, learner_id):
         "source_kind": SourceKind.UNKNOWN.value, "independence": Independence.UNKNOWN.value,
         "prompt_status": PromptStatus.UNKNOWN.value, "actual_date_state": ActualDateState.UNKNOWN.value,
         "legibility": Legibility.UNKNOWN.value, "sources": "[]", "context_token": token}
+    selected_question = request.GET.get('question')
+    if selected_question in {item['question_id'] for item in choices['questions']}:
+        initial['question_id'] = selected_question
+    if request.GET.get('kind') == AttemptKind.RETEST.value:
+        initial['attempt_kind'] = AttemptKind.RETEST.value
     if request.method == "GET":
         form = AttemptForm(initial=initial, learner_id=learner_id, questions=choices["questions"],
             observations=choices["observation_choices"], prior_attempts=choices["prior_attempts"])

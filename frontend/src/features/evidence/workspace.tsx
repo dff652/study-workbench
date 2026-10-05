@@ -14,18 +14,22 @@ export function EvidenceWorkspace({
   learner,
   activePage,
   initialTab,
+  initialFilters = INITIAL_FILTERS,
   onTabChange,
+  onFiltersChange,
   onUnauthorized,
 }: {
   householdId: string
   learner: Learner
   activePage: EvidencePage
   initialTab?: string
+  initialFilters?: Filters
   onTabChange?: (value: string) => void
+  onFiltersChange?: (filters: Filters) => void
   onUnauthorized: () => void
 }) {
   const [tab, setTab] = useState<EvidencePage>(() => normalizePage(initialTab, activePage))
-  const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS)
+  const [filters, setFilters] = useState<Filters>(() => ({ ...initialFilters }))
   const [page, setPage] = useState(1)
   const [overview, setOverview] = useState<Remote<OverviewResponse>>({ status: 'loading' })
   const [attempts, setAttempts] = useState<Remote<AttemptResponse>>({ status: 'loading' })
@@ -35,6 +39,12 @@ export function EvidenceWorkspace({
   useEffect(() => {
     setTab(normalizePage(initialTab, activePage))
   }, [activePage, initialTab])
+
+  useEffect(() => {
+    const next = normalizeFilters(initialFilters)
+    setFilters((current) => filtersEqual(current, next) ? current : next)
+    setPage(1)
+  }, [initialFilters.dateFrom, initialFilters.dateTo, initialFilters.sourceKind])
 
   useEffect(() => {
     if (tab !== 'overview') return
@@ -73,11 +83,15 @@ export function EvidenceWorkspace({
   }, [tab, householdId, learner.id, filters, page, attemptsRetry, onUnauthorized])
 
   const updateFilters = (next: Filters) => {
-    setFilters(next)
+    const normalized = normalizeFilters(next)
+    setFilters(normalized)
     setPage(1)
     setOverview({ status: 'loading' })
     setAttempts({ status: 'loading' })
+    onFiltersChange?.(normalized)
   }
+
+  const clearFilters = () => updateFilters(INITIAL_FILTERS)
 
   return (
     <div className='space-y-5'>
@@ -99,13 +113,22 @@ export function EvidenceWorkspace({
             <h2 className='text-lg font-semibold'>学习概况</h2>
             <p className='mt-1 text-sm text-muted-foreground'>按当前筛选查看真实作答和待核对证据。</p>
           </div>
-          <Overview remote={overview} onRetry={() => setOverviewRetry((count) => count + 1)} />
+          <Overview
+            remote={overview}
+            learnerName={learner.display_name}
+            filters={filters}
+            onClearFilters={clearFilters}
+            onRetry={() => setOverviewRetry((count) => count + 1)}
+          />
         </div>
       </WorkspacePanel>
       <WorkspacePanel id='evidence' value='attempts' active={tab}>
         <Attempts
           remote={attempts}
           page={page}
+          filters={filters}
+          recordAttemptUrl={`${learner.profile_url.replace(/\/$/, '')}/attempt/new/`}
+          onClearFilters={clearFilters}
           onRetry={() => setAttemptsRetry((count) => count + 1)}
           onPageChange={(nextPage) => {
             setPage(nextPage)
@@ -115,6 +138,20 @@ export function EvidenceWorkspace({
       </WorkspacePanel>
     </div>
   )
+}
+
+function normalizeFilters(filters: Filters): Filters {
+  return {
+    dateFrom: filters.dateFrom || '',
+    dateTo: filters.dateTo || '',
+    sourceKind: filters.sourceKind || '',
+  }
+}
+
+function filtersEqual(left: Filters, right: Filters) {
+  return left.dateFrom === right.dateFrom
+    && left.dateTo === right.dateTo
+    && left.sourceKind === right.sourceKind
 }
 
 function normalizePage(value: string | undefined, fallback: EvidencePage): EvidencePage {

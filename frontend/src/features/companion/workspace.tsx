@@ -53,6 +53,7 @@ export function CompanionWorkspace<C, O extends CompanionOutput, W extends Compa
   const outputPageControllerRef = useRef<AbortController | null>(null)
   const historyPageBusyRef = useRef(false)
   const outputPageBusyRef = useRef(false)
+  const [focusItem, setFocusItem] = useState<{ id: string } | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState('')
   const [conflict, setConflict] = useState<W | null>(null)
@@ -491,6 +492,7 @@ export function CompanionWorkspace<C, O extends CompanionOutput, W extends Compa
   const outputs = mergeOutputs(olderOutputs, data.outputs)
   const compareWorkspace = { ...data, nodes: mergeNodes(olderNodes, data.nodes) }
   const canGenerate = Boolean(content && config.canGenerate(content))
+  const outputSummary = content ? config.outputSummary(content) : { label: '先选择输出格式', detail: '尚未选择输出。' }
   const hasPrivateResolution = Boolean(privateDraft.candidate) || privateDraft.conflict !== undefined
   const candidateBaseChanged = Boolean(privateDraft.candidate && privateDraft.candidate.base_stamp !== baseStamp)
 
@@ -543,14 +545,23 @@ export function CompanionWorkspace<C, O extends CompanionOutput, W extends Compa
     ]} value={activePanel} onChange={(value) => changeTab(value as SolutionTab)} />
 
     <WorkspacePanel id={config.mode} value='editor' active={activePanel}>
+    {showConflictCompare && conflict?.revision?.content && content ? <Card className='border-amber-300'><CardHeader className='flex flex-wrap items-start justify-between gap-3'><div><CardTitle className='text-base'>本页输入与服务器最新版本</CardTitle><CardDescription>先检查差异，再决定是否将本页输入另存为下一版本；历史内容不会被覆盖。</CardDescription></div><Button type='button' size='sm' variant='outline' onClick={() => setShowConflictCompare(false)}>关闭比较</Button></CardHeader><CardContent><ContentCompare leftTitle='服务器版本' left={conflict.revision.content} rightTitle='本页输入' right={content} workspace={compareWorkspace} /></CardContent></Card> : null}
+
+    <section aria-labelledby={`${config.mode}-edit-heading`} className='space-y-3'><div><h2 id={`${config.mode}-edit-heading`} className='text-xl font-semibold'>一、整理讲解</h2><p className='mt-1 text-sm text-muted-foreground'>{config.generationHint}</p></div>
+      <Editor focusItem={focusItem || undefined} content={content} workspace={data} materialId={materialId} csrfToken={csrfToken} writable={writable && action === null} onChange={changeContent} onBusyChange={setEditorBusy} onAssetsChanged={(assets) => mountedRef.current && setRemote((current) => current.status === 'loaded' ? { status: 'loaded', data: { ...current.data, assets: mergeAssets(current.data.assets, assets) } } : current)} onUnauthorized={onUnauthorized} />
+    </section>
+    {data.revision?.gaps?.length ? <section className='space-y-2 rounded-md border border-amber-300 p-3' aria-label='保存版本的内容检查'>
+      <h3 className='font-semibold'>上次保存版本的待补项</h3><p className='text-xs text-muted-foreground'>当前输入有变化时，先保存新版本刷新检查；生成时服务端还会再次核对。</p>
+      <ul className='space-y-2'>{data.revision.gaps.map((gap, index) => <li key={index} className='flex flex-wrap items-center justify-between gap-3 text-sm'><span>{gap.message}</span><Button type='button' size='sm' variant='outline' disabled={editorBusy || action !== null} onClick={() => { const id=gap.question_id || gap.knowledge_id || ''; setFocusItem({id}); if (!id) { const summary=[...document.querySelectorAll('summary')].find((item) => item.textContent?.includes('文档设置')); summary?.closest('details')?.setAttribute('open','') }; document.getElementById(`${config.mode}-edit-heading`)?.scrollIntoView({block:'start'}) }}>定位条目或文档设置</Button></li>)}</ul>
+    </section> : null}
     {writable ? <Card>
       <CardHeader className='border-b pb-4'><CardTitle className='text-base'>检查并保存</CardTitle><CardDescription>编辑时只自动保存私人草稿。选择“保存为新版本”才写入正式历史；确认或生成会先保存当前内容，再继续操作。</CardDescription></CardHeader>
       <CardContent className='flex flex-wrap items-end gap-3 p-4'>
         <label className='min-w-56 flex-1 text-sm font-medium'>本次保存依据<input className='mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm' maxLength={1000} value={reason} onChange={(event) => setReason(event.target.value)} /></label>
         <Button type='button' variant='outline' disabled={editorBusy || action !== null || saveState === 'saving' || !reason.trim() || hasPrivateResolution || Boolean(privateDraft.loadError)} onClick={() => void saveOfficialVersion(reason, undefined, true)}>{saveState === 'saving' ? '正在保存正式版本…' : '保存为新版本'}</Button>
         <Button type='button' variant='outline' disabled={editorBusy || action !== null || saveState === 'saving' || !config.hasItems(content) || !reason.trim() || hasPrivateResolution || Boolean(privateDraft.loadError)} onClick={() => void runSolutionAction('confirm')}>{action === 'confirm' ? '正在保存并确认…' : config.mode === 'knowledge' ? '明确确认讲解' : '明确确认解析'}</Button>
-        <Button type='button' disabled={editorBusy || action !== null || saveState === 'saving' || !canGenerate || !reason.trim() || hasPrivateResolution || Boolean(privateDraft.loadError)} onClick={() => void runSolutionAction('generate')}>{action === 'generate' ? '正在保存并创建文档…' : '生成 PDF / Word'}</Button>
-        <p className='w-full text-xs text-muted-foreground'>{config.generationHint}</p>
+        <Button type='button' disabled={editorBusy || action !== null || saveState === 'saving' || !canGenerate || !reason.trim() || hasPrivateResolution || Boolean(privateDraft.loadError)} onClick={() => void runSolutionAction('generate')}>{action === 'generate' ? '正在保存并创建文档…' : outputSummary.label}</Button>
+        <p className='w-full text-sm'>本次输出：{outputSummary.detail}</p><p className='w-full text-xs text-muted-foreground'>{config.mode === 'solution' ? '家长解析含答案与方法，不能作为无提示独立练习。' : '知识讲解用于回看结论、条件与依据。'}生成后分别审校内容、来源和文件版式；Word 实开单独记录。</p>
         {saveState === 'saving' ? <p role='status' className='w-full text-sm'>{config.mode === 'knowledge' ? '正在保存正式知识讲解版本…' : '正在保存正式解析版本…'}</p> : null}
         {saveState === 'saved' ? <p role='status' className='w-full text-sm text-emerald-800'>已保存为版本 {data.revision?.version || 0}。{dirty ? '保存后有新的输入，仍在作为私人草稿保存。' : ''}</p> : null}
         {saveState === 'failed' ? <p role='alert' className='w-full text-sm text-amber-900'>{saveError} 本地输入仍保留；可修改后重试或再次保存。</p> : null}
@@ -563,11 +574,6 @@ export function CompanionWorkspace<C, O extends CompanionOutput, W extends Compa
       </CardContent>
     </Card> : null}
 
-    {showConflictCompare && conflict?.revision?.content && content ? <Card className='border-amber-300'><CardHeader className='flex flex-wrap items-start justify-between gap-3'><div><CardTitle className='text-base'>本页输入与服务器最新版本</CardTitle><CardDescription>先检查差异，再决定是否将本页输入另存为下一版本；历史内容不会被覆盖。</CardDescription></div><Button type='button' size='sm' variant='outline' onClick={() => setShowConflictCompare(false)}>关闭比较</Button></CardHeader><CardContent><ContentCompare leftTitle='服务器版本' left={conflict.revision.content} rightTitle='本页输入' right={content} workspace={compareWorkspace} /></CardContent></Card> : null}
-
-    <section aria-labelledby={`${config.mode}-edit-heading`} className='space-y-3'><div><h2 id={`${config.mode}-edit-heading`} className='text-xl font-semibold'>一、整理讲解</h2><p className='mt-1 text-sm text-muted-foreground'>{config.generationHint}</p></div>
-      <Editor content={content} workspace={data} materialId={materialId} csrfToken={csrfToken} writable={writable && action === null} onChange={changeContent} onBusyChange={setEditorBusy} onAssetsChanged={(assets) => mountedRef.current && setRemote((current) => current.status === 'loaded' ? { status: 'loaded', data: { ...current.data, assets: mergeAssets(current.data.assets, assets) } } : current)} onUnauthorized={onUnauthorized} />
-    </section>
     </WorkspacePanel>
 
     <WorkspacePanel id={config.mode} value='history' active={activePanel}>
@@ -593,7 +599,7 @@ export function CompanionWorkspace<C, O extends CompanionOutput, W extends Compa
       <CardContent className='space-y-4 pt-4'>
         {outputActionError ? <p role='alert' className='rounded-md bg-amber-50 p-3 text-sm text-amber-950'>{outputActionError}</p> : null}
         {pollError ? <div role='alert' className='flex flex-wrap items-center gap-3 rounded-md bg-amber-50 p-3 text-sm text-amber-950'><p className='min-w-0 flex-1'>读取输出任务状态失败：{pollError}。自动轮询已暂停。</p><Button type='button' size='sm' variant='outline' onClick={() => { setPollError(''); setPollRetry((value) => value + 1) }}>重试读取状态</Button></div> : null}
-        {outputs.length === 0 ? <EmptyState title='还没有生成文档' detail={`先在“编辑讲解”中保存${config.title}草稿并生成文档。`} /> : outputs.map((output) => <OutputCard checkNames={config.checkNames} key={output.id} output={output} expanded={expandedOutputId === output.id} onToggleExpanded={() => setExpandedOutputId((current) => current === output.id ? null : output.id)} checks={checksDraft[output.id] || output.checks} writable={writable} onCheckChange={(name, patch) => updateOutputCheck(output, name, patch)} onAction={(nextAction, checks) => void outputAction(output, nextAction, checks)} />)}
+        {outputs.length === 0 ? <div className='space-y-3'><EmptyState title='还没有生成文档' detail={`先在“编辑讲解”中保存${config.title}草稿并生成文档。`} /><Button type='button' variant='outline' onClick={() => changeTab('editor')}>前往编辑讲解</Button></div> : outputs.map((output) => <OutputCard checkNames={config.checkNames} key={output.id} output={output} expanded={expandedOutputId === output.id} onToggleExpanded={() => setExpandedOutputId((current) => current === output.id ? null : output.id)} checks={checksDraft[output.id] || output.checks} writable={writable} onCheckChange={(name, patch) => updateOutputCheck(output, name, patch)} onAction={(nextAction, checks) => void outputAction(output, nextAction, checks)} />)}
         {outputPageError ? <div className='flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950' role='alert'><p className='min-w-0 flex-1'>读取更早文档失败：{outputPageError}</p><Button type='button' size='sm' variant='outline' disabled={outputPageLoading} onClick={() => void loadEarlierOutputs()}>重试读取更早文档</Button></div> : null}
         {outputBefore !== null ? <Button type='button' size='sm' variant='outline' disabled={outputPageLoading} onClick={() => void loadEarlierOutputs()}>{outputPageLoading ? '正在读取更早文档…' : '读取更早文档'}</Button> : null}
       </CardContent>

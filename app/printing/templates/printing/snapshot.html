@@ -2,7 +2,7 @@
 {% block content %}
 <h1>{{ snapshot.title }}</h1><p>{{ snapshot.purpose|ui_label }} · {{ snapshot.created_at }}</p>
 {% if availability.status == 'retired' %}<p class="notice">此文档已移出本机，保留归档和历史记录。</p>
-{% else %}<p><a href="{% url 'printing:download' snapshot.pk 'document.pdf' %}">预览 PDF</a> · <a href="{% url 'printing:download' snapshot.pk 'document.docx' %}">下载 Word</a></p>
+{% else %}<p><a href="{% url 'printing:download' snapshot.pk 'document.pdf' %}" data-preview-title="{{ snapshot.title }}">预览 PDF</a> · <a href="{% url 'printing:download' snapshot.pk 'document.docx' %}">下载 Word</a></p>
 {% if availability.status == 'archived' %}<p>正在使用已核对完整性的归档副本。</p>{% endif %}{% endif %}
 <section class="panel"><h2>本次使用的题目</h2><ol>{% for q in questions %}<li><a href="{% url 'knowledge:question_detail' q.entity.pk %}">{{ q.label|truncatechars:120 }}</a> · 第 {{ q.number }} 版</li>{% empty %}<li>此文档内容保留在生成时的快照中。</li>{% endfor %}</ol></section>
 <p>本次文档保留生成时的内容；后续编辑会生成新文档，历史版本仍可回看。</p>

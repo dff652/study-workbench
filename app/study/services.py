@@ -18,7 +18,7 @@ from app.web import learning_services as learning
 from app.web.learning_labels import (
     ATTEMPT_KIND_LABELS, ATTEMPT_STATE_LABELS, BASIS_LABELS, DIMENSION_LABELS, INDEPENDENCE_LABELS,
     JUDGMENT_LABELS, LEGIBILITY_LABELS, PROMPT_STATUS_LABELS, REVIEW_STATE_LABELS,
-    SOURCE_KIND_LABELS, label as learning_label,
+    SOURCE_KIND_LABELS, attempt_choice_label, label as learning_label,
 )
 from app.web import records
 from .models import ScheduleRevision, StudySchedule, VariantProvenance
@@ -433,7 +433,7 @@ def schedule_attempt_choices(actor, schedule_pk):
         if revision.state.value != "active" or entity is None or entity.head_revision_id != revision.header.revision_id:
             continue
         actual_date = revision.actual_date if revision.actual_date_state.value == "known" else None
-        label = f"{revision.actual_date or '实际日期未知'} · {revision.source_kind.value} · {attempt.attempt_id}"
+        label = attempt_choice_label(attempt.attempt_id, revision)
         choices.append({"attempt": attempt, "revision": revision, "label": label,
                         "actual_date": actual_date, "recorded_at": revision.header.recorded_at})
     return {"schedule": schedule, "choices": choices}

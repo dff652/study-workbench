@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { WorkspacePanel, WorkspaceTabs } from '../../components/workspace-tabs'
 import { BookOpenCheck, FileCheck2 } from 'lucide-react'
 import { api } from '../../api'
 import { ApiLink, EmptyState, errorText, isUnauthorized, LoadingState, RetryState, type Remote } from '../../components/shared'
@@ -37,6 +38,7 @@ export function ContentWorkspace({
   const [editorEpoch, setEditorEpoch] = useState(0)
   const [refresh, setRefresh] = useState(0)
   const [notice, setNotice] = useState('')
+  const [editingTab, setEditingTab] = useState('question')
   const [writing, setWriting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [unsaved, setUnsaved] = useState({ question: false, erratum: false, reading: false })
@@ -165,7 +167,7 @@ export function ContentWorkspace({
         {content.status === 'loaded' ? (
           <>
             <section className='space-y-3'>
-              <div className='grid gap-3 sm:grid-cols-[minmax(15rem,1fr)_minmax(13rem,0.7fr)]'>
+              <div className='sticky top-16 z-20 grid gap-3 rounded-md border bg-background p-3 sm:grid-cols-[minmax(15rem,1fr)_minmax(13rem,0.7fr)]'>
                 <label className='text-sm font-medium'>正在核对的题目
                   <select className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={selectedQuestionId} onChange={(event) => selectQuestion(event.target.value)} disabled={writing || refreshing}>
                     <option value=''>新建题目草稿</option>
@@ -191,6 +193,8 @@ export function ContentWorkspace({
               <EmptyState title='资料还没有原图页' detail='上传原图后，可以在这里按原图像素选择题面来源。' icon={FileCheck2} />
             ) : (
               <div className='space-y-5'>
+                <WorkspaceTabs id='content-editing' label='内容整理方式' tabs={[{ value: 'question', label: '逐题核对' }, { value: 'reading', label: '整页阅读' }]} value={editingTab} onChange={setEditingTab} />
+                <WorkspacePanel id='content-editing' value='question' active={editingTab}>
                 <QuestionEditor
                   key={`${selectedQuestionId || 'new'}:${current?.revision_id || 'draft'}:${content.data.context.source_stamp}:${editorEpoch}`}
                   materialId={materialId}
@@ -213,6 +217,8 @@ export function ContentWorkspace({
                     setRefresh((value) => value + 1)
                   }}
                 />
+                </WorkspacePanel>
+                <WorkspacePanel id='content-editing' value='reading' active={editingTab}>
                 <PageReading
                   key={selectedPage.id}
                   page={selectedPage}
@@ -223,6 +229,7 @@ export function ContentWorkspace({
                   onBusyChange={handleBusyChange}
                   onUnsavedChange={(dirty) => updateUnsaved('reading', dirty)}
                 />
+                </WorkspacePanel>
               </div>
             )}
           </>

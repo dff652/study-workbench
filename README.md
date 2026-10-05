@@ -36,6 +36,8 @@
 
 [本轮整合验收](docs/reviews/pc-integration-20261005.md) · [整合前 PC 基线](docs/pc-acceptance-20261005.md)。不同轮次和专项结果分别记录，不相加为一次全套测试。
 
+36 已备份、恢复演练并升级到整合源码 `66e7fb2`，32 项运维及 18 组实际 HTTPS 浏览器检查通过，原记录、文件和恢复点保持；详见 [运行验收](docs/reviews/web-deployment-20261005.md)。[真实家庭 Web 小批次](docs/web-family-trial-20261005.md)仍待实际操作反馈。
+
 ## 能做什么
 
 - **资料与知识：** 原图选区、旋转和派生处理、整页分区、拆题／合题，知识、方法、题型与题目双向关联。
@@ -87,7 +89,7 @@ cd ..
 
 ## 当前边界
 
-- 新整合通过 `codex/pc-integration` 分支和 PR 交付；提交／合并身份以 Git 和 [交付记录](docs/repository-handoff.md)为准，运行服务状态见 [DEV_STATE](DEV_STATE.md)。本次源码交付不升级既有 36 服务。
+- 新整合已通过 PR 合并，36 随后经用户同意完成配套备份、恢复演练及升级；源码、运行镜像与后续文档回执分别记录，见 [DEV_STATE](DEV_STATE.md) 和 [交付记录](docs/repository-handoff.md)。
 - AI 默认关闭。真实调用、识别质量、费用和照片外发需按 [模型配置](docs/model-configuration.md)另行核定。
 - DOCX 结构和 LibreOffice 排版已经检查；PC／macOS Microsoft Word 实开及真实 Web 家庭批次仍待验证。Android 真机、手机专项与 PWA 体验归第二期。
 - 原照片、个人学习记录、凭据、导出和备份不进入源码仓库。关系图是自编 SVG 文档源码，不含业务图片或运行截图。

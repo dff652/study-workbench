@@ -4,7 +4,7 @@
 
 面向家庭自用的学习工作台：对照原图整理题目与知识，记录作答、评价和复测，再生成练习与 PDF／Word 文档。关闭 AI 也能完成整个人工流程。
 
-**第一期交付完整可用的 Web 产品，手机端开发与真机验收放到第二期。** 已有窄屏能力保留，当前范围与完成条件见 [Web 第一期清单](docs/web-phase1-release-20261005.md)。
+**第一期目标是完整可用的 Web 产品，手机端开发与真机验收放到第二期。** 当前仍属开发中的半成品，工程验证不能替代真实家庭使用效果；范围与完成条件见 [Web 第一期清单](docs/web-phase1-release-20261005.md)。
 
 [开始使用](#开始使用) · [能做什么](#能做什么) · [验收证据](#验收证据) · [全部文档](docs/README.md)
 
@@ -25,7 +25,11 @@
 
 ## 验收证据
 
-知识点讲解和学科分类已接入，文档中心区分知识点讲解、逐题讲解、五册与练习。学校学科与证明／观察／语言／人文依据分别填写。[PR #3](https://github.com/dff652/study-workbench/pull/3) 已合并，36 运行 `86d25ef`，37 项运维、28 组实际 HTTPS 浏览器、两份新迁移演练和前后空恢复通过；独立复核 PASS（另验 30 组 HTTPS 与两次空恢复），旧记录／文件保留，见 [知识运行验收](docs/reviews/knowledge-deployment-20261006.md)。契约和匿名实际小批次结果见 [知识集成验收](docs/reviews/knowledge-integration-20261005.md)，真实家庭／Word 实机仍待验证。
+2026-10-06，正式运行源码已核对为 `86d25ef`，包含知识讲解与学科分类。本轮按 [整改主基线](docs/reviews/learning-system-ux-remediation-baseline-20261006.md)实施七域的 42 项主任务：来源选区、真实作答与复测、学习／管理边界、资料处理入口、文档预览和家庭维护。最新验证状态见 [实施记录](docs/reviews/ux-remediation-implementation-20261006.md)；本轮源码已本地提交，配套文档及交付 review 状态见 [本地交付记录](docs/reviews/ux-remediation-handoff-20261006.md)；后续由用户统一手动 push，正式服务保持核对前的版本。真实家庭反馈及 Microsoft Word 实开另验。
+
+以下保留前轮交付历史。知识点讲解和学科分类的源码／测试曾本地提交为 `1f35fa4`，GitHub 交付见 [知识源码交付](docs/reviews/knowledge-handoff-20261005.md)；学校学科与证明／观察／语言／人文依据分别填写。此前候选阶段尚未部署，之后运行状态以本节最新说明及 [DEV_STATE](DEV_STATE.md)为准。契约和小批次结果见 [知识集成验收](docs/reviews/knowledge-integration-20261005.md)。
+
+2026-10-06知识与学科部署历史：知识点讲解和学科分类已接入，文档中心区分知识点讲解、逐题讲解、五册与练习。学校学科与证明／观察／语言／人文依据分别填写。[PR #3](https://github.com/dff652/study-workbench/pull/3) 已合并，36 运行 `86d25ef`，37 项运维、28 组实际 HTTPS 浏览器、两份新迁移演练和前后空恢复通过；独立复核 PASS（另验 30 组 HTTPS 与两次空恢复），旧记录／文件保留，见 [知识运行验收](docs/reviews/knowledge-deployment-20261006.md)。契约和匿名实际小批次结果见 [知识集成验收](docs/reviews/knowledge-integration-20261005.md)，真实家庭／Word 实机仍待验证。
 
 2026-10-05，新的 Web 体验候选已实现常显导航、紧凑上下文、宽屏工作区、Tab 和列表／详情。主代理本机测试与浏览器验收通过，首轮表单竞态修复后的独立第二轮 PASS，见 [体验验收](docs/reviews/web-ux-20261005.md)。源码已本地提交为 `2a605c3`，配套文档 `77eea51` 与本地交付独立 review 已 PASS，见 [交付记录](docs/reviews/web-ux-handoff-20261005.md)。36 已配套备份、前后空实例恢复并升级到 `bed16d3`，主代理 32 项运维及加载完成后的 23 组实际 HTTPS 浏览器检查通过，独立运行复核 PASS（另验 24 组 HTTPS 与两份实际空恢复），见 [UX 运行验收](docs/reviews/web-ux-deployment-20261005.md)。真实家庭任务反馈仍待取得。
 

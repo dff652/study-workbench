@@ -83,7 +83,7 @@ cd ..
 
 ## 当前边界
 
-- PC 实现已验收并本地提交；本轮未 push 或升级 36。Git 与运行状态见 [DEV_STATE](DEV_STATE.md)和 [交付记录](docs/repository-handoff.md)。
+- PC 实现已验收并推送至 GitHub main；36 的本轮 PC 升级待执行。Git 与运行状态见 [DEV_STATE](DEV_STATE.md)和 [交付记录](docs/repository-handoff.md)。
 - AI 默认关闭。真实调用、识别质量、费用和照片外发需按 [模型配置](docs/model-configuration.md)另行核定。
 - DOCX 结构和 LibreOffice 排版已经检查；PC／macOS Microsoft Word 实开、Android 真机及完整家庭批次效果仍待实际验收。
 - 原照片、个人学习记录、凭据、导出和备份不进入源码仓库。关系图是自编 SVG 文档源码，不含业务图片或运行截图。

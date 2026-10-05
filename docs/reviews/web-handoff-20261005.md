@@ -22,4 +22,4 @@
 
 review 通过后 push 分支并通过 PR 合并 main，回读远端内容一致。部署另行记录，本次不升级 36。第一期还需目标 Web 服务和真实家庭小批次流程的实际验收；Word 实开和真实模型未验状态保留，手机端及 Android／PWA 真机归第二期。
 
-本次独立提交 review 已通过；PR 身份在创建后补入，合并结果以 GitHub 和远端 Git 为准，不预先写为已合并。
+本次独立提交 review 已通过，源码、范围文档和 review 回执已 push 到 `codex/pc-integration`，创建 [PR #1](https://github.com/dff652/study-workbench/pull/1) 向 main 交付。准确合并状态、时间与提交身份以该 PR 和远端 Git 为准；本节 PR 身份回执也只修改文档并纳入同一 PR，主代理检查完整实际差异、最终提交范围及冻结一致性。

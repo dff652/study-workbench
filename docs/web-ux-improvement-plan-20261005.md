@@ -1,6 +1,6 @@
 # Web 产品体验改进方案与任务清单（2026-10-05）
 
-状态：**UX-00～04 本机实现、主验与独立第二轮 PASS，UX-05 待真实反馈**。完整验证、提交、推送和运行更新分别按实际结果登记。起点为 main `4b70f03`，独立工作树为 `codex/web-ux-improvement`；目标应用仍运行整合源码 `66e7fb2`。第一期交付完整 Web 产品，手机专项仍在第二期。共享接口与文件归属见 [实施契约](web-ux-implementation-contract-20261005.md)，当前证据见 [体验验收](reviews/web-ux-20261005.md)。
+状态：**UX-00～04 本机实现、主验与独立第二轮 PASS，UX-05 待真实反馈**。源码／测试 `2a605c3` 与文档 `77eea51` 已本地提交，独立交付及容量 review PASS，见 [交付记录](reviews/web-ux-handoff-20261005.md)。尚未 push／合并，运行更新另行登记。起点为 main `4b70f03`，独立工作树为 `codex/web-ux-improvement`；目标应用仍运行整合源码 `66e7fb2`。第一期交付完整 Web 产品，手机专项仍在第二期。共享接口与文件归属见 [实施契约](web-ux-implementation-contract-20261005.md)，当前证据见 [体验验收](reviews/web-ux-20261005.md)。
 
 ## 问题与改进目标
 

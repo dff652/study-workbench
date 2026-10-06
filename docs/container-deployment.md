@@ -1,6 +1,10 @@
 # Single-host container service
 
-## 当前 UI UX 整改部署（2026-10-06）
+## 当前双入口（2026-10-06）
+
+新增内网 HTTP `http://192.168.2.36:18080/app/`，原 HTTPS `https://192.168.2.36:18443/app/` 保持。HTTP 源码 `02ce455`／`test-20261006-http-02ce455`，原 HTTPS Web／worker 仍 `4ab5a22`；共享原数据库／资料卷，各自会话名字。当前使用 `compose.yaml`＋`compose.mobile.yaml`＋`compose.http.yaml` 三文件，启动／回退和验收状态见 [HTTP 支持](reviews/http-support-deployment-20261006.md)。下方两个配置文件的叙述为相应历史阶段或未启用 HTTP 伴随服务的配置，不能作为本次整项目操作文件列表。
+
+## 前轮 UI UX 整改部署（2026-10-06）
 
 36 当前运行 `4ab5a22`／`test-20261006-ux-4ab5a22`，仍为 `0.2.0-dev`。主代理 38 项运维及 15 组实际 HTTPS 检查通过；52 张表旧业务记录与 24 文件保持，没有新增迁移。PRE／POST 配套备份分别实际空恢复，并在 PRE 恢复实例启动新镜像验证兼容；原数据库／卷、代理及 CA 保持，旧镜像与恢复点保留。独立运行 review、文档交付与人工未验范围见 [本轮部署验收](reviews/ux-remediation-deployment-20261006.md)。后续仍使用两个 Compose 文件，不能把文档提交当作新镜像。
 
@@ -25,9 +29,9 @@
 根地址登录后进入 `/app/`，旧资料库保留在 `/materials/`；原业务入口继续可访问。运行身份固定为源码提交，之后文档提交不等于重建镜像。精确门槛及人工未验项见 [本轮 review](reviews/skill-delivery-20261004.md)和 [DEV_STATE](../DEV_STATE.md)。
 
 
-This document covers the local Docker Compose service and its private backup and restore workflow. The Compose file binds the Web service to `127.0.0.1:8000` by default; PostgreSQL has no published host port. It is not a public deployment recipe. Put a separately managed TLS reverse proxy in front of the loopback listener before exposing access beyond the machine.
+This document covers the local Docker Compose service and its private backup and restore workflow. The Compose file binds the Web service to `127.0.0.1:8000` by default; PostgreSQL has no published host port. It is not a public deployment recipe. For the current authorized LAN HTTP listener, use the dedicated companion configuration above; HTTPS/PWA keeps its managed TLS proxy.
 
-The optional [MOB-01 HTTPS/PWA overlay](mobile-deployment.md) adds an owned non-root Caddy proxy, removes the direct Web host port, and uses a private CA. Its isolated acceptance and authorized host-36 upgrade/recovery are recorded in DEV_STATE; Android physical-device acceptance is still pending. Keep both Compose files in subsequent operations and handle the private CA state separately from the database/file backup.
+The optional [MOB-01 HTTPS/PWA overlay](mobile-deployment.md) adds an owned non-root Caddy proxy, removes the direct Web host port, and uses a private CA. Its isolated acceptance and authorized host-36 upgrade/recovery are recorded in DEV_STATE; Android physical-device acceptance is still pending. Keep the HTTPS overlay and handle private CA state separately from database/file backup. With the current HTTP companion enabled, retain all three Compose files as documented above.
 
 ## Pinned runtime
 

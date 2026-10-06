@@ -1,6 +1,10 @@
 # PC 使用说明
 
-更新日期：2026-10-06。下文按已部署的 UI UX 改版描述，正式源码为 `4ab5a22`；配套恢复和运行验收见 [本轮部署记录](reviews/ux-remediation-deployment-20261006.md)。源码与实际验证见 [实施记录](reviews/ux-remediation-implementation-20261006.md)和 [DEV_STATE](../DEV_STATE.md)。首次启动、账号与家庭初始化见 [容器说明](container-deployment.md#first-local-start)。
+更新日期：2026-10-06。下文按已部署的 UI UX 改版描述，HTTPS 源码为 `4ab5a22`，HTTP 源码为 `02ce455`；配套恢复和运行验收见 [本轮部署记录](reviews/ux-remediation-deployment-20261006.md)。源码与实际验证见 [实施记录](reviews/ux-remediation-implementation-20261006.md)和 [DEV_STATE](../DEV_STATE.md)。首次启动、账号与家庭初始化见 [容器说明](container-deployment.md#first-local-start)。
+
+## 内网访问
+
+浏览器直接打开 `http://192.168.2.36:18080/app/`，使用已有账号登录；无需为此入口配置证书。原 `https://192.168.2.36:18443/app/` 继续可用。两入口共用资料和账号，但分别登录／注销；HTTP 注销不会同时注销 HTTPS。HTTP 常规工作台支持保存与下载；PWA 仍使用 HTTPS。当前 HTTP 源码 `02ce455`，HTTPS 源码 `4ab5a22`，部署及实际验收见 [HTTP 记录](reviews/http-support-deployment-20261006.md)。
 
 ## 学生自己使用与家长协助
 

@@ -2,6 +2,14 @@
 
 更新日期：2026-10-06（Asia/Shanghai）。
 
+## 本轮内网 HTTP 支持（2026-10-06）
+
+- 用户授权补齐内网 IP＋端口 HTTP；新增 `http://192.168.2.36:18080/app/`，原 HTTPS 四服务不升级／重启。HTTP 源码本地提交 `02ce45536c98534a9c01a2b75640bb25b1eb8a3d`，独立镜像 `test-20261006-http-02ce455`；HTTPS 仍为 `4ab5a22`。运行与最终 review 状态见 [本轮 HTTP 验收](docs/reviews/http-support-deployment-20261006.md)。
+- 已实际通过完整前端 194 项、设置／CSRF 7 项、类型／构建及 284 镜像文件精确 SHA；新增非安全上下文 CSPRNG UUID 请求键兼容、独立 HTTP 设置／cookie 和不迁移的启动流程。合成 HTTP 写入 6 组及主代理正式双入口 17 组检查 PASS，包含 6 历史下载及实际 PDF 正文。原 15 容器、50 非认证业务表、24 文件及迁移保持；HTTP 登录／注销不改 HTTPS 会话，根 CA 不变，模型启用／调用均为 0。独立切换前预审 PASS，最终运行／文档 review 正在进行；未 push。
+- 同一业务数据库／资料卷，HTTP／HTTPS 各自登录／注销；后续 Compose 操作使用三个文件。原主基线、用户 DOCX 和 Word 阅读副本保持；真实家庭、Word、实体 Android／PWA 与模型仍未验。
+
+以下 UI UX 部署条目的“本次源码未改／189 项”等仅描述前轮；本轮 HTTP 修改了前端与设置，验证以上节及新 HTTP 记录为准。
+
 ## 本轮 UI UX 36 部署（2026-10-06）
 
 - 用户同意升级与配套恢复；正式源码已由 `86d25ef` 切换至 `4ab5a227ceef49f18a99a3d9ed5c41eb964e44fb`，Web／worker 镜像 `test-20261006-ux-4ab5a22`，版本仍为 `0.2.0-dev`。数据库／卷、代理及 CA 保持，无新增迁移，旧镜像和恢复点保留。

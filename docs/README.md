@@ -4,6 +4,8 @@
 
 ## 使用与当前交付
 
+- [36 内网 HTTP 支持与部署验收](reviews/http-support-deployment-20261006.md)：双协议入口、非安全上下文兼容、独立 cookie、实际验证和仅新增服务的回退。
+
 - [三种资料模式与学科契约](knowledge-subject-contract-20261005.md)：知识点讲解、逐题讲解、五册与练习，学校学科和讲解依据分别保存。
 - [知识集成与匿名小批次验收](reviews/knowledge-integration-20261005.md)：本机候选、实际验证和空实例恢复，区分源码、正式运行与 Word 实机状态。
 - [知识源码交付与 review](reviews/knowledge-handoff-20261005.md)：本地源码／文档提交、完整交付范围、GitHub PR 与独立交付结果。

@@ -25,6 +25,8 @@
 
 ## 验收证据
 
+2026-10-06，新增内网 HTTP 入口 `http://192.168.2.36:18080/app/`，沿用已有账号及业务数据；原 HTTPS `https://192.168.2.36:18443/app/` 保持。HTTP 使用独立 cookie，两个入口分别登录／注销；常规工作台走 HTTP，PWA 使用 HTTPS。HTTP 源码为 `02ce455`，部署与验收状态见 [HTTP 支持记录](docs/reviews/http-support-deployment-20261006.md)，后续运行使用三个 Compose 文件。文档和代码只本地提交，后续手动 push。
+
 2026-10-06，36 已从 `86d25ef` 升级至已审源码 `4ab5a22`。本轮按 [整改主基线](docs/reviews/learning-system-ux-remediation-baseline-20261006.md)实施七域 42 项主任务；前后配套空恢复、旧业务记录与私有文件保留、实际 HTTPS 检查通过，运行 review 状态见 [本轮部署验收](docs/reviews/ux-remediation-deployment-20261006.md)。本机工程结果见 [实施记录](docs/reviews/ux-remediation-implementation-20261006.md)，源码本地交付见 [交付记录](docs/reviews/ux-remediation-handoff-20261006.md)。后续由用户统一手动 push；真实家庭反馈与 Microsoft Word 实开另验。
 
 以下保留前轮交付历史。知识点讲解和学科分类的源码／测试曾本地提交为 `1f35fa4`，GitHub 交付见 [知识源码交付](docs/reviews/knowledge-handoff-20261005.md)；学校学科与证明／观察／语言／人文依据分别填写。此前候选阶段尚未部署，之后运行状态以本节最新说明及 [DEV_STATE](DEV_STATE.md)为准。契约和小批次结果见 [知识集成验收](docs/reviews/knowledge-integration-20261005.md)。
@@ -70,7 +72,7 @@ python3 -m unittest discover \
 
 想使用网页，按 [首次本机启动](docs/container-deployment.md#first-local-start)准备 Docker Engine／Compose v2、生成私有配置，启动 Web／worker／PostgreSQL，并交互创建账号及家庭。登录后进入 `http://127.0.0.1:8000/app/`；数据库默认不发布端口，照片、记录、输出和备份保存在私有目录。
 
-Django／PostgreSQL 保存正式数据，React 提供统一 PC 工作台。局域网访问使用 [私有 HTTPS 与 PWA](docs/mobile-deployment.md)，运行配置及账号只在本机设置。
+Django／PostgreSQL 保存正式数据，React 提供统一 PC 工作台。局域网访问支持 [HTTP 工作台](docs/reviews/http-support-deployment-20261006.md)及 [私有 HTTPS 与 PWA](docs/mobile-deployment.md)，运行配置及账号只在本机设置。
 
 <details>
 <summary>开发与离线复验</summary>

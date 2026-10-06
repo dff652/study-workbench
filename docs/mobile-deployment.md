@@ -1,5 +1,7 @@
 # MOB-01：HTTPS 与最小 PWA
 
+当前 HTTP 补充（2026-10-06）：独立入口 `http://192.168.2.36:18080/app/` 提供普通浏览器工作台，原 HTTPS／CA 保持；PWA 继续用 HTTPS。本项目后续操作带三个 Compose 文件，HTTP 的设置／cookie 只作用于新增服务，详见 [HTTP 运行与验收](reviews/http-support-deployment-20261006.md)。下方仅 HTTPS、两个配置文件及原 Web 不发布端口的说明描述 MOB-01 历史配置；新增 HTTP 的具体暴露范围以上述记录为准。
+
 当前运行更新（2026-10-06）：36 已升级至整改源码 `4ab5a22`，代理／CA 保持；本次 390 浏览器宽度七入口检查通过，详见 [部署验收](reviews/ux-remediation-deployment-20261006.md)。本次没有重跑 PWA 安装专项，不能沿用此前结果声称 Android 真机通过。第一期聚焦 Web；下方 MOB-01 及 PC 记录按历史保留，手机专项与 Android／PWA 真机归第二期。
 
 更新日期：2026-10-04（Asia/Shanghai）。用户同意 MOB-01 的首轮为源码和合成隔离验收，当时不升级 36、不提交／推送。同日另获同意后，源码已交付、36 已备份升级并通过运行与恢复验收。Android 手机证书／主屏幕安装仍待实际操作；不开发原生 API／Flutter，不调用模型或外发照片。

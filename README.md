@@ -25,6 +25,10 @@
 
 ## 验收证据
 
+最新后续整改、验证结果和真实客户端／用户门槛见[实施回执](docs/reviews/learning-system-follow-up-implementation-20261007.md)。已实现、合成验证、正式部署和产品体验验收分别记录。
+
+2026-10-06，用户提供新的回归验收 PDF，产品体验结论为暂不通过。既有工程和部署记录保留；当前后续工作见 [回归评估与29项任务](docs/reviews/learning-system-acceptance-follow-up-20261006.md)，包括行动区重复、成果查找、同日排序、任务路径及补验。评估阶段先形成清单，用户随后授权实施；当前结果以本轮实施回执为准，不以旧工程通过关闭产品问题。
+
 2026-10-06，新增内网 HTTP 入口 `http://192.168.2.36:18080/app/`，沿用已有账号及业务数据；原 HTTPS `https://192.168.2.36:18443/app/` 保持。HTTP 使用独立 cookie，两个入口分别登录／注销；常规工作台走 HTTP，PWA 使用 HTTPS。HTTP 源码为 `02ce455`，部署与验收状态见 [HTTP 支持记录](docs/reviews/http-support-deployment-20261006.md)，后续运行使用三个 Compose 文件。文档和代码只本地提交，后续手动 push。
 
 2026-10-06，36 已从 `86d25ef` 升级至已审源码 `4ab5a22`。本轮按 [整改主基线](docs/reviews/learning-system-ux-remediation-baseline-20261006.md)实施七域 42 项主任务；前后配套空恢复、旧业务记录与私有文件保留、实际 HTTPS 检查通过，运行 review 状态见 [本轮部署验收](docs/reviews/ux-remediation-deployment-20261006.md)。本机工程结果见 [实施记录](docs/reviews/ux-remediation-implementation-20261006.md)，源码本地交付见 [交付记录](docs/reviews/ux-remediation-handoff-20261006.md)。后续由用户统一手动 push；真实家庭反馈与 Microsoft Word 实开另验。

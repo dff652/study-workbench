@@ -4,6 +4,11 @@
 
 ## 使用与当前交付
 
+- [后续整改实施与验收回执（2026-10-07）](reviews/learning-system-follow-up-implementation-20261007.md)：源码、合成验证、提交、部署与产品待验门槛。
+- [目标用户与客户端验收记录](reviews/learning-system-target-user-acceptance-20261007.md)：真实学生／家长任务和Word／内置客户端，未测结果保持未测试。
+
+- [最新回归验收评估与后续整改任务](reviews/learning-system-acceptance-follow-up-20261006.md)：用户23页PDF的产品验收暂不通过；1项准备、20项整改、8项补验，区分现场缺陷、结构建议和证据缺口；当前实施状态见实施回执。
+
 - [36 内网 HTTP 支持与部署验收](reviews/http-support-deployment-20261006.md)：双协议入口、非安全上下文兼容、独立 cookie、实际验证和仅新增服务的回退。
 
 - [三种资料模式与学科契约](knowledge-subject-contract-20261005.md)：知识点讲解、逐题讲解、五册与练习，学校学科和讲解依据分别保存。

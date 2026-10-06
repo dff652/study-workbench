@@ -26,7 +26,7 @@
 
 ## 部署方式与后续操作
 
-[HTTP 覆盖配置](../../compose.http.yaml)默认绑定 `127.0.0.1`，本次保护环境文件显式选择家庭接口 `192.168.2.36`／`18080`。要求支持 `!override` 的 Docker Compose 2.24 以上；本机实际版本为 5.1.3。
+[HTTP 覆盖配置](../../compose.http.yaml)默认绑定 `127.0.0.1`，本次保护环境文件显式选择家庭接口 `192.168.2.36`／`18080`。要求支持 `!override` 的 [Docker Compose 2.24.4 以上](https://docs.docker.com/reference/compose-file/merge/#replace-value)；本机实际版本为 5.1.3。
 
 在既有 `data/runtime-36/compose.env` 中补充 `SWB_HTTP_IMAGE_TAG`、`SWB_HTTP_SOURCE_REVISION`、`SWB_HTTP_BUILD_DATE`、`SWB_HTTP_HOST`、`SWB_HTTP_BIND_ADDRESS` 和 `SWB_HTTP_HOST_PORT`。上述实际运行身份固定为表中版本；秘密字段保留原值，不在文档或 shell 参数中显示。保持保护权限，并使用三个配置文件：
 
@@ -44,13 +44,15 @@ HTTP 启动只执行 `check`、`migrate --check`、静态文件收集和 Gunicor
 
 ## 验收结果
 
-当前状态：主代理合成与正式运行验收 **PASS**，切换前独立预审 **PASS**；最终独立运行／文档交付 review 正在进行。源码本地提交 `02ce455`，配套文档另行本地提交，不 push。
+当前状态：主代理合成与正式运行验收、独立切换前预审及最终独立运行／文档交付 review 均 **PASS**。源码本地提交 `02ce455`，配套七文档提交 `227d27bff616803cf50ede79bcd98972fd9c5a47`；本最终回执仅更新两文档，另行本地提交，不 push。
 
 源码阶段本轮实际运行完整前端 **194 项**、生产设置／CSRF **7 项**，类型检查和生产构建通过。镜像 **284 个**应用、入口、依赖说明及前端文件 SHA 与已提交源码／已验构建完全相符。旧应用完整后端测试没有在本次重新运行；前轮结果见 [UI UX 部署](ux-remediation-deployment-20261006.md)。
 
 合成完整验收 **6 组 PASS**，使用实际 LAN HTTP origin，验证不属于安全上下文、没有 `randomUUID` 但有 `getRandomValues`，在浏览器保存分类、幂等重放、创建资料及注销；错误 Origin 和缺少 CSRF 实际返回 403。合成 PostgreSQL 与资料目录均为独立 tmpfs，验后仅清理匹配自有项目／所有者的资源。
 
 主代理正式浏览器 **17 组检查 PASS**，验证七入口加载、四种宽度、原图、作答／评价历史、历史 PDF／Word 下载及退役状态、实际 native PDF viewer 正文，实际 Chromium native viewer 为 success、1 页／第 1 页，主代理目视题目正文及缩略图；并在同一浏览器先后登录两个入口，验证 HTTP 登录／注销不改写 HTTPS cookie 或登录状态。正式启动前后全部 52 张表／24 文件／迁移严格一致；浏览器登录／注销后单列账号登录时间和会话表，其他 50 张业务表、24 文件及迁移保持精确一致。原四服务及 11 个无关容器的 ID／镜像／启动时间／挂载完整字段集合保持，Docker 挂载返回顺序先归一化。原根 CA 指纹保持，HTTPS 通过严格 CA／IP 验证，无证书豁免；HTTP 登录／注销期间，原 HTTPS cookie 值与权限属性不变，CSRF 正常刷新到期时间单独区分。正式浏览器无 JavaScript 错误、无业务写入或第三方请求；启用模型及调用数均为 0。
+
+最终独立代理另实际完成 **17 组双协议检查／6 历史下载**，目视 PDF 题目正文、缩略图和页码；原 Web／worker 各 283 文件及 HTTP 284 文件、原 15 容器、业务／文件／迁移、CA／模型边界均通过。完整交付 14 路径、七文档实际 diff／blob／冻结输入及隐私通过，相关 12 文档 246 本地链接／17 锚点、57 问题／42 主任务依赖无环。独立未重跑主代理完整 194 前端、旧 401 后端、Word 转换、合成写入或第三次恢复；主代理已全文审阅最终报告并独立复验，未发现未解决问题。完整报告为上述私有证据目录的 `independent/final-review.md`；运行源码与此文档回执分开记录。
 
 两轮合成失败来自注销探针误读不存在字段及把公开帮助页当私有页，最终依据实际私有 API 未登录应 401 的契约通过；两轮正式浏览器初始探针把 HTTPS 正常刷新 CSRF 到期时间误判为 cookie 改写，诊断确认只有 expires 变化后归一化并完整重验。失败证据保持，不将失败轮次登记为 PASS。
 

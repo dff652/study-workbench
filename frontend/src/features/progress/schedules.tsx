@@ -446,7 +446,7 @@ function ScheduleRow({
         <p className='mt-1 text-xs text-muted-foreground'>
           {item.attempt_count === undefined ? '作答次数未提供' : `此题历版本共 ${formatCount(item.attempt_count)} 次有效作答`}
         </p>
-        {item.latest_attempt ? <p className='mt-1 text-xs leading-5 text-muted-foreground'>最近记录：{latestAttemptSummary(item.latest_attempt)}</p> : null}
+        {item.latest_attempt ? <p className='mt-1 text-xs leading-5 text-muted-foreground'>最近记录：{latestAttemptSummary(item.latest_attempt)}{item.latest_attempt.ordering_basis_label ? ` · ${item.latest_attempt.ordering_basis_label}` : ''}</p> : null}
       </td>
       <td className='max-w-sm px-2 py-2 align-top'>
         <p className='font-medium tabular-nums'>{item.due_date || '计划日期未记录'}</p>

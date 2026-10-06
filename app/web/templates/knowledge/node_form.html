@@ -1,5 +1,5 @@
 {% extends "web/base.html" %}
-{% load static %}
+{% load static product %}
 {% block title %}{% if is_edit %}修订{% else %}新建{% endif %}{{ kind_label }} · 知识库{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
@@ -12,7 +12,8 @@
     <section class="panel"><h2>条目内容</h2>
       {% if kind == "knowledge" %}
         <div class="field"><label for="id_definition">定义、公式与例题</label>{{ form.definition }}<span class="help-text">{{ form.definition.help_text }}</span>{{ form.definition.errors }}</div>
-        <div class="field"><label for="id_display_markup">公式与重点排版</label>{{ form.display_markup }}<span class="help-text">{{ form.display_markup.help_text }}</span>{{ form.display_markup.errors }}</div>
+        <div id="standalone-formula-tools"></div>
+        <details {% if form.display_markup.errors %}open{% endif %}><summary>高级排版标记</summary><div class="field"><label for="id_display_markup">公式与重点排版</label>{{ form.display_markup }}<span class="help-text">{{ form.display_markup.help_text }}</span>{{ form.display_markup.errors }}</div></details>
         <div class="field"><label for="id_conditions">适用条件</label>{{ form.conditions }}<span class="help-text">{{ form.conditions.help_text }}</span>{{ form.conditions.errors }}</div>
         <div class="field"><label for="id_common_errors">易错点</label>{{ form.common_errors }}<span class="help-text">{{ form.common_errors.help_text }}</span>{{ form.common_errors.errors }}</div>
       {% elif kind == "method" %}
@@ -48,4 +49,4 @@
     <div class="form-actions"><button type="submit" class="primary-button">{% if is_edit %}保存新修订{% else %}保存为待审核草稿{% endif %}</button>{% if cancel_url %}<a class="secondary-button link-button" href="{{ cancel_url }}">取消</a>{% else %}<a class="secondary-button link-button" href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">取消</a>{% endif %}</div>
   </form>
 {% endblock %}
-{% block scripts %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}
+{% block scripts %}{% if kind == "knowledge" %}{% frontend_formula_assets %}{% endif %}<script src="{% static 'web/regions.js' %}" defer></script>{% endblock %}

@@ -29,7 +29,7 @@ describe('SolutionsLauncher', () => {
     expect(screen.queryByRole('combobox', { name: '选择资料' })).toBeNull()
     await user.click(within(row).getByRole('button', { name: '整理家长解析' }))
     await user.click(within(row).getByRole('button', { name: '制作整套五册' }))
-    expect(onOpen).toHaveBeenCalledWith('material-2')
+    expect(onOpen).toHaveBeenCalledWith('material-2', false)
     expect(onPrepareDocuments).toHaveBeenCalledWith('material-2')
 
     await user.type(screen.getByPlaceholderText('输入资料或文档名称'), '几何')

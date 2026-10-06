@@ -12,6 +12,7 @@
   <script src="{% static 'web/pwa/client.js' %}" defer></script>
 </head>
 <body>
+  {% firstof household.pk household_id as nav_household_id %}
   <header class="site-header">
     <a class="brand" href="{% url 'web:index' %}">学习资料工作台</a>
     {% if request.user.is_authenticated %}
@@ -22,7 +23,7 @@
   </header>
   <p id="pwa-network-status" class="page-shell notice" role="status" hidden>网络连接已断开，未确认保存的操作请联网后先核对历史记录。</p>
   {% if request.user.is_authenticated %}<nav class="page-shell" aria-label="工作台导航">
-    <a href="/app/">工作台</a> · <a href="/materials/">资料核对</a> · <a href="/knowledge/">知识与题库</a> · <a href="/learning/">学习档案</a> · <a href="/prints/">文档导出</a> · <a href="/study/">复习与报告</a>
+    <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=overview">学习总览</a> · <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=materials">资料整理</a> · <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=knowledge">知识与题库</a> · <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=learning">学习档案</a> · <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=progress">进度与复测</a> · <a href="/app/?household={{ nav_household_id|urlencode }}&amp;view=documents">文档中心</a>
     <details><summary>设置与更多工具</summary><a href="/members/">家庭成员</a> · <a href="/ai/">模型配置与任务</a> · <a href="/catalogue/">拆分与合题</a> · <a href="/operations/">保留规则与用时</a></details>
   </nav>{% endif %}
   <main class="page-shell">

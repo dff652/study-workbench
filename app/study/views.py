@@ -12,6 +12,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_http_methods
 
 from app.persistence import services as core
+from app.persistence.models import EntityRecord, HouseholdMember
 from app.web import records
 from . import services
 from .forms import ScheduleEventForm, ScheduleForm
@@ -104,9 +105,21 @@ def schedule_detail(request, schedule_pk):
         choices = services.schedule_attempt_choices(request.user, schedule_pk)["choices"]
     except core.PersistenceError as exc:
         return _failure(request, exc)
+    if request.method == 'POST':
+        # Closed plans have no new choices. Retain their exact existing binding
+        # for an identical lost-response replay; the command rejects new events.
+        known = {item['revision'].header.revision_id for item in choices}
+        choices = [*choices, *({'revision': item['revision'], 'label': '已保存的完成关联'}
+            for item in data['completion_history'] if item['revision'] and item['revision'].header.revision_id not in known)]
     token = records.sign_context(data["household_id"], "study_schedule", str(schedule_pk),
         "schedule-event", data["context"])
     initial = {"request_key": uuid4(), "context_token": token, "action": "rescheduled"}
+    selected_revision = request.GET.get('attempt_revision', '')
+    if selected_revision in {str(item['revision'].header.revision_id) for item in choices}:
+        initial.update(action='completed', attempt_revision_id=selected_revision)
+        data['saved_attempt_pending'] = True
+    elif selected_revision:
+        data['saved_attempt_unavailable'] = True
     if request.method == "GET":
         form = ScheduleEventForm(initial=initial, attempts=choices)
     else:
@@ -126,7 +139,9 @@ def schedule_detail(request, schedule_pk):
             return redirect("study:schedule_detail", schedule_pk=result["schedule_pk"])
     data["form"] = form
     data["attempt_choices"] = choices
-    data["index_url"] = reverse("study:index")
+    data['can_write'] = HouseholdMember.objects.filter(household_id=data['household_id'], user=request.user, user__is_active=True, role__in=('owner', 'reviewer')).exists()
+    data['record_attempt_url'] = reverse('learning:attempt_new', args=[data['schedule'].learner.stable_id]) + '?' + urlencode({'question': data['schedule'].target_question_revision.entity.stable_id, 'kind': 'retest', 'plan': schedule_pk})
+    data["index_url"] = '/app/?' + urlencode({'view': 'progress', 'household': data['household_id'], 'learner': data['schedule'].learner.stable_id})
     return render(request, "study/schedule_detail.html", data,
         status=400 if request.method == "POST" and not form.is_valid() else 200)
 
@@ -140,7 +155,11 @@ def report(request, learner_entity_pk):
         data = services.evidence_report(request.user, learner_entity_pk, material_id=request.GET.get("material") or None)
     except core.PersistenceError as exc:
         return _failure(request, exc)
-    data["index_url"] = reverse("study:index")
+    from app.api import progress
+    data['household_id'] = str(EntityRecord.objects.get(pk=learner_entity_pk, kind='learner').household_id)
+    selected_questions = set(data['scope_question_ids']) if data.get('material_id') else None
+    data['association_groups'] = progress.learner(request.user, data['household_id'], data['learner']['learner_id'], question_ids=selected_questions)['groups']
+    data["index_url"] = '/app/?' + urlencode({'view': 'progress', 'household': data['household_id'], 'learner': data['learner']['learner_id'], 'tab': 'evidence'})
     data["json_url"] = reverse("study:report_json", kwargs={"learner_entity_pk": learner_entity_pk})
     data["print_report_url"] = reverse("printing:evidence_report", kwargs={"pk": learner_entity_pk})
     if data.get("material_id"):

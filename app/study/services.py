@@ -2,6 +2,7 @@
 from dataclasses import replace
 from datetime import date
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
@@ -600,6 +601,9 @@ def evidence_report(actor, learner_entity_pk, *, material_id=None):
             "actual_date_state": revision.actual_date_state.value,
             "actual_date": revision.actual_date if revision.actual_date_state.value == "known" else None,
             "recorded_at": revision.header.recorded_at,
+            "created_at": info["created_at"],
+            "learner_id": profile.learner_id,
+            "ordering_basis_label": info["ordering_basis_label"],
             "source_kind": revision.source_kind.value,
             "source_kind_label": learning_label(SOURCE_KIND_LABELS, revision.source_kind),
             "independence": revision.independence.value,
@@ -628,6 +632,7 @@ def evidence_report(actor, learner_entity_pk, *, material_id=None):
         if revision.state.value != "active":
             actionable = []
         attempt_row["assessments"] = assessment_rows
+        attempt_row['has_current_accepted_assessment'] = bool(actionable)
         output_attempts.append(attempt_row)
         if revision.state.value == "active" and revision.actual_date_state.value == "known" and revision.actual_date:
             dated_by_question.setdefault(attempt.question_id, []).append(
@@ -717,11 +722,31 @@ def evidence_report(actor, learner_entity_pk, *, material_id=None):
                 "from_attempt_id": first[2], "to_attempt_id": second[2],
                 "from_actual_date": first[0], "to_actual_date": second[0],
                 "days": (date.fromisoformat(second[0]) - date.fromisoformat(first[0])).days})
+    active_rows = [row for row in output_attempts if row['state'] == 'active']
+    conditions_confirmed = sum(row['source_kind'] == 'independent_answer'
+        and row['independence'] == 'confirmed_independent' and row['prompt_status'] == 'none_confirmed'
+        and not row['prompts'] and row['actual_date_state'] == 'known' and row['legibility'] == 'readable'
+        for row in active_rows)
+    plans = StudySchedule.objects.filter(household_id=learner_entity.household_id, learner=learner_entity).prefetch_related('revisions')
+    if selected_questions is not None:
+        plans = plans.filter(target_question_revision__entity__stable_id__in=selected_questions)
+    pending_plans = []
+    for plan in plans:
+        latest = max(plan.revisions.all(), key=lambda item: item.revision_no, default=None)
+        if latest and latest.action in ('planned', 'rescheduled'):
+            pending_plans.append(latest)
+    today = timezone.localdate(timezone=ZoneInfo('Asia/Shanghai'))
+    summary = {'active_attempt_count': len(active_rows), 'conditions_confirmed_count': conditions_confirmed,
+        'pending_assessment_count': sum(not row['has_current_accepted_assessment'] for row in active_rows),
+        'pending_retest_count': len(pending_plans), 'overdue_retest_count': sum(item.due_date < today for item in pending_plans),
+        'as_of': today.isoformat()}
     return {"learner": {"learner_id": profile.learner_id, "display_name": profile.display_name,
                         "grade": profile.grade},
         "generated_at": timezone.now().isoformat(), "attempts": output_attempts,
+        'summary': summary,
         "evidence_scope": "material_questions" if selected_material else "selected_learner_history",
         "material_id": str(selected_material.pk) if selected_material else None,
         "material_title": selected_material.title if selected_material else None,
+        "scope_question_ids": sorted(selected_questions) if selected_questions is not None else None,
         "observed_correct_methods": observed_methods, "insufficient_evidence": insufficient,
         "repeated_errors": error_groups, "known_actual_date_intervals": interval_days}

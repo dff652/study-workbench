@@ -1,9 +1,10 @@
 from django.urls import path
+from . import preview
 from . import views
 from . import packet_views
 from . import diagram_views
 app_name='printing'
-urlpatterns=[path('',views.index,name='index'),path('arithmetic/',views.arithmetic,name='arithmetic'),path('snapshots/<int:pk>/',views.snapshot,name='snapshot'),
+urlpatterns=[path('snapshots/<int:pk>/preview/',preview.metadata,name='snapshot_preview_metadata'),path('snapshots/<int:pk>/preview/<int:number>/',preview.page,name='snapshot_preview'),path('',views.index,name='index'),path('arithmetic/',views.arithmetic,name='arithmetic'),path('snapshots/<int:pk>/',views.snapshot,name='snapshot'),
     path('diagrams/<str:pk>/',diagram_views.diagrams,name='diagrams'),
     path('diagrams/files/<int:pk>/<str:name>/',diagram_views.diagram_file,name='diagram_file'),
     path('materials/<uuid:material_id>/five-books/',packet_views.prepare,name='packet_prepare'),

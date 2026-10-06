@@ -2,8 +2,8 @@ import { BookOpen, CalendarDays, PencilLine } from 'lucide-react'
 import { Button } from './ui/button'
 import { HelpTip } from './help-tip'
 
-export function LearningStart({ learnerName, canWrite, onPractice, onExplanation, onReview, onMaterials, onRecord, onHistory }: {
-  learnerName: string; canWrite: boolean
+export function LearningStart({ learnerName, canWrite, parentMode = false, onPractice, onExplanation, onReview, onMaterials, onRecord, onHistory }: {
+  learnerName: string; canWrite: boolean; parentMode?: boolean
   onPractice: () => void; onExplanation: () => void; onReview: () => void
   onMaterials: () => void; onRecord: () => void; onHistory: () => void
 }) {
@@ -17,10 +17,10 @@ export function LearningStart({ learnerName, canWrite, onPractice, onExplanation
       <Button type='button' variant='outline' onClick={onExplanation}><BookOpen className='size-4' aria-hidden='true' />查看讲解</Button>
       <Button type='button' variant='outline' onClick={onReview}><CalendarDays className='size-4' aria-hidden='true' />复习安排</Button>
     </div>
-    <div className='mt-2 flex flex-wrap gap-2' aria-label='资料与作答操作'>
+    <details open={parentMode} className='mt-3'><summary className='cursor-pointer text-sm font-medium'>家长整理与记录</summary><div className='mt-2 flex flex-wrap gap-2' aria-label='资料与作答操作'>
       {canWrite ? <Button type='button' variant='outline' onClick={onMaterials}>整理学习资料</Button> : null}
       {canWrite && learnerName ? <Button type='button' variant='outline' onClick={onRecord}>记录一次作答</Button> : null}
       <Button type='button' variant='ghost' onClick={onHistory}>查看学习记录</Button>
-    </div>
+    </div></details>
   </section>
 }

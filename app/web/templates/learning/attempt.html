@@ -8,6 +8,7 @@
     <div class="workspace-actions button-row"><a class="secondary-button" href="{{ edit_url }}">补充或更正本次作答</a><a class="secondary-button" href="{{ correction_url }}">更正作者／题目身份</a><a class="primary-button" href="{{ assessment_new_url }}">新增五维评价</a></div>
   </div>
 
+  <section class="panel" aria-label="作答保存与下一步">{% if saved_notice %}<p role="status">作答已保存。评价和复测计划仍需分别确认。</p>{% endif %}<a class="primary-button link-button" href="{{ practice_question_url }}">返回题目继续学习</a><a class="secondary-button link-button" href="{% url 'learning:profile_detail' learner.learner_id %}">查看这位学习者的记录</a></section>
   {% if independent_success %}<p class="notice success">这次作答有已审核、直接可见的独立成功证据，不代表长期掌握。</p>{% else %}<p class="notice">这次作答的证据不足以确认独立成功。课堂、提示、未知作者、未知日期、看不清或未接受评价不会计为独立成功。</p>{% endif %}
 
   <div class="workspace-columns">

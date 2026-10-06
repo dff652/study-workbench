@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import { CheckCheck, CircleAlert, X } from 'lucide-react'
 import { api } from '../../api'
 import { ApiLink, errorText, isUnauthorized } from '../../components/shared'
@@ -23,6 +23,7 @@ const NODE_FIELDS = {
 
 type NodeKind = keyof typeof NODE_FIELDS
 type NodeDrafts = Record<NodeKind, Record<string, string>>
+export type QuestionFocusTarget = 'printed-text' | 'source-region' | 'confirmation'
 
 function emptyNodeDrafts(): NodeDrafts {
   return { knowledge: {}, method: {}, question_type: {} }
@@ -34,6 +35,7 @@ export function QuestionEditor({
   pages,
   selectedPage,
   question,
+  focusRequest,
   canWrite,
   workspaceBusy,
   csrfToken,
@@ -48,6 +50,7 @@ export function QuestionEditor({
   pages: MaterialPage[]
   selectedPage: MaterialPage
   question?: MaterialContentQuestion
+  focusRequest?: { target: QuestionFocusTarget; sequence: number } | null
   canWrite: boolean
   workspaceBusy: boolean
   csrfToken: string
@@ -70,6 +73,8 @@ export function QuestionEditor({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [questionDirty, setQuestionDirty] = useState(false)
+  const printedTextInput = useRef<HTMLTextAreaElement>(null)
+  const confirmationInput = useRef<HTMLInputElement>(null)
   const discardQuestionForErratum = useRef(false)
   const requestKey = useRef<RequestKeyState>(null)
   const answerHasRequiredText = !answerEnabled || (answerBody.trim().length > 0 && answerBasis.trim().length > 0)
@@ -79,6 +84,16 @@ export function QuestionEditor({
     setQuestionDirty(true)
     onUnsavedChange?.(true)
   }
+
+  useLayoutEffect(() => {
+    if (!focusRequest || focusRequest.target === 'source-region') return
+    const target = focusRequest.target === 'confirmation'
+      ? confirmationInput.current
+      : printedTextInput.current
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    target.focus({ preventScroll: true })
+  }, [focusRequest])
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -191,6 +206,8 @@ export function QuestionEditor({
                 onSelectionChange={(hasSelection) => { if (hasSelection) markQuestionDirty() }}
                 onAdd={(bbox) => { setSources((current) => [...current, { page_id: selectedPage.id, bbox }]); setError(''); markQuestionDirty() }}
                 addLabel='确认添加这个题目来源'
+                canvasId='content-question-source-canvas'
+                focusRequest={focusRequest?.target === 'source-region' ? focusRequest.sequence : undefined}
               />
               <div>
                 <h4 className='mb-2 text-sm font-medium'>已选来源 · {sources.length} 个</h4>
@@ -216,7 +233,7 @@ export function QuestionEditor({
                 <p className='mt-1 text-xs text-muted-foreground'>核对图中题面、题号与来源。看不清或缺失处可以保留为空并说明。</p>
               </div>
               <Field label='题号（可留空）' value={number} onChange={(value) => { setNumber(value); markQuestionDirty() }} disabled={formDisabled} />
-              <TextField label='图中印刷题面转写' value={printedText} onChange={(value) => { setPrintedText(value); markQuestionDirty() }} disabled={formDisabled} required />
+              <TextField id='content-question-printed-text' inputRef={printedTextInput} label='图中印刷题面转写' value={printedText} onChange={(value) => { setPrintedText(value); markQuestionDirty() }} disabled={formDisabled} required />
 
               <div className='rounded-lg border p-4'>
                 <label className='flex items-start gap-2 text-sm font-medium'>
@@ -240,7 +257,7 @@ export function QuestionEditor({
               {canWrite ? (
                 <div className='space-y-3 rounded-lg border bg-muted/20 p-4'>
                   <label className='flex items-start gap-2 text-sm'>
-                    <input type='checkbox' className='mt-1' checked={checked} onChange={(event) => { setChecked(event.target.checked); markQuestionDirty() }} disabled={formDisabled} />
+                    <input ref={confirmationInput} id='content-question-confirmation' type='checkbox' className='mt-1' checked={checked} onChange={(event) => { setChecked(event.target.checked); markQuestionDirty() }} disabled={formDisabled} />
                     我已对照原图核对题面、题号、来源及已填写内容，并确认保存本次修订。
                   </label>
                   <Field label='本次核对原因' value={reason} onChange={(value) => { setReason(value); markQuestionDirty() }} disabled={formDisabled} required />
@@ -421,8 +438,8 @@ function Field({ label, value, onChange, required = false, disabled = false }: {
   return <label className='block text-sm font-medium'>{label}{required ? '（必填）' : ''}<input className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={value} onChange={(event) => onChange(event.target.value)} required={required} disabled={disabled} /></label>
 }
 
-function TextField({ label, value, onChange, required = false, disabled = false }: { label: string; value: string; onChange: (value: string) => void; required?: boolean; disabled?: boolean }) {
-  return <label className='block text-sm font-medium'>{label}{required ? '（必填）' : ''}<textarea className='mt-1 min-h-24 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={value} onChange={(event) => onChange(event.target.value)} required={required} disabled={disabled} /></label>
+function TextField({ id, label, value, onChange, required = false, disabled = false, inputRef }: { id?: string; label: string; value: string; onChange: (value: string) => void; required?: boolean; disabled?: boolean; inputRef?: Ref<HTMLTextAreaElement> }) {
+  return <label className='block text-sm font-medium'>{label}{required ? '（必填）' : ''}<textarea id={id} ref={inputRef} className='mt-1 min-h-24 w-full rounded-md border bg-background px-3 py-2 font-normal leading-6' value={value} onChange={(event) => onChange(event.target.value)} required={required} disabled={disabled} /></label>
 }
 
 function kindLabel(kind: NodeKind) {

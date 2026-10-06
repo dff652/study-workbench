@@ -31,7 +31,7 @@ export function Overview({
   const noHistory = remote.data.history_attempt_count !== undefined
     ? remote.data.history_attempt_count === 0
     : metrics.attempt_count === 0 && !hasFilters
-  const recentAttempts = (remote.data.recent_attempts || []).slice(0, 6)
+  const recentAttempts = (remote.data.recent_attempts || []).slice(0, 5)
   const attemptsById = new Map([...(remote.data.finding_attempts || []), ...recentAttempts]
     .map((attempt) => [attempt.attempt_id, attempt]))
   const recordAttemptUrl = links.record_attempt_url || appendAttemptNewPath(links.profile_url)
@@ -51,12 +51,12 @@ export function Overview({
           <SummaryCount label='已核对独立成功' value={metrics.independent_success_count} unit='次' />
           <SummaryCount label='实际日期未知（来源范围）' value={metrics.unknown_date_count} unit='次' />
         </dl>
-        <p className='max-w-4xl text-xs leading-5 text-muted-foreground'>
+        <details><summary className='cursor-pointer text-sm text-muted-foreground'>计数范围与证据规则</summary><p className='max-w-4xl text-xs leading-5 text-muted-foreground'>
           日期筛选只匹配已知的实际作答日期；未知日期计数只应用来源筛选、不应用日期上下限，且不会用录入时间代替。独立成功仅计入有效作答中经核对的独立来源、无提示、日期和字迹可核，并有已接受评价及来源证据支持答案与过程的记录；这不等于长期掌握。
-        </p>
+        </p></details>
       </section>
 
-      <section aria-labelledby='evidence-sources-heading' className='space-y-3'>
+      <details className='space-y-3'><summary className='cursor-pointer text-sm font-medium'>作答来源分布</summary><section aria-labelledby='evidence-sources-heading' className='space-y-3'>
         <div>
           <h3 id='evidence-sources-heading' className='font-semibold'>作答来源</h3>
           <p className='mt-1 text-sm text-muted-foreground'>以下均为当前学习者与筛选范围内的作答次数。</p>
@@ -71,7 +71,7 @@ export function Overview({
             </li>
           ))}
         </ul>
-      </section>
+      </section></details>
 
       <section aria-labelledby='evidence-links-heading' className='flex flex-wrap items-center gap-x-5 gap-y-2 border-y py-3 text-sm'>
         <h3 id='evidence-links-heading' className='font-semibold'>继续查看</h3>
@@ -112,6 +112,7 @@ export function Overview({
             </section>
           ) : null}
 
+          <details><summary className='cursor-pointer font-medium'>家长关注 · 过程观察与待核实证据</summary>
           <section aria-labelledby='evidence-correct-heading' className='space-y-3'>
             <div>
               <h3 id='evidence-correct-heading' className='font-semibold'>已观察到的正确方法与过程</h3>
@@ -144,7 +145,8 @@ export function Overview({
             )}
           </section>
 
-          <section aria-labelledby='evidence-repeated-heading' className='space-y-3'>
+          </details>
+          <details><summary className='cursor-pointer font-medium'>重复错误与日期间隔</summary><section aria-labelledby='evidence-repeated-heading' className='space-y-3'>
             <div>
               <h3 id='evidence-repeated-heading' className='font-semibold'>重复错误观察</h3>
               <p className='mt-1 text-sm text-muted-foreground'>仅列出有多次可追溯观察的错误组；没有足够观察不代表表现良好。</p>
@@ -180,7 +182,7 @@ export function Overview({
                 ))}
               </ul>
             )}
-          </section>
+          </section></details>
         </div>
       )}
     </div>
@@ -206,7 +208,7 @@ function RecentAttempt({ attempt }: { attempt: Attempt }) {
     <li className='flex flex-col gap-1 py-3 first:pt-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4'>
       <div className='min-w-0'>
         <p className='text-sm font-medium'>{attempt.question_text || '题干未记录'}</p>
-        <p className='mt-1 text-xs text-muted-foreground'>{kind} · {source} · {date}</p>
+        <p className='mt-1 text-xs text-muted-foreground'>{kind} · {source} · {date}{attempt.ordering_basis_label ? ` · ${attempt.ordering_basis_label}` : ''}</p>
       </div>
       <ApiLink href={attempt.attempt_url}>查看本次作答</ApiLink>
     </li>

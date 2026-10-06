@@ -8,7 +8,9 @@
     <div class="workspace-actions button-row"><a class="primary-button" href="{% url 'learning:attempt_new' profile.learner_id %}">新增作答</a><a class="secondary-button" href="{% url 'learning:observation_new' %}?household={{ household_id|urlencode }}">记录来源观察</a></div>
   </div>
 
-  <section class="panel" aria-labelledby="profile-filter-heading">
+  <section class="panel" aria-label="近期作答"><h2>近期作答</h2><p class="muted">按近期记录回看，撤回和替代仍保留为历史，不算当前有效表现。</p><ol class="history-list">{% for item in attempts|slice:":5" %}<li><a href="{{ item.detail_url }}">{{ item.question_label }}</a><p>{% if item.revision.actual_date_state.value == "known" %}{{ item.revision.actual_date }}{% else %}实际日期未知{% endif %} · {{ item.attempt_kind_label }} · 状态：{{ item.revision.state|ui_label }} · {{ item.independence_label }} · 提示：{{ item.prompt_status_label }}</p><p class="muted">答案：{{ item.revision.answer_text|default:"未记录" }} · {{ item.ordering_basis_label }}</p></li>{% empty %}<li>{% if has_filters and has_attempt_history %}当前筛选没有匹配记录；可清除筛选查看历史。{% else %}还没有真实作答；记录后即可回看。{% endif %}</li>{% endfor %}</ol></section>
+  <details class="panel"><summary>按题目回看学习过程</summary><p class="muted">按真实题目分组；前次链接仅在记录中确有绑定时显示，不把独立事件拼成因果链。</p>{% for process in question_processes %}<details><summary>{{ process.label }} · {{ process.items|length }} 次记录</summary><ol>{% for item in process.items %}<li><a href="{{ item.detail_url }}">{{ item.attempt_kind_label }} · {% if item.revision.actual_date_state.value == "known" %}{{ item.revision.actual_date }}{% else %}实际日期未知{% endif %}</a> · 状态：{{ item.revision.state|ui_label }} · {{ item.independence_label }} · {{ item.prompt_status_label }}<p>答案：{{ item.revision.answer_text|default:"未记录" }}{% if item.attempt.previous_attempt_id %} · <a href="{% url 'learning:attempt_detail' item.attempt.previous_attempt_id %}">查看精确前次作答</a>{% endif %}</p></li>{% endfor %}</ol></details>{% empty %}<p>当前没有可以分组的真实作答。</p>{% endfor %}</details>
+  <details class="panel" {% if has_filters %}open{% endif %}><summary>筛选作答记录</summary><div class="disclosure-content">
     <div class="section-heading"><h2 id="profile-filter-heading">筛选作答记录</h2><p class="muted">按日期、题目和评价状态查找。</p></div>
     <form method="get" class="learning-filter">
       <div class="field"><label for="filter-from">实际日期从</label><input id="filter-from" type="date" name="from" value="{{ filters.from }}"></div>
@@ -22,9 +24,9 @@
       </div></details>
       <div class="workspace-actions"><button class="secondary-button" type="submit">应用筛选</button><a class="quiet-button" href="{% url 'learning:profile_detail' profile.learner_id %}">清除</a></div>
     </form>
-  </section>
+  </div></details>
 
-  <section class="panel" aria-labelledby="profile-attempts-heading">
+  <details class="panel" {% if has_filters %}open{% endif %}><summary>全部作答、条件与评价</summary><section aria-labelledby="profile-attempts-heading">
     <div class="workspace-toolbar"><div><h2 id="profile-attempts-heading">历次作答</h2><p class="muted">每次作答单独保留；选择记录后可查看来源照片与对应评价。</p></div></div>
     {% if attempts %}
       <div class="workspace-table-wrap">
@@ -33,7 +35,7 @@
           <tbody>
             {% for item in attempts %}
               <tr>
-                <td><a href="{{ item.detail_url }}">{{ item.question_label }}</a><p class="muted small-text">{% if item.revision.actual_date_state.value == "known" and item.revision.actual_date %}{{ item.revision.actual_date }}{% else %}实际日期未知{% endif %}</p>{% if item.knowledge_labels %}<p class="muted small-text">知识：{{ item.knowledge_labels|join:"、" }}</p>{% endif %}{% if item.type_labels %}<p class="muted small-text">题型：{{ item.type_labels|join:"、" }}</p>{% endif %}</td>
+                <td><a href="{{ item.detail_url }}">{{ item.question_label }}</a><p class="muted small-text">{% if item.revision.actual_date_state.value == "known" and item.revision.actual_date %}{{ item.revision.actual_date }}{% else %}实际日期未知{% endif %}</p><p class="muted small-text">{{ item.ordering_basis_label }}</p>{% if item.attempt.previous_attempt_id %}<a class="small-text" href="{% url 'learning:attempt_detail' item.attempt.previous_attempt_id %}">查看前次作答</a>{% endif %}{% if item.knowledge_labels %}<p class="muted small-text">知识：{{ item.knowledge_labels|join:"、" }}</p>{% endif %}{% if item.type_labels %}<p class="muted small-text">题型：{{ item.type_labels|join:"、" }}</p>{% endif %}</td>
                 <td>{{ item.attempt_kind_label }}<br><span class="muted small-text">{{ item.source_kind_label }}</span></td>
                 <td>{{ item.independence_label }}<br><span class="muted small-text">提示：{{ item.prompt_status_label }} · 笔迹：{{ item.legibility_label }}</span></td>
                 <td>{% if item.assessments %}{% for assessment in item.assessments %}<a class="small-text" href="{% url 'learning:assessment_detail' assessment.assessment.assessment_id %}">评价 {{ assessment.revision.header.revision_no }}</a> · {{ assessment.state_label }}{% if assessment.current and assessment.published %} · 当前已发布{% endif %}{% if assessment.dimension_labels %}<details><summary class="small-text">查看五维判断</summary><p class="small-text">{% for dimension in assessment.dimension_labels %}{{ dimension.dimension }}：{{ dimension.judgment }}／{{ dimension.basis }}{% if not forloop.last %}；{% endif %}{% endfor %}</p></details>{% endif %}{% if not forloop.last %}<br>{% endif %}{% endfor %}{% else %}<span class="muted small-text">尚无评价记录</span>{% endif %}</td>
@@ -46,7 +48,8 @@
     {% else %}<p class="muted">{% if has_attempt_history and has_filters %}当前筛选没有匹配的作答，历史记录仍保留。{% else %}还没有作答记录。选择题目后可记录一次实际作答。{% endif %}</p>{% if has_attempt_history and has_filters %}<a href="{% url 'learning:profile_detail' profile.learner_id %}">清除筛选查看历史</a>{% else %}<a href="{% url 'learning:attempt_new' profile.learner_id %}">记录一次作答</a>{% endif %}{% endif %}
   </section>
 
-  <section class="panel" aria-labelledby="profile-observations-heading">
+  </details>
+  <details class="panel"><summary>笔迹与来源观察</summary><section aria-labelledby="profile-observations-heading">
     <div class="workspace-toolbar"><div><h2 id="profile-observations-heading">笔迹与来源观察</h2><p class="muted">观察记录与实际作答分别保存；作者、日期和可读性未知时保留未知。</p></div></div>
     {% if observations %}
       <ol class="history-list">
@@ -60,6 +63,6 @@
         {% endfor %}
       </ol>
     {% else %}<p class="muted">暂无来源观察。</p>{% endif %}
-  </section>
+  </section></details>
 {% endblock %}
 {% block scripts %}<link rel="stylesheet" href="{% static 'learning/learning.css' %}">{% endblock %}

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import { sameOriginHref } from '../../components/shared'
 import type { MaterialPage } from '../../types'
 
@@ -27,6 +27,8 @@ export function ImageBoxPicker({
   onSelectionChange,
   disabled = false,
   addLabel = '将选区加入来源',
+  canvasId,
+  focusRequest,
 }: {
   page: MaterialPage
   boxes: ImageBox[]
@@ -34,8 +36,11 @@ export function ImageBoxPicker({
   onSelectionChange?: (hasSelection: boolean) => void
   disabled?: boolean
   addLabel?: string
+  canvasId?: string
+  focusRequest?: number
 }) {
   const imageRef = useRef<HTMLImageElement>(null)
+  const canvasRef = useRef<SVGSVGElement>(null)
   const previewUrl = sameOriginHref(page.preview_url)
   const imageKey = JSON.stringify([page.id, previewUrl, page.width, page.height])
   const startRef = useRef<{ imageKey: string; point: Point } | null>(null)
@@ -55,6 +60,14 @@ export function ImageBoxPicker({
     setSelection(null)
     setImageState({ imageKey, loaded: false, aspectMatches: false })
   }, [imageKey])
+
+  useEffect(() => {
+    if (!focusRequest || !canvasId) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    canvas.focus({ preventScroll: true })
+  }, [canvasId, focusRequest, imageKey])
 
   const pointFromEvent = (event: PointerEvent<SVGSVGElement>): Point => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -115,13 +128,17 @@ export function ImageBoxPicker({
         ) : (
           <div className='flex min-h-40 items-center justify-center px-4 text-sm text-muted-foreground'>原图预览链接暂不可用。</div>
         )}
-        {previewUrl && imageLoaded ? (
+        {previewUrl && (imageLoaded || canvasId) ? (
           <svg
+            ref={canvasRef}
+            id={canvasId}
             viewBox={`0 0 ${page.width} ${page.height}`}
             preserveAspectRatio='none'
             aria-label={`资料页 ${page.position} 区域选框`}
             role='img'
-            className={`absolute inset-0 h-full w-full touch-none ${ready ? 'cursor-crosshair' : 'pointer-events-none'}`}
+            aria-disabled={canvasId ? !ready : undefined}
+            tabIndex={canvasId ? 0 : undefined}
+            className={`absolute inset-0 h-full w-full touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${ready ? 'cursor-crosshair' : 'pointer-events-none'}`}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}

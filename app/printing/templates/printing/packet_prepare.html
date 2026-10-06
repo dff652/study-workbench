@@ -1,7 +1,7 @@
 {% extends 'web/base.html' %}{% block content %}
-<nav class="breadcrumbs"><a href="{% url 'web:material_detail' material.pk %}">{{ material.title }}</a><span>/</span><span>生成五册</span></nav>
-<h1>核对内容，生成五册</h1>
-<p>为当前资料的已核定题目生成五册 PDF 与 Word；生成后逐页检查并分别记录审校结果。知识或分类缺项会在对应册中注明。</p>
+<nav class="breadcrumbs"><a href="{% url 'web:material_detail' material.pk %}">{{ material.title }}</a><span>/</span><span>同时生成五册 PDF 与 Word</span></nav>
+<h1>核对内容，同时生成五册 PDF 与 Word</h1>
+<p>为当前资料的已核定题目同时生成五册 PDF 与 Word；生成后逐页检查并分别记录审校结果。知识或分类缺项会在对应册中注明。</p>
 <section class="panel"><h2>五册各自用途</h2><ul><li>知识整理：回看已核定知识与来源。</li><li>逐题分类索引：按已确认的知识、方法和题型找题。</li><li>学习证据与待测项目：真实作答及未核实项；没有学习者时列待测清单。</li><li>独立复测无提示：不给答案与方法提示，用于记录新的独立尝试。</li><li>家长答案与依据：供家长核对，勿作为无提示练习。</li></ul><p>格式：每册 PDF + Word。内容检查、历史版本和客户端版式审校分别记录；生成不会产生学习表现或掌握结论。</p></section>
 {% if gaps %}<section class="panel"><h2>需要补齐</h2><ul>{% for gap in gaps %}<li>{{ gap }}</li>{% endfor %}</ul></section>{% endif %}
 {% if content_gaps %}<section class="panel"><h2>知识整理待补</h2><p>可以先生成检查版，知识与分类册会保留以下缺口。</p><ul>{% for gap in content_gaps %}<li>{{ gap }}</li>{% endfor %}</ul><a href="/knowledge/?household_id={{ material.household_id|urlencode }}">完善知识和分类关联</a></section>{% endif %}
@@ -11,5 +11,5 @@
 <form method="post" class="panel">{% csrf_token %}
 <label for="packet-learner">学习证据</label><select id="packet-learner" name="learner_id"><option value="">暂不关联学习者，生成待测清单</option>{% for learner in learners %}<option value="{{ learner.pk }}">{{ learner.head_revision.payload.display_name }}</option>{% endfor %}</select>
 <label for="packet-evidence-scope">学习记录范围</label><select id="packet-evidence-scope" name="evidence_scope"><option value="material_questions">本资料题目的历次记录</option><option value="selected_learner_history">这位学习者的全部记录</option></select><p class="muted">第三册按所选范围汇总真实作答；其余四册使用本资料的题目。没有记录或无法判断时保留未知。</p>
-<button class="primary-button" {% if not ready %}disabled{% endif %}>生成五册 PDF 与 Word</button></form>
+<button class="primary-button" {% if not ready %}disabled{% endif %}>同时生成五册 PDF 与 Word</button></form>
 {% endblock %}

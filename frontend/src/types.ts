@@ -71,6 +71,8 @@ export type Assessment = {
 
 export type Attempt = {
   attempt_id: string
+  ordering_basis_label?: string
+  ordering_group?: string
   attempt_revision_id: string
   attempt_kind: string
   attempt_kind_label?: string
@@ -215,7 +217,7 @@ export type MaterialRow = {
   classification?: { subject: string; version: number }
   processing?: ProgressMaterial
   available_outputs?: Array<{ mode: 'solution' | 'knowledge'; created_at: string; revision_version: number; state: string;
-    documents: Array<{ id: string; title: string; page_count: number; pdf_url: string | null; docx_url: string | null }>;
+    documents: Array<{ id: string; title: string; page_count: number; pdf_url: string | null; docx_url: string | null; previews?: string[] }>;
     zip_url: string | null }>
 }
 
@@ -395,6 +397,8 @@ export type MaterialContentQuestion = {
   answer: ContentAnswer | null
   edit_context: unknown
   question_url: string | null
+  missing_fields?: string[]
+  sources_ready?: boolean
 }
 
 export type MaterialContentNode = {

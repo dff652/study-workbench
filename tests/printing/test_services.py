@@ -129,6 +129,36 @@ class PrintTests(TransactionTestCase):
         from app.exports.contracts import ExportError
         with self.assertRaises(ExportError):services.snapshot_file(self.owner,practice.pk,'document.pdf')
 
+    def test_pdf_image_fallback_is_authorized_paged_and_immutable(self):
+        from hashlib import sha256
+        from unittest.mock import patch
+        question = self.published()
+        snapshot = services.export_questions(self.owner, self.house.pk, [question.pk], title='合成逐页预览', purpose='independent_practice')
+        original = sha256(services.snapshot_file(self.owner, snapshot.pk, 'document.pdf').read_bytes()).hexdigest()
+        base = f'/prints/snapshots/{snapshot.pk}/preview/'
+        self.client.force_login(self.viewer)
+        metadata = self.client.get(base)
+        self.assertEqual(metadata.status_code, 200)
+        self.assertIn('no-store', metadata['Cache-Control'])
+        pages = metadata.json()['pages']
+        self.assertGreaterEqual(len(pages), 1)
+        image = self.client.get(pages[0])
+        self.assertEqual(image.status_code, 200)
+        self.assertEqual(image['Content-Type'], 'image/png')
+        self.assertIn('no-store', image['Cache-Control'])
+        self.assertTrue(b''.join(image.streaming_content).startswith(b'\x89PNG\r\n\x1a\n'))
+        image.close()
+        self.assertEqual(self.client.get(base + '0/').status_code, 404)
+        self.assertEqual(self.client.get(base + str(len(pages) + 1) + '/').status_code, 404)
+        with patch('app.printing.preview.shutil.which', return_value=None):
+            self.assertEqual(self.client.get(pages[0]).status_code, 503)
+        self.assertEqual(sha256(services.snapshot_file(self.owner, snapshot.pk, 'document.pdf').read_bytes()).hexdigest(), original)
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.get(base).status_code, 404)
+        self.assertEqual(self.client.get(pages[0]).status_code, 404)
+        self.client.logout()
+        self.assertEqual(self.client.get(base).status_code, 302)
+
     def test_snapshot_provenance_pins_link_and_node_review_decisions(self):
         q=self.published()
         node=knowledge_services.save_node(self.owner,self.house.pk,'knowledge',data={

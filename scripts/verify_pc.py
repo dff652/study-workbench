@@ -263,8 +263,14 @@ def main():
                         const blend = (top, bottom) => top.slice(0, 3).map((v, i) => v * top[3] + bottom[i] * (1 - top[3]));
                         const luminance = rgb => rgb.map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
                             .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
-                        return [...document.querySelectorAll('#content h1, #content h2, #content p, #content button, #content label, #content th, #content td, nav[aria-label="主导航"] button')]
-                            .filter(el => el.getClientRects().length && el.textContent.trim() && !el.disabled)
+                        return [...document.querySelectorAll('#content h1, #content h2, #content p, #content button, #content label, #content th, #content td, #content [role="status"] span, nav[aria-label="主导航"] button')]
+                            .filter(el => {
+                                if (!el.getClientRects().length || !el.textContent.trim() || el.disabled) return false;
+                                for (let parent = el.parentElement; parent; parent = parent.parentElement) {
+                                    if (parent.tagName === 'DETAILS' && !parent.open && !parent.querySelector(':scope > summary')?.contains(el)) return false;
+                                }
+                                return getComputedStyle(el).visibility !== 'hidden';
+                            })
                             .slice(0, 100).map(el => {
                                 const ancestors = []; for (let node = el; node; node = node.parentElement) ancestors.unshift(node);
                                 const background = ancestors.reduce((bg, node) => blend(color(getComputedStyle(node).backgroundColor), bg), [1, 1, 1]);
@@ -281,14 +287,24 @@ def main():
 
                 page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
                 expect(page.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
-                expect(page.get_by_role('button', name='记录一次作答', exact=True)).to_be_visible()
+                use_mode = page.get_by_role('group', name='使用方式', exact=True)
+                expect(use_mode.get_by_role('button', name='学生练习', exact=True)).to_have_attribute('aria-pressed', 'true')
+                expect(use_mode.get_by_role('button', name='家长跟进', exact=True)).to_have_attribute('aria-pressed', 'false')
+                parent_summary = page.locator('summary').filter(has_text=re.compile('^家长整理与记录$'))
+                expect(parent_summary).to_be_visible()
+                assert not parent_summary.evaluate('(element) => element.parentElement.open')
+                record_attempt = page.get_by_role('button', name='记录一次作答', exact=True)
+                expect(record_attempt).not_to_be_visible()
                 help_button = page.get_by_role('button', name='学习顺序帮助', exact=True)
                 help_button.focus()
                 expect(page.get_by_role('tooltip')).to_be_visible()
                 help_button.press('Escape')
                 expect(page.get_by_role('tooltip')).to_have_count(0)
-                page.get_by_role('button', name='记录一次作答', exact=True).click()
+                parent_summary.click()
+                expect(record_attempt).to_be_visible()
+                record_attempt.click()
                 expect(page.locator('.workspace-page h1')).to_contain_text('作答')
+                checks.append('overview-default-student-mode-parent-actions-collapsed-until-open')
                 for action_name, view in [('选题练习', 'knowledge'), ('查看讲解', 'documents'), ('复习安排', 'progress')]:
                     page.goto(origin + app_url(view='overview') + '&learner=' + f['learner'])
                     page.get_by_role('button', name=action_name, exact=True).click()
@@ -321,14 +337,22 @@ def main():
                     assert target_key(response.json()['page']['url']) == target_key(path), name
                     expect(page.locator('.workspace-page')).to_have_count(1)
                     if name == 'prints':
-                        expect(page.get_by_role('tab', name='家长解析', exact=True)).to_have_attribute('aria-selected', 'true')
+                        recent_tab = page.get_by_role('tab', name='最近成果', exact=True)
+                        expect(recent_tab).to_have_attribute('aria-selected', 'true')
+                        expect(page.get_by_role('region', name='最近成果', exact=True)).to_be_visible()
+                        expect(page.get_by_role('tabpanel', name='家长解析', exact=True)).not_to_be_visible()
                         expect(page.locator('.workspace-page')).not_to_be_visible()
                         page.screenshot(path=str(output / 'document-home-default.png'), full_page=True)
-                        page.get_by_role('tab', name='练习与整套五册', exact=True).click()
-                    expect(page.locator('.workspace-page')).to_be_visible()
+                        page.get_by_role('tab', name='家长解析', exact=True).click()
+                        expect(page.get_by_role('tab', name='家长解析', exact=True)).to_have_attribute('aria-selected', 'true')
+                        expect(page.get_by_role('tabpanel', name='家长解析', exact=True)).to_be_visible()
+                        checks.append('document-center-default-recent-explicit-parent-tab')
+                    else:
+                        expect(page.locator('.workspace-page')).to_be_visible()
                     expect(page.get_by_role('navigation', name='主导航')).to_be_visible()
-                    expect(page.locator('.workspace-page h1'), name).to_have_count(1)
-                    expect(page.locator('.workspace-page h1'), name).to_have_text(response.json()['page']['title'])
+                    if name != 'prints':
+                        expect(page.locator('.workspace-page h1'), name).to_have_count(1)
+                        expect(page.locator('.workspace-page h1'), name).to_have_text(response.json()['page']['title'])
                     actual_screen = dict(parse_qsl(urlsplit(page.url).query)).get('screen', '')
                     assert target_key(actual_screen) == target_key(path), (name, actual_screen)
                     assert urlsplit(page.url).path == '/app/'
@@ -583,6 +607,32 @@ def main():
                 page.get_by_role('tab', name=re.compile('^题面核对')).click()
                 printed_input = page.get_by_role('textbox', name='图中印刷题面转写（必填）', exact=True)
                 expect(printed_input).to_be_visible()
+                original_printed = printed_input.input_value()
+                assert original_printed, 'continue must open an existing unfinished question'
+                original_question = page.get_by_role('combobox', name='正在核对的题目', exact=True).input_value()
+                assert original_question
+                pending = page.locator('section[aria-labelledby="content-question-readiness-title"]')
+                confirmation_gap = pending.get_by_role('listitem').filter(has_text='待补：人工核对与确认')
+                confirmation_gap.get_by_role('button', name='去补充：人工核对与确认', exact=True).click()
+                expect(page.locator('#content-question-confirmation')).to_be_focused()
+                expect(page.locator('#content-question-confirmation')).not_to_be_checked()
+                page.wait_for_function('''() => {
+                    const rect = document.querySelector('#content-question-confirmation').getBoundingClientRect();
+                    return rect.top >= 80 && rect.bottom <= innerHeight;
+                }''')
+                page.locator('#content-question-confirmation').scroll_into_view_if_needed()
+                settle_visuals()
+                page.screenshot(path=str(output / 'materials-content-focused-confirmation.png'))
+                page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
+                settle_visuals()
+                check_text_contrast('materials-content-pending', 'light')
+                page.screenshot(path=str(output / 'materials-content-pending-light.png'), full_page=True)
+                page.evaluate("document.documentElement.classList.add('dark')")
+                settle_visuals()
+                check_text_contrast('materials-content-pending', 'dark')
+                page.screenshot(path=str(output / 'materials-content-pending-dark.png'), full_page=True)
+                page.evaluate("document.documentElement.classList.remove('dark')")
+                checks.append('continued-question-real-confirmation-field-focus-and-light-dark-pending-content')
                 printed_input.fill('浏览器临时输入：切标签和取消刷新仍应保留')
                 page.get_by_role('tab', name=re.compile('^整理任务')).click()
                 page.get_by_role('tab', name=re.compile('^题面核对')).click()
@@ -599,6 +649,9 @@ def main():
                 expect(printed_input).to_have_value('浏览器临时输入：切标签和取消刷新仍应保留')
                 page.once('dialog', lambda dialog: dialog.accept())
                 page.get_by_role('button', name='刷新核对数据', exact=True).click()
+                expect(printed_input).to_have_value(original_printed)
+                expect(page.get_by_role('combobox', name='正在核对的题目', exact=True)).to_have_value(original_question)
+                page.get_by_role('button', name='＋ 新建题目草稿', exact=True).click()
                 expect(printed_input).to_have_value('')
                 page.get_by_role('tab', name='整页阅读', exact=True).click()
                 reading_input = page.get_by_role('textbox', name='阅读依据（必填）', exact=True)
@@ -794,7 +847,7 @@ def main():
                 page.locator('#id_title').fill('整合验收无提示练习')
                 page.locator('#id_purpose').select_option('independent_practice')
                 page.locator(f'input[name=questions][value="{new_question.head_revision_id}"]').check()
-                page.get_by_role('button', name='生成 PDF／Word', exact=True).click()
+                page.get_by_role('button', name='同时生成 PDF 与 Word', exact=True).click()
                 expect(page.locator('.workspace-page h1')).to_have_text('整合验收无提示练习')
                 snapshot_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
                 snapshot_id = int(snapshot_path.rstrip('/').split('/')[-1])
@@ -827,7 +880,7 @@ def main():
                 open_disclosure('回看这次作答的修改历史')
                 expect(page.locator('.history-list')).to_contain_text('修订 1')
                 retest_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
-                retest_id = retest_path.rstrip('/').split('/')[-1]
+                retest_id = urlsplit(retest_path).path.rstrip('/').split('/')[-1]
                 retest = db(lambda: EntityRecord.objects.get(kind='attempt', stable_id=retest_id))
                 assert retest.pk != attempt_entity.pk
                 assert db(lambda: EntityRecord.objects.filter(household_id=house.pk, kind='attempt').count()) == attempt_count + 1
@@ -841,6 +894,7 @@ def main():
                 expect(page.locator('.study-events')).to_be_visible()
                 schedule_path = dict(parse_qsl(urlsplit(page.url).query))['screen']
                 new_schedule_pk = int(schedule_path.rstrip('/').split('/')[-1])
+                open_disclosure('修改计划与确认已有作答')
                 page.locator('#id_action').select_option('completed')
                 page.locator('#id_attempt_revision_id').select_option(str(retest.head_revision_id))
                 page.locator('#id_reason').fill('绑定刚保存的合成复测，不推断掌握')
@@ -910,8 +964,13 @@ def main():
                             expect(page.get_by_text('合成复测：检查乘法与单位', exact=True)).to_be_visible()
                             page.get_by_role('button', name=re.compile('^近期')).click()
                         elif view == 'documents':
-                            expect(page.get_by_role('heading', name='家长逐题解析', exact=True)).to_be_visible()
-                            expect(page.get_by_role('heading', name=material.title, exact=True)).to_be_visible()
+                            expect(page.get_by_role('tab', name='最近成果', exact=True)).to_have_attribute('aria-selected', 'true')
+                            recent = page.get_by_role('region', name='最近成果', exact=True)
+                            expect(recent).to_be_visible()
+                            recent_rows = recent.get_by_role('listitem').filter(
+                                has=page.get_by_role('heading', name=material.title, exact=True))
+                            expect(recent_rows.first).to_be_visible()
+                            assert recent_rows.count() >= 1, 'recent catalogue should allow one or more outputs for the fixture material'
                         else:
                             expect(page.locator('.workspace-page h1')).to_be_visible()
                             if view == 'settings':
@@ -924,12 +983,17 @@ def main():
                         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), (view, width)
                         page.screenshot(path=str(output / f'entry-{view}-{width}.png'), full_page=True)
                         if width == 1920:
+                            if view == 'overview':
+                                open_disclosure('家长整理与记录')
+                                settle_visuals()
                             check_text_contrast(view, 'light')
                             page.evaluate("document.documentElement.classList.add('dark')")
                             settle_visuals()
                             check_text_contrast(view, 'dark')
                             page.screenshot(path=str(output / f'entry-{view}-1920-dark.png'), full_page=True)
                             page.evaluate("document.documentElement.classList.remove('dark')")
+                            if view == 'overview':
+                                page.locator('summary').filter(has_text=re.compile('^家长整理与记录$')).click()
                         if width >= 1280:
                             measured = page.locator('#content').evaluate('''main => {
                                 const rect = main.getBoundingClientRect();
@@ -959,7 +1023,16 @@ def main():
                             assert heights and all(44 <= height <= upper for height in heights), (view, width, heights)
                             row_measurements.append({'view':view, 'width':width, 'heights':heights})
                         if view == 'documents':
-                            page.locator('li').filter(has=page.get_by_role('heading', name=material.title, exact=True)).get_by_role('button', name='查看文档与历史', exact=True).click()
+                            parent_tab = page.get_by_role('tab', name='家长解析', exact=True)
+                            parent_tab.click()
+                            expect(parent_tab).to_have_attribute('aria-selected', 'true')
+                            solutions = page.get_by_role('tabpanel', name='家长解析', exact=True)
+                            expect(solutions).to_be_visible()
+                            source_rows = solutions.get_by_role('listitem').filter(
+                                has=page.get_by_role('heading', name=material.title, exact=True))
+                            expect(source_rows.first).to_be_visible()
+                            assert source_rows.count() >= 1, 'solution launcher should include the fixture material'
+                            source_rows.first.get_by_role('button', name='查看文档与历史', exact=True).click()
                             expect(page.get_by_role('tab', name=re.compile('^生成文件'))).to_have_attribute('aria-selected', 'true')
                             expect(page.locator('#solution-editor-panel')).not_to_be_visible()
                             expect(page.locator('#solution-outputs-panel article').first).to_be_visible()
@@ -967,7 +1040,17 @@ def main():
                             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), ('solution-outputs', width)
                             page.screenshot(path=str(output / f'solution-viewing-{width}.png'), full_page=True)
                             page.goto(origin + app_url(view='documents'))
-                            page.locator('li').filter(has=page.get_by_role('heading', name=material.title, exact=True)).get_by_role('button', name='制作整套五册', exact=True).click()
+                            parent_tab = page.get_by_role('tab', name='家长解析', exact=True)
+                            expect(page.get_by_role('tab', name='最近成果', exact=True)).to_have_attribute('aria-selected', 'true')
+                            expect(page.get_by_role('button', name='制作整套五册', exact=True)).not_to_be_visible()
+                            parent_tab.click()
+                            expect(parent_tab).to_have_attribute('aria-selected', 'true')
+                            solutions = page.get_by_role('tabpanel', name='家长解析', exact=True)
+                            source_rows = solutions.get_by_role('listitem').filter(
+                                has=page.get_by_role('heading', name=material.title, exact=True))
+                            expect(source_rows.first).to_be_visible()
+                            assert source_rows.count() >= 1, 'solution launcher should include the fixture material before the five-book action'
+                            source_rows.first.get_by_role('button', name='制作整套五册', exact=True).click()
                             expect(page.locator('.workspace-page h1')).to_contain_text('五册')
                             assert dict(parse_qsl(urlsplit(page.url).query))['screen'].startswith(f'/prints/materials/{material.pk}/five-books/')
                     if width == 390:
@@ -1039,6 +1122,8 @@ def main():
                 login(actor)
                 from verify_ux_remediation import verify as verify_ux_remediation
                 verify_ux_remediation(page, origin, app_url, db, actor, house, material, f, output, checks)
+                from verify_acceptance_follow_up import verify as verify_acceptance_follow_up
+                verify_acceptance_follow_up(page, origin, app_url, db, actor, house, material, f, output, checks)
                 assert not errors, errors
                 assert not external, external
                 assert not leaks, leaks

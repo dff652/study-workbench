@@ -542,7 +542,7 @@ def main():
                     page.locator("#id_title").fill(title)
                     page.locator("#id_purpose").select_option(purpose)
                     page.locator(f"input[name='questions'][value='{question_one['revision_id']}']").check()
-                    page.get_by_role("button", name=re.compile("生成 PDF／Word")).click()
+                    page.get_by_role("button", name=re.compile("生成 PDF／Word|同时生成 PDF 与 Word")).click()
                     expect(page.locator("h1")).to_have_text(title)
                     snapshot_id = int(page.url.rstrip("/").split("/")[-1])
                     row = db(lambda: ExportSnapshot.objects.get(pk=snapshot_id))
@@ -618,7 +618,7 @@ def main():
                 checks.append('diagrams:private-upload-confirm-append-history-vector-attachment')
                 screenshot('phone-diagrams.png')
                 goto(f'/prints/materials/{material.pk}/five-books/', 'five-books-readiness')
-                page.get_by_role('button',name='生成五册 PDF 与 Word',exact=True).click()
+                page.get_by_role('button',name='同时生成五册 PDF 与 Word',exact=True).click()
                 page.wait_for_url('**/five-books/*/')
                 packet_id=page.url.rstrip('/').split('/')[-1]
                 zip_response=context.request.get(origin+f'/prints/materials/{material.pk}/five-books/{packet_id}/download/')

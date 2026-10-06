@@ -6,9 +6,14 @@ import type { MaterialPage } from '../../types'
 if (!window.PointerEvent) Object.defineProperty(window, 'PointerEvent', { configurable: true, value: MouseEvent })
 
 const page: MaterialPage = { id: 'page-1', position: 1, sha256: 'synthetic', width: 100, height: 100, page_url: '/page/', preview_url: '/preview/' }
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
 
 describe('ImageBoxPicker', () => {
-  afterEach(() => { cleanup() })
+  afterEach(() => {
+    cleanup()
+    if (originalScrollIntoView) Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoView)
+    else Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  })
 
   it('maps an image drag to bounded, integer original-image coordinates', () => {
     expect(bboxFromDrag({ x: 80.2, y: 40.8 }, { x: -5, y: 120 }, 100, 100)).toEqual([0, 41, 80, 100])
@@ -65,5 +70,16 @@ describe('ImageBoxPicker', () => {
     expect((nextImage as HTMLImageElement).className).toContain('h-auto')
     expect((nextImage as HTMLImageElement).className).not.toContain('object-contain')
     expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('provides a focusable, locatable canvas target without claiming keyboard drawing support', () => {
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    render(<ImageBoxPicker page={page} boxes={[]} onAdd={vi.fn()} canvasId='question-source-canvas' focusRequest={1} />)
+    const canvas = screen.getByRole('img', { name: '资料页 1 区域选框' })
+    expect(canvas.getAttribute('id')).toBe('question-source-canvas')
+    expect(canvas.getAttribute('tabindex')).toBe('0')
+    expect(document.activeElement).toBe(canvas)
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
   })
 })

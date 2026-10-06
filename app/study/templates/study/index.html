@@ -1,15 +1,15 @@
 {% extends "web/base.html" %}
 {% load static product %}
-{% block title %}复习安排与证据报告{% endblock %}
+{% block title %}进度与复测{% endblock %}
 {% block content %}
-  <div class="workspace-toolbar"><div><p class="eyebrow">学习跟踪</p><h1>复习安排与证据报告</h1><p class="muted">计划固定到当前已发布题目版本；复习完成和学习掌握分别呈现。</p></div>
+  <div class="workspace-toolbar"><div><p class="eyebrow">学习跟踪</p><h1>进度与复测</h1><p class="muted">计划固定到当前已发布题目版本；复习完成和学习掌握分别呈现。</p></div>
     {% if households %}<form method="get" class="study-household{% if household_id %} workspace-scope-field{% endif %}"><label for="id_household">家庭</label><select id="id_household" name="household" onchange="this.form.submit()">{% for member in households %}<option value="{{ member.household_id }}"{% if household_id == member.household_id %} selected{% endif %}>家庭 {{ forloop.counter }}</option>{% endfor %}</select></form>{% endif %}
   </div>
   {% if not household_id %}<section class="panel"><p>还没有可访问的家庭。</p></section>{% else %}
     <div class="workspace-tabs" role="tablist" aria-label="进度模块" data-workspace-tabs>
       <button type="button" role="tab" id="study-workspace-plans-tab" aria-controls="study-workspace-plans-panel" data-workspace-tab="plans" aria-selected="true">复测计划</button>
       <button type="button" role="tab" id="study-workspace-evidence-tab" aria-controls="study-workspace-evidence-panel" data-workspace-tab="evidence" aria-selected="false">学习证据</button>
-      <button type="button" role="tab" id="study-workspace-materials-tab" aria-controls="study-workspace-materials-panel" data-workspace-tab="materials" aria-selected="false">资料进度</button>
+
     </div>
 
     <section class="panel" id="study-workspace-plans-panel" role="tabpanel" aria-labelledby="study-workspace-plans-tab" data-workspace-panel="plans">
@@ -40,11 +40,7 @@
       </table></div>{% else %}<p class="muted">此家庭还没有学习者档案。请先在<a href="/learning/">学习档案</a>中建立。</p>{% endif %}
     </section>
 
-    <section class="panel" id="study-workspace-materials-panel" role="tabpanel" aria-labelledby="study-workspace-materials-tab" data-workspace-panel="materials">
-      <div class="workspace-toolbar"><h2>资料进度</h2></div>
-      <p class="muted">资料整理与学习者复测分别记录。请在资料核对入口查看原图、题目和整理进度。</p>
-      <div class="workspace-actions"><a class="secondary-button" href="/materials/">查看资料核对</a></div>
-    </section>
+    <section class="panel" id="study-workspace-materials-panel"><h2>资料处理进度</h2><p>家庭资料处理已归入资料整理，与学习者作答进展分别查看。</p><a class="secondary-button" href="/app/?view=materials&amp;tab=processing&amp;household={{ household_id|urlencode }}">查看资料处理进度</a></section>
   {% endif %}
 {% endblock %}
 {% block scripts %}<link rel="stylesheet" href="{% static 'study/study.css' %}">{% endblock %}

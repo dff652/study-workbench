@@ -55,6 +55,7 @@ function installRouteAppApi({
       schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1', households,
     }))
     if (url.pathname === '/api/v1/about/') return Promise.resolve(Response.json(about))
+    if (url.pathname === '/api/v1/documents/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items: [], total: 0, page: 1, has_next: false }))
     if (url.pathname === '/api/v1/materials/') return Promise.resolve(Response.json({ schema_version: 'swb.api.v1', items: [], total: 0, page: 1, page_size: 20 }))
     if (url.pathname === '/api/v1/learners/') {
       learnerHouseholdRequests.push(url.searchParams.get('household') || '')
@@ -88,7 +89,25 @@ describe('App URL navigation', () => {
     cleanup()
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    localStorage.clear()
     window.history.replaceState({}, '', '/app/')
+  })
+
+  it('keeps exactly one action region through learner changes and removes it on every other page', async () => {
+    const user = userEvent.setup()
+    installRouteAppApi({ pageHtml: () => '<main><h1>业务页面</h1></main>' })
+    render(<App />)
+    await screen.findByRole('combobox', { name: '学习者' })
+    for (const id of ['learner-b', 'learner-a', 'learner-b']) {
+      await user.selectOptions(screen.getByRole('combobox', { name: '学习者' }), id)
+      await waitFor(() => expect(document.querySelectorAll('#learning-tasks-title')).toHaveLength(1))
+    }
+    for (const name of ['资料整理', '知识与题库', '学习档案', '进度与复测', '文档中心', '设置']) {
+      await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name }))
+      await waitFor(() => expect(document.querySelectorAll('#learning-tasks-title')).toHaveLength(0))
+      await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '学习总览' }))
+      await waitFor(() => expect(document.querySelectorAll('#learning-tasks-title')).toHaveLength(1))
+    }
   })
 
   it('starts with learning actions and keeps all core navigation directly visible', async () => {
@@ -130,7 +149,8 @@ describe('App URL navigation', () => {
     window.history.replaceState({}, '', '/app/?view=knowledge&household=home-1')
     const { requestedPages } = installRouteAppApi({ pageHtml: () => '<main><h1>知识目录</h1></main>' })
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: '整理知识点讲解' }))
+    await user.click(await screen.findByText('家长整理工具'))
+    await user.click(screen.getByRole('button', { name: '整理知识点讲解' }))
     expect(await screen.findByRole('heading', { name: '知识点讲解' })).toBeTruthy()
     expect(new URLSearchParams(window.location.search).get('screen')).toBe('/__app__/knowledge-explanations/')
     expect(requestedPages.some((path) => path.startsWith('/__app__/'))).toBe(false)
@@ -309,9 +329,9 @@ describe('App URL navigation', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '家庭' }), 'home-a')
     expect(await screen.findByRole('heading', { name: '当前知识页' })).toBeTruthy()
     expect(new URLSearchParams(window.location.search).get('household')).toBe('home-a')
-    expect(new URLSearchParams(window.location.search).get('learner')).toBeNull()
-    expect(new URLSearchParams(window.location.search).get('screen')).toBe('/knowledge/?household_id=home-a')
-    expect(requestedPages).toContain('/knowledge/?household_id=home-a')
+    expect(new URLSearchParams(window.location.search).get('learner')).toBe('learner-a')
+    expect(new URLSearchParams(window.location.search).get('screen')).toBe('/knowledge/?household_id=home-a&mode=learn')
+    expect(requestedPages).toContain('/knowledge/?household_id=home-a&mode=learn')
   })
 
   it('routes business report links under /study/ to the progress view', async () => {
@@ -759,6 +779,7 @@ describe('App URL navigation', () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = new URL(String(input), window.location.origin)
       if (url.pathname.endsWith('.pdf') || url.pathname.endsWith('.pdf/')) return Promise.resolve(new Response('synthetic PDF', { headers: { 'content-type': 'application/pdf' } }))
+      if (url.pathname === '/prints/snapshots/12/preview/') return Promise.resolve(Response.json({ pages: [] }))
       if (url.pathname === '/api/v1/session/') return Promise.resolve(Response.json({
         schema_version: 'swb.api.v1', user: { username: 'parent' }, csrf_token: 'csrf-1',
         households: [{ id: 'home-1', name: '甲家庭', role: 'owner' }, { id: 'home-2', name: '乙家庭', role: 'reviewer' }],

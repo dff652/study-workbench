@@ -1,3 +1,4 @@
+import { readPresentationMode, savePresentationMode, type PresentationMode } from './lib/presentation-mode'
 import { PdfPreview } from './components/pdf-preview'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -27,6 +28,7 @@ import { MaterialProcessing } from './features/materials/processing'
 import { ProgressWorkspace } from './features/progress/workspace'
 import { WorkspacePage } from './features/workspace/page'
 import { SolutionWorkspace } from './features/solutions/workspace'
+import { DocumentCatalogue } from './features/solutions/catalogue'
 import { SolutionsLauncher } from './features/solutions/launcher'
 import { KnowledgeWorkspace } from './features/knowledge/workspace'
 import { fragmentOfPath, householdIdForBusinessPath, isFilePath, knowledgeMaterialId, knowledgeScreen, learnerIdForBusinessPath, parseRoute, previewKindForPath, printReportPathForLearner, routeForBusinessPath, routeUrl, safeBusinessPath, screenForView, solutionMaterialId, solutionScreen, withoutFragment, type AppRoute, type View } from './routing/routes'
@@ -58,12 +60,14 @@ export default function App() {
   const [about, setAbout] = useState<Remote<AboutResponse>>({ status: 'loading' })
   const [learners, setLearners] = useState<Remote<LearnersResponse>>({ status: 'loading' })
   const [route, setRoute] = useState<AppRoute>(() => parseRoute(window.location))
+  const [presentation, setPresentation] = useState<PresentationMode>('student')
   const [sessionRetry, setSessionRetry] = useState(0)
   const [aboutRetry, setAboutRetry] = useState(0)
   const [learnersRetry, setLearnersRetry] = useState(0)
   const [unauthorized, setUnauthorized] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [filePreview, setFilePreview] = useState<{ kind: 'image' | 'pdf'; src: string; title: string } | null>(null)
+  const previewDialogRef = useRef<HTMLDivElement>(null)
+  const [filePreview, setFilePreview] = useState<{ kind: 'image' | 'pdf'; src: string; title: string; previews?: string[] } | null>(null)
   const routeRef = useRef(route)
   const sessionRef = useRef(session)
   const unsavedRef = useRef(hasUnsavedChanges)
@@ -96,7 +100,9 @@ export default function App() {
     const learnerRoutes = learners.status === 'loaded' && learnersHouseholdRef.current === routeRef.current.household
       ? learners.data.items
       : []
-    const nextRoute = routeForBusinessPath(path, routeRef.current, routeRef.current.learner, learnerRoutes)
+    const contextual = new URL(path, window.location.origin)
+    if (/^\/knowledge\/question\//.test(contextual.pathname) && routeRef.current.learner) contextual.searchParams.set('learner', routeRef.current.learner)
+    const nextRoute = routeForBusinessPath(`${contextual.pathname}${contextual.search}${contextual.hash}`, routeRef.current, routeRef.current.learner, learnerRoutes)
     if (!nextRoute) return
     const target = new URL(path, window.location.origin)
     const householdWasSpecified = target.searchParams.has('household') || target.searchParams.has('household_id')
@@ -136,6 +142,7 @@ export default function App() {
         kind: previewKind,
         src: `${previewUrl.pathname}${previewUrl.search}`,
         title: anchor.dataset.previewTitle || previewTitle(targetUrl.pathname, previewKind),
+        previews: previewPages(anchor.dataset.previewPages),
       })
       return
     }
@@ -169,11 +176,22 @@ export default function App() {
 
   useEffect(() => {
     if (!filePreview) return
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const dialog = previewDialogRef.current
+    const main = document.getElementById('workbench-shell')
+    main?.setAttribute('inert', '')
+    const focusables = () => Array.from(dialog?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex="0"]') || []).filter((item) => !item.closest('[hidden]'))
+    focusables()[0]?.focus()
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setFilePreview(null)
+      if (event.key === 'Escape') { event.preventDefault(); setFilePreview(null) }
+      if (event.key === 'Tab') {
+        const items = focusables(), first = items[0], last = items[items.length - 1]
+        if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) { event.preventDefault(); last?.focus() }
+        else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) { event.preventDefault(); first?.focus() }
+      }
     }
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    return () => { main?.removeAttribute('inert'); window.removeEventListener('keydown', onKeyDown); if (trigger?.isConnected) trigger.focus() }
   }, [filePreview])
 
   const handleUnauthorized = useCallback(() => setUnauthorized(true), [])
@@ -210,6 +228,7 @@ export default function App() {
     api.session(controller.signal).then((data) => {
       if (!active) return
       setSession({ status: 'loaded', data })
+      setPresentation(readPresentationMode(data.user.username))
       const current = routeRef.current
       const household = current.household && data.households.some((item) => item.id === current.household)
         ? current.household
@@ -295,9 +314,9 @@ export default function App() {
   useEffect(() => {
     const current = routeRef.current
     if (session.status !== 'loaded' || !householdId || current.household !== householdId || current.screen) return
-    const screen = screenForView(current.view, householdId, current.learner)
+    const screen = current.view === 'knowledge' ? `/knowledge/?household_id=${encodeURIComponent(householdId)}&mode=${presentation === 'student' ? 'learn' : 'manage'}` : screenForView(current.view, householdId, current.learner)
     if (screen) replaceRoute({ ...current, screen })
-  }, [session.status, householdId, route, replaceRoute])
+  }, [session.status, householdId, route, replaceRoute, presentation])
 
   useEffect(() => {
     const onPopState = () => {
@@ -355,7 +374,7 @@ export default function App() {
   const isKnowledgeLauncher = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/__app__/knowledge-explanations/'
   const isKnowledgeIndex = route.view === 'knowledge' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/knowledge/'
   const isDocumentsLanding = route.view === 'documents' && new URL(effectiveScreen || '/', window.location.origin).pathname === '/prints/' && !isSolutionScreen
-  const documentsTab = route.tab === 'practice' ? 'practice' : route.tab === 'knowledge' ? 'knowledge' : 'solutions'
+  const documentsTab = route.tab === 'practice' ? 'practice' : route.tab === 'knowledge' ? 'knowledge' : route.tab === 'solutions' ? 'solutions' : 'recent'
   const isBusinessScreen = Boolean(effectiveScreen) && (route.view === 'knowledge' || route.view === 'learning'
     || route.view === 'documents' || route.view === 'settings' || Boolean(route.screen))
   const needsLearner = viewNeedsLearner(route.view)
@@ -368,7 +387,7 @@ export default function App() {
       ...route,
       household: nextId,
       learner: '',
-      screen: screenForView(route.view, nextId),
+      screen: route.view === 'knowledge' ? `/knowledge/?household_id=${encodeURIComponent(nextId)}&mode=${presentation === 'student' ? 'learn' : 'manage'}` : screenForView(route.view, nextId),
       materialId: undefined,
       materialQuery: undefined,
       materialPage: undefined,
@@ -389,6 +408,11 @@ export default function App() {
       return
     }
     let screen = route.screen
+    if (route.view === 'knowledge' && /^\/knowledge\/question\//.test(screen)) {
+      const questionPath = new URL(screen, window.location.origin)
+      questionPath.searchParams.set('learner', nextId)
+      screen = `${questionPath.pathname}${questionPath.search}${questionPath.hash}`
+    }
     const screenLearner = learnerIdForBusinessPath(screen, learners.data.items)
     if (nextId !== route.learner) {
       if (route.view === 'progress' && screen) screen = screenForView('progress', householdId, nextId)
@@ -400,7 +424,7 @@ export default function App() {
 
   const selectView = (view: View) => {
     const learnerId = route.learner || (viewNeedsLearner(view) && learners.status === 'loaded' ? learners.data.items[0]?.id || '' : '')
-    navigateRoute({ ...route, view, learner: learnerId, screen: screenForView(view, householdId, learnerId), tab: '', materialId: undefined, materialQuery: undefined, materialPage: undefined })
+    navigateRoute({ ...route, view, learner: learnerId, screen: view === 'knowledge' ? `/knowledge/?household_id=${encodeURIComponent(householdId)}&mode=${presentation === 'student' ? 'learn' : 'manage'}` : screenForView(view, householdId, learnerId), tab: '', materialId: undefined, materialQuery: undefined, materialPage: undefined })
   }
 
   const selectSettingsScreen = (path: string) => {
@@ -417,7 +441,7 @@ export default function App() {
   return (
     <div className='min-h-svh bg-muted/30 text-foreground'>
       <a href='#content' className='fixed left-4 top-2 z-[100] -translate-y-16 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground focus:translate-y-0'>跳到主要内容</a>
-      <div className='min-h-svh lg:grid lg:grid-cols-[13rem_minmax(0,1fr)]'>
+      <div id='workbench-shell' className='min-h-svh lg:grid lg:grid-cols-[13rem_minmax(0,1fr)]'>
         <aside className='flex flex-col border-b bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:h-svh lg:border-b-0 lg:border-r'>
           <div className='flex min-h-14 items-center gap-2 px-4 py-3'>
             <div className='flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground'><GraduationCap className='size-4' aria-hidden='true' /></div>
@@ -448,7 +472,8 @@ export default function App() {
                   {learners.status === 'loaded' && learners.data.items.length === 0 ? <span className='text-muted-foreground'>暂无记录</span> : null}
                 </div> : null}
               </div>
-              <div className='flex shrink-0 items-center gap-2'>
+              <div className='flex shrink-0 flex-wrap items-center gap-2'>
+                <div role='group' aria-label='使用方式' className='flex rounded-md border p-1'>{([{ value: 'student', label: '学生练习' }, { value: 'parent', label: '家长跟进' }] as const).map((mode) => <Button key={mode.value} type='button' size='sm' variant={presentation === mode.value ? 'secondary' : 'ghost'} aria-pressed={presentation === mode.value} onClick={() => { setPresentation(mode.value); savePresentationMode(session.data.user.username, mode.value); if (isKnowledgeIndex) navigateRoute({ ...route, screen: `/knowledge/?household_id=${encodeURIComponent(householdId)}&mode=${mode.value === 'student' ? 'learn' : 'manage'}` }) }}>{mode.label}</Button>)}</div>
                 <details className='relative'>
                   <summary className='cursor-pointer list-none rounded-md border px-3 py-2 text-xs font-medium hover:bg-muted'>
                     关于
@@ -479,7 +504,9 @@ export default function App() {
               <EmptyState title='当前账号没有可访问的家庭' detail='请使用有权限的账号登录，或联系家庭所有者调整访问权限。' icon={House} />
             ) : null}
 
+            {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningTasks key={`tasks:${householdId}:${learner?.id || ''}`} householdId={householdId} learnerId={learner?.id || ''} studentMode={presentation === 'student'} onUnauthorized={handleUnauthorized} /> : null}
             {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningStart
+              parentMode={presentation === 'parent'}
               learnerName={learner?.display_name || ''}
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
               onPractice={() => navigateBusinessPath(`/knowledge/?household_id=${encodeURIComponent(householdId)}&mode=learn#question-index`)}
@@ -489,7 +516,7 @@ export default function App() {
               onRecord={() => learner && navigateBusinessPath(`/learning/profile/${encodeURIComponent(learner.id)}/attempt/new/`)}
               onHistory={() => selectView('learning')}
             /> : null}
-            {households.length > 0 && route.view === 'overview' && !isBusinessScreen ? <LearningTasks key={`${householdId}:${learner?.id || ''}`} householdId={householdId} learnerId={learner?.id || ''} onUnauthorized={handleUnauthorized} /> : null}
+
 
             {route.view === 'settings' && settingsLinks.length > 0 ? (
               <nav aria-label='设置导航' className='flex flex-wrap gap-2'>
@@ -502,30 +529,31 @@ export default function App() {
             {households.length > 0 && isDocumentsLanding ? <WorkspaceTabs
               id='document-center'
               label='文档分类'
-              tabs={[{ value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '家长解析' }, { value: 'practice', label: '练习与整套五册' }]}
+              tabs={[{ value: 'recent', label: '最近成果' }, { value: 'knowledge', label: '知识点讲解' }, { value: 'solutions', label: '家长解析' }, { value: 'practice', label: '练习与整套五册' }]}
               value={documentsTab}
               onChange={handleWorkspaceTab}
             /> : null}
 
+            {households.length > 0 && isDocumentsLanding ? <WorkspacePanel id='document-center' value='recent' active={documentsTab}><DocumentCatalogue key={`catalogue:${householdId}`} householdId={householdId} onUnauthorized={handleUnauthorized} /></WorkspacePanel> : null}
             {households.length > 0 && isBusinessScreen && effectiveScreen ? (
               isDocumentsLanding ? <WorkspacePanel id='document-center' value='solutions' active={documentsTab}><SolutionsLauncher
                 key={householdId}
                 householdId={householdId}
                 onUnauthorized={handleUnauthorized}
-                onOpen={(materialId) => navigateRoute({ ...route, view: 'documents', screen: `${solutionScreen(materialId)}?panel=outputs` })}
+                onOpen={(materialId, hasOutputs) => navigateRoute({ ...route, view: 'documents', screen: `${solutionScreen(materialId)}?panel=${hasOutputs ? 'outputs' : 'editor'}` })}
                 onPrepareDocuments={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'
                   ? (materialId) => navigateBusinessPath(`/prints/materials/${encodeURIComponent(materialId)}/five-books/`)
                   : undefined}
                 onMaterials={() => selectView('materials')}
               /></WorkspacePanel> : null
             ) : null}
-            {households.length > 0 && isKnowledgeIndex ? <div className='flex flex-wrap items-center gap-3 border-b pb-3'><Button type='button' size='sm' variant='outline' onClick={() => navigateRoute({ ...route, screen: '/__app__/knowledge-explanations/', tab: undefined })}>整理知识点讲解</Button><p className='text-sm text-muted-foreground'>按资料编写完整结论、条件与依据，再生成知识讲解文档。</p></div> : null}
+            {households.length > 0 && isKnowledgeIndex ? <details open={presentation === 'parent'} className='border-b pb-3'><summary className='cursor-pointer text-sm font-medium'>家长整理工具</summary><div className='mt-3 flex flex-wrap items-center gap-3'><Button type='button' size='sm' variant='outline' onClick={() => navigateRoute({ ...route, screen: '/__app__/knowledge-explanations/', tab: undefined })}>整理知识点讲解</Button><p className='text-sm text-muted-foreground'>按资料编写完整结论、条件与依据，再生成知识讲解文档。</p></div></details> : null}
             {households.length > 0 && (isKnowledgeLauncher || isDocumentsLanding) ? <WorkspacePanel id='document-center' value='knowledge' active={isKnowledgeLauncher ? 'knowledge' : documentsTab}><SolutionsLauncher
               key={`${householdId}:knowledge`}
               mode='knowledge'
               householdId={householdId}
               onUnauthorized={handleUnauthorized}
-              onOpen={(materialId) => navigateRoute({ ...route, screen: knowledgeScreen(materialId), tab: isDocumentsLanding ? 'outputs' : 'editor' })}
+              onOpen={(materialId, hasOutputs) => navigateRoute({ ...route, screen: knowledgeScreen(materialId), tab: hasOutputs ? 'outputs' : 'editor' })}
               onMaterials={() => selectView('materials')}
             /></WorkspacePanel> : null}
             {households.length > 0 && isSolutionScreen && solutionId ? <SolutionWorkspace
@@ -546,7 +574,8 @@ export default function App() {
               key={`${householdId}:knowledge:${knowledgeId}`}
               materialId={knowledgeId}
               householdId={householdId}
-              initialTab={route.tab || 'editor'}
+              initialPanel={new URL(effectiveScreen, window.location.origin).searchParams.get('panel') === 'outputs' ? 'outputs' : 'editor'}
+              initialTab={route.tab || undefined}
               onTabChange={handleWorkspaceTab}
               csrfToken={session.data.csrf_token}
               canWrite={selectedHousehold?.role === 'owner' || selectedHousehold?.role === 'reviewer'}
@@ -602,7 +631,7 @@ export default function App() {
             {households.length > 0 && needsNativeLearner && hasLearnerWorkspace && learner ? (
               route.view === 'progress' ? (
                 <ProgressWorkspace
-                  key={`${householdId}:${learner.id}`}
+                  key={`progress:${householdId}:${learner.id}`}
                   householdId={householdId}
                   learner={learner}
                   csrfToken={session.data.csrf_token}
@@ -613,14 +642,14 @@ export default function App() {
                   onTabChange={handleWorkspaceTab}
                 />
               ) : (
-                <EvidenceWorkspace key={`${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} initialTab={route.tab || undefined} onTabChange={handleWorkspaceTab} initialFilters={route.evidenceFilters} onFiltersChange={(evidenceFilters) => navigateRoute({ ...routeRef.current, evidenceFilters })} onUnauthorized={handleUnauthorized} />
+                <EvidenceWorkspace key={`evidence:${householdId}:${learner.id}`} householdId={householdId} learner={learner} activePage={route.view === 'attempts' ? 'attempts' : 'overview'} initialTab={route.tab || undefined} onTabChange={handleWorkspaceTab} initialFilters={route.evidenceFilters} onFiltersChange={(evidenceFilters) => navigateRoute({ ...routeRef.current, evidenceFilters })} onUnauthorized={handleUnauthorized} />
               )
             ) : null}
           </Main>
         </div>
       </div>
       {filePreview ? (
-        <div className='fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 sm:p-6' role='dialog' aria-modal='true' aria-label={filePreview.title} onMouseDown={(event) => { if (event.target === event.currentTarget) setFilePreview(null) }}>
+        <div ref={previewDialogRef} className='fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3 sm:p-6' role='dialog' aria-modal='true' aria-label={filePreview.title} onMouseDown={(event) => { if (event.target === event.currentTarget) setFilePreview(null) }}>
           <section className='flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-background shadow-2xl'>
             <header className='flex items-center justify-between gap-3 border-b px-4 py-3'>
               <h2 className='truncate text-sm font-semibold'>{filePreview.title}</h2>
@@ -629,7 +658,7 @@ export default function App() {
             {filePreview.kind === 'image' ? (
               <div className='flex min-h-0 flex-1 items-center justify-center overflow-auto bg-black/5 p-2 sm:p-4'><img src={filePreview.src} alt={filePreview.title} className='max-h-[calc(100vh-7rem)] max-w-full object-contain' /></div>
             ) : (
-              <div className='flex min-h-0 flex-1 flex-col overflow-auto p-3'><PdfPreview title={filePreview.title} src={filePreview.src} /></div>
+              <div className='flex min-h-0 flex-1 flex-col overflow-auto p-3'><PdfPreview title={filePreview.title} src={filePreview.src} previews={filePreview.previews} /></div>
             )}
           </section>
         </div>
@@ -685,5 +714,13 @@ function roleLabel(role: string) {
 
 function viewNeedsLearner(view: View) {
   return view === 'materials' || view === 'overview' || view === 'attempts' || view === 'learning'
-    || view === 'progress' || view === 'documents'
+    || view === 'progress' || view === 'documents' || view === 'knowledge'
+}
+
+function previewPages(value?: string): string[] {
+  if (!value) return []
+  try {
+    const pages: unknown = JSON.parse(value)
+    return Array.isArray(pages) ? pages.filter((page): page is string => typeof page === 'string' && Boolean(safeBusinessPath(page))) : []
+  } catch { return [] }
 }

@@ -9,7 +9,7 @@ import { SubjectSelect } from '../materials/subjects'
 
 type Remote = { status: 'loading' } | { status: 'loaded'; data: MaterialListResponse } | { status: 'error'; message: string }
 
-export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onMaterials, onUnauthorized, mode = 'solution' }: { householdId: string; onOpen: (materialId: string) => void; onPrepareDocuments?: (materialId: string) => void; onMaterials: () => void; onUnauthorized: () => void; mode?: 'solution' | 'knowledge' }) {
+export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onMaterials, onUnauthorized, mode = 'solution' }: { householdId: string; onOpen: (materialId: string, hasOutputs: boolean) => void; onPrepareDocuments?: (materialId: string) => void; onMaterials: () => void; onUnauthorized: () => void; mode?: 'solution' | 'knowledge' }) {
   const [remote, setRemote] = useState<Remote>({ status: 'loading' })
   const [searchText, setSearchText] = useState('')
   const [query, setQuery] = useState('')
@@ -56,8 +56,8 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
           {[...remote.data.items].sort((a, b) => (b.available_outputs?.find((o) => o.mode === mode)?.created_at || '').localeCompare(a.available_outputs?.find((o) => o.mode === mode)?.created_at || '')).map((item) => {
             const output = item.available_outputs?.find((entry) => entry.mode === mode)
             return <li key={item.id} className='space-y-3 py-4'>
-              <div className='flex flex-wrap items-center justify-between gap-3'><div><h3 className='font-semibold'>{item.title}</h3><p className='mt-1 text-xs text-muted-foreground'>{item.page_count} 页原图 · {output ? `文档版本 ${output.revision_version} · ${output.state === 'complete' ? '检查已记录' : '输出待审校'} · ${new Date(output.created_at).toLocaleString('zh-CN')}` : '尚无可用文档'}</p></div><Button type='button' size='sm' variant='outline' onClick={() => onOpen(item.id)}>{output ? '查看文档与历史' : mode === 'knowledge' ? '整理知识讲解' : '整理家长解析'}</Button></div>
-              {output?.documents.map((doc) => <div key={doc.id} className='flex flex-wrap items-center gap-3 text-sm'><span>{doc.title} · {doc.page_count} 页</span>{doc.pdf_url ? <a href={doc.pdf_url} data-preview-title={doc.title} className="text-primary underline">预览 PDF</a> : null}{doc.docx_url ? <a href={doc.docx_url} download className='font-medium text-primary underline'>下载 Word</a> : null}</div>)}
+              <div className='flex flex-wrap items-center justify-between gap-3'><div><h3 className='font-semibold'>{item.title}</h3><p className='mt-1 text-xs text-muted-foreground'>{item.page_count} 页原图 · {output ? `文档版本 ${output.revision_version} · ${output.state === 'complete' ? '检查已记录' : '输出待审校'} · ${new Date(output.created_at).toLocaleString('zh-CN')}` : '尚无可用文档'}</p></div><Button type='button' size='sm' variant='outline' onClick={() => onOpen(item.id, Boolean(output))}>{output ? '查看文档与历史' : mode === 'knowledge' ? '整理知识讲解' : '整理家长解析'}</Button></div>
+              {output?.documents.map((doc) => <div key={doc.id} className='flex flex-wrap items-center gap-3 text-sm'><span>{doc.title} · {doc.page_count} 页</span>{doc.pdf_url ? <a href={doc.pdf_url} data-preview-title={doc.title} data-preview-pages={JSON.stringify(doc.previews)} className="text-primary underline">预览 PDF</a> : null}{doc.docx_url ? <a href={doc.docx_url} download className='font-medium text-primary underline'>下载 Word</a> : null}</div>)}
               {output?.zip_url ? <a href={output.zip_url} download className='inline-block text-sm text-primary underline'>下载这批 ZIP</a> : null}
               {onPrepareDocuments ? <Button type='button' size='sm' variant='ghost' onClick={() => onPrepareDocuments(item.id)}>制作整套五册</Button> : null}
             </li>

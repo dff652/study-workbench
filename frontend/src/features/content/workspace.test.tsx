@@ -9,6 +9,7 @@ if (!window.PointerEvent) Object.defineProperty(window, 'PointerEvent', { config
 const page: MaterialPage = { id: 'page-1', position: 1, sha256: 'private-hash', width: 100, height: 100, page_url: '/page/', preview_url: '/preview/' }
 const context = { source_stamp: 'source-stamp-current' }
 const secretEditContext = { version: 999, stamp: 'do-not-render-or-submit' }
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView')
 
 const question = {
   id: 'question-1', revision_id: 'revision-1', number: '3', printed_text: '原印刷题面', working_text: '当前工作题干',
@@ -78,7 +79,100 @@ async function addSourceWithDrag(user: ReturnType<typeof userEvent.setup>, confi
 }
 
 describe('ContentWorkspace', () => {
-  afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+    if (originalScrollIntoView) Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoView)
+    else Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+  })
+
+  it('locates real text, source canvas and manual confirmation gaps without completing them', async () => {
+    const user = userEvent.setup()
+    const scrollIntoView = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    const incompleteQuestion = {
+      ...question,
+      printed_text: '',
+      working_text: '',
+      missing_fields: ['printed_text', 'working_text'],
+      sources_ready: false,
+      confirmed: false,
+    }
+    mountContent({ content: { ...emptyContent(), questions: [incompleteQuestion] } })
+
+    const printedRow = await screen.findByText('待补：图中印刷题面转写')
+    const printedJump = within(printedRow.closest('li')!).getByRole('button', { name: '去补充：图中印刷题面转写' })
+    expect(printedJump.getAttribute('data-ux-target')).toBe('content-gap-printed-text')
+    await user.click(printedJump)
+    const printed = screen.getByLabelText('图中印刷题面转写（必填）') as HTMLTextAreaElement
+    expect(document.activeElement).toBe(printed)
+    expect(printed.value).toBe('')
+    expect(scrollIntoView).toHaveBeenCalled()
+
+    const image = screen.getAllByAltText('资料页 1 原图')[0]
+    Object.defineProperty(image, 'naturalWidth', { configurable: true, value: 100 })
+    Object.defineProperty(image, 'naturalHeight', { configurable: true, value: 100 })
+    fireEvent.load(image)
+    const sourceRow = screen.getByText('待补：原图来源区域')
+    const sourceJump = within(sourceRow.closest('li')!).getByRole('button', { name: '去补充：原图来源区域' })
+    expect(sourceJump.getAttribute('data-ux-target')).toBe('content-gap-source-region')
+    await user.click(sourceJump)
+    const canvas = await screen.findByRole('img', { name: '资料页 1 区域选框' })
+    await waitFor(() => expect(document.activeElement).toBe(canvas))
+    expect(canvas.getAttribute('id')).toBe('content-question-source-canvas')
+    expect(canvas.getAttribute('tabindex')).toBe('0')
+    expect(canvas.getAttribute('aria-disabled')).toBe('false')
+    expect(scrollIntoView).toHaveBeenCalledTimes(2)
+
+    const confirmRow = screen.getByText('待补：人工核对与确认')
+    const confirmationJump = within(confirmRow.closest('li')!).getByRole('button', { name: '去补充：人工核对与确认' })
+    expect(confirmationJump.getAttribute('data-ux-target')).toBe('content-gap-confirmation')
+    await user.click(confirmationJump)
+    const confirmation = screen.getByRole('checkbox', { name: /我已对照原图核对题面/ })
+    expect(document.activeElement).toBe(confirmation)
+    expect((confirmation as HTMLInputElement).checked).toBe(false)
+    expect(screen.getByText('待补：人工核对与确认')).toBeTruthy()
+  })
+
+  it('keeps unknown server missing fields visible without a misleading jump action', async () => {
+    const opaqueQuestion = {
+      ...question,
+      missing_fields: ['opaque_server_field'],
+      sources_ready: true,
+      confirmed: false,
+    }
+    mountContent({ content: { ...emptyContent(), questions: [opaqueQuestion] } })
+    const row = await screen.findByText('待核对：其他内容待核对')
+    expect(within(row.closest('li')!).queryByRole('button')).toBeNull()
+    expect(within(row.closest('li')!).getByText(/无法对应到本页的具体控件/)).toBeTruthy()
+    expect(within(row.closest('li')!).getByText('查看缺项记录')).toBeTruthy()
+    expect(row.closest('li')!.querySelector('details')?.open).toBe(false)
+    expect(row.closest('li')!.querySelector('code')?.textContent).toBe('opaque_server_field')
+  })
+
+  it('does not derive a second work-text requirement when printed text is usable', async () => {
+    const user = userEvent.setup()
+    const printedOnlyQuestion = { ...question, working_text: '', sources_ready: true }
+    mountContent({ content: { ...emptyContent(), questions: [printedOnlyQuestion] } })
+    await screen.findByLabelText('正在核对的题目')
+    await user.selectOptions(screen.getByLabelText('正在核对的题目'), 'question-1')
+    expect(screen.queryByText('待补：当前工作题干字段')).toBeNull()
+    expect(screen.getByText('已具备：可用于练习的题面文本已记录')).toBeTruthy()
+  })
+
+  it('shows an explicitly flagged work-text field without requiring duplicate text for practice', async () => {
+    const explicitlyFlaggedQuestion = {
+      ...question,
+      working_text: '',
+      missing_fields: ['working_text'],
+      sources_ready: true,
+      confirmed: false,
+    }
+    mountContent({ content: { ...emptyContent(), questions: [explicitlyFlaggedQuestion] } })
+    const workTextRow = await screen.findByText('待核对：当前工作题干字段')
+    expect(within(workTextRow.closest('li')!).queryByRole('button')).toBeNull()
+    expect(screen.getByText('已具备：可用于练习的题面文本已记录')).toBeTruthy()
+  })
 
   it('keeps question input when a question switch is cancelled and switches after confirmation', async () => {
     const user = userEvent.setup()

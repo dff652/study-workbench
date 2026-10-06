@@ -106,7 +106,7 @@ export function EvidenceWorkspace({
           onTabChange?.(value)
         }}
       />
-      <FilterBar filters={filters} onChange={updateFilters} />
+      <details open={Boolean(filters.dateFrom || filters.dateTo || filters.sourceKind)} className='rounded-md border p-3'><summary className='cursor-pointer text-sm font-medium'>筛选作答分析</summary><div className='mt-3'><FilterBar filters={filters} onChange={updateFilters} /></div></details>
       <WorkspacePanel id='evidence' value='overview' active={tab}>
         <div className='space-y-4'>
           <div>

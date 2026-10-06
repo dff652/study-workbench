@@ -41,8 +41,27 @@ def verify(page, origin, app_url, db, actor, house, material, fixture, output, c
         page.wait_for_function("[...document.images].filter(i => i.getClientRects().length).every(i => i.complete && i.naturalWidth)")
         for label in ('正在整理学习证据…', '正在读取计划…', '正在读取家庭资料…'):
             expect(page.get_by_text(label, exact=True).filter(visible=True)).to_have_count(0)
+        page.evaluate('async () => {await document.fonts.ready; await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))}')
     def no_overflow(label):
-        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 2'), label
+        measured = page.evaluate('''() => ({width: innerWidth, scroll: document.documentElement.scrollWidth,
+            overflow: [...document.querySelectorAll('#content *')].filter(el => el.getClientRects().length && el.getBoundingClientRect().right > innerWidth + 2)
+                .slice(0, 12).map(el => ({tag:el.tagName, cls:el.className, width:el.getBoundingClientRect().width, right:el.getBoundingClientRect().right}))})''')
+        if measured['scroll'] > measured['width'] + 2:
+            page.screenshot(path=str(output / 'ux-overflow-failure.png'), full_page=True)
+        assert measured['scroll'] <= measured['width'] + 2, (label, measured)
+    def expect_recent_documents_default():
+        recent_tab = page.get_by_role('tab', name='最近成果', exact=True)
+        expect(recent_tab).to_have_attribute('aria-selected', 'true')
+        expect(page.get_by_role('region', name='最近成果', exact=True)).to_be_visible()
+        expect(page.get_by_role('tabpanel', name='家长解析', exact=True)).not_to_be_visible()
+        expect(page.get_by_role('button', name='制作整套五册', exact=True)).not_to_be_visible()
+        matching_results = page.get_by_role('region', name='最近成果', exact=True).get_by_role('listitem').filter(
+            has=page.get_by_role('heading', name=material.title, exact=True))
+        expect(matching_results.first).to_be_visible()
+        # The fixture creates two independently generated solution outputs for
+        # one material. The catalogue must show both without requiring a unique
+        # material-title heading.
+        assert matching_results.count() >= 2, 'recent results should retain multiple outputs for the same material'
     def check_saved_overlay(box, image, geometry):
         expect(box).to_be_visible(); settle()
         rect=image.bounding_box(); overlay=box.bounding_box(); assert rect and overlay
@@ -165,13 +184,15 @@ def verify(page, origin, app_url, db, actor, house, material, fixture, output, c
             page.set_viewport_size({'width':width,'height':1000})
             for view in ('overview','materials','knowledge','learning','progress','documents','settings'):
                 page.goto(origin+app_url(view=view)+'&learner='+fixture['learner']+('&material='+str(material.pk) if view=='materials' else ''))
-                if view in ('materials','documents'): expect(page.get_by_role('heading',name=material.title,exact=True)).to_be_visible()
+                if view=='materials': expect(page.get_by_role('heading',name=material.title,exact=True)).to_be_visible()
                 elif view=='overview': expect(page.get_by_role('heading',name='当前范围摘要',exact=True)).to_be_visible()
                 elif view=='progress': expect(page.get_by_role('heading',name='复测计划',exact=True)).to_be_visible()
+                elif view=='documents': expect_recent_documents_default()
                 else: expect(page.locator('.workspace-page h1')).to_be_visible()
                 settle(); no_overflow((view,width))
                 page.screenshot(path=str(output/f'ux-final-{view}-{width}.png'),full_page=True)
         checks.append('ux-final-seven-domains-1280-1440-1920')
+        checks.append('ux-documents-recent-default-retains-multiple-results-per-material')
 
         page.goto(origin+app_url(view='overview')+'&learner='+fixture['learner']+'&date_from=2099-01-01')
         expect(page.get_by_text('当前筛选范围没有作答记录',exact=True)).to_be_visible()
@@ -210,8 +231,9 @@ def verify(page, origin, app_url, db, actor, house, material, fixture, output, c
             for view in ('overview','materials','knowledge','learning','progress','documents','settings'):
                 page.goto(origin+app_url(view=view)+'&learner='+fixture['learner']+('&material='+str(material.pk) if view=='materials' else ''))
                 if view=='overview': expect(page.get_by_role('heading',name='当前范围摘要',exact=True)).to_be_visible()
-                elif view in ('materials','documents'): expect(page.get_by_role('heading',name=material.title,exact=True)).to_be_visible()
+                elif view=='materials': expect(page.get_by_role('heading',name=material.title,exact=True)).to_be_visible()
                 elif view=='progress': expect(page.get_by_role('heading',name='复测计划',exact=True)).to_be_visible()
+                elif view=='documents': expect_recent_documents_default()
                 else: expect(page.locator('.workspace-page h1')).to_be_visible()
                 settle(); no_overflow(('native-200-percent',view))
                 page.keyboard.press('Tab')

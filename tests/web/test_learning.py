@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TransactionTestCase, override_settings
+from django.test import Client, TransactionTestCase, override_settings
 from PIL import Image
 
 from app.persistence import services as core
@@ -314,6 +314,27 @@ class LearningServiceTests(TransactionTestCase):
         self.assertEqual(original_history["assessments"][0]["assessment"].attempt_id,
                          original["attempt_id"])
         self.assertFalse(original_history["independent_success"])
+        old_profile_attempts = learning.profile_detail(self.owner, self.learner_id)["attempts"]
+        replacement_profile_attempts = learning.profile_detail(self.owner, replacement_learner_id)["attempts"]
+        self.assertEqual([item["attempt"].attempt_id for item in old_profile_attempts],
+                         [original["attempt_id"]])
+        self.assertEqual(old_profile_attempts[0]["revision"].state.value, "withdrawn")
+        self.assertEqual([item["attempt"].attempt_id for item in replacement_profile_attempts],
+                         [replacement["attempt_id"]])
+        self.assertEqual(replacement_profile_attempts[0]["revision"].state.value, "active")
+        client = Client()
+        client.force_login(self.owner)
+        old_overview = client.get(
+            f"/api/v1/learners/{self.learner_id}/overview/?household={self.household.pk}").json()
+        old_history = client.get(
+            f"/api/v1/learners/{self.learner_id}/attempts/?household={self.household.pk}").json()
+        replacement_overview = client.get(
+            f"/api/v1/learners/{replacement_learner_id}/overview/?household={self.household.pk}").json()
+        self.assertEqual(old_overview["recent_attempts"], [])
+        self.assertEqual([(row["attempt_id"], row["state"]) for row in old_history["items"]],
+                         [(original["attempt_id"], "withdrawn")])
+        self.assertEqual([row["attempt_id"] for row in replacement_overview["recent_attempts"]],
+                         [replacement["attempt_id"]])
 
     def test_prompted_classroom_unknown_and_date_mismatch_never_count_as_independent_success(self):
         attempts = [

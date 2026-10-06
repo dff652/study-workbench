@@ -12,11 +12,11 @@
       <div class="field"><label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>{{ form.title }}{{ form.title.errors }}</div>
       <div class="field"><label for="{{ form.purpose.id_for_label }}">{{ form.purpose.label }}</label>{{ form.purpose }}{{ form.purpose.errors }}</div>
       <fieldset><legend>{{ form.questions.label }}</legend><div class="workspace-choice-list">{{ form.questions }}</div>{{ form.questions.errors }}</fieldset>
-      <div class="form-actions"><button type="submit">生成 PDF／Word</button></div>
+      <div class="form-actions"><button type="submit">同时生成 PDF 与 Word</button></div>
     </form>
   </section>
   <section>
-    <h2>已生成的练习文档</h2>
+    <h2>练习制作历史</h2><p><a href="/app/?view=documents">查看最近全部成果与搜索</a></p>
     {% if snapshots %}<div class="workspace-table-wrap"><table><thead><tr><th>文档</th><th>用途</th><th>生成时间</th></tr></thead><tbody>
       {% for s in snapshots %}<tr><td><a href="{% url 'printing:snapshot' s.pk %}">{{ s.title }}</a></td><td>{{ s.purpose|ui_label }}</td><td>{{ s.created_at|date:"Y-m-d H:i" }}</td></tr>{% endfor %}
     </tbody></table></div>{% else %}<p class="muted">还没有生成的练习文档。</p>{% endif %}

@@ -228,10 +228,21 @@ def _question_view_context(request, data, link_form=None):
     from app.study.models import VariantProvenance
     variant = VariantProvenance.objects.filter(question=entity, household=data['household']).select_related(
         'parent_question_revision__entity', 'target_method_revision__entity').first()
-    return {**data, "link_form": link_form or _link_form(data, question_id=entity.pk),
+    from app.web import learning_services
+    learner_id = request.GET.get('learner', '')
+    practice_learner = None
+    if learner_id and data['practice_ready'] and EntityRecord.objects.filter(household=data['household'], kind='learner', stable_id=learner_id).exists():
+        try:
+            profile = learning_services.learner_create_choices(request.user, learner_id)
+            if any(item['question_id'] == entity.stable_id for item in profile['questions']):
+                practice_learner = learner_id
+        except core.PersistenceError:
+            pass
+    return {**data, "practice_learner": practice_learner,
+        "link_form": link_form or _link_form(data, question_id=entity.pk),
         "current_state_label": services._state_label(entity.head_revision.review_projection.state),
         "variant": variant,
-        "edit_url": "", "title": data["number"], "source_cards": _decorate_sources(request, data["current_sources"]),
+        "edit_url": reverse('web:question_edit', args=[entity.stable_id]) if data['can_write'] and data['material'] else "", "title": data["number"], "source_cards": _decorate_sources(request, data["current_sources"]),
         "current_missing": bool(current.get("missing_fields")) or not current.get("evidence_refs")}
 
 

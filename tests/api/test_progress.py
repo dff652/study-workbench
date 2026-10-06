@@ -1,6 +1,7 @@
 """A plan completion is a real attempt, never a UI counter mutation."""
 import json
-from datetime import date
+from dataclasses import replace
+from datetime import date, datetime, timezone
 from unittest.mock import patch
 from django.test import Client, TransactionTestCase
 from app.study.models import StudySchedule, ScheduleRevision
@@ -25,6 +26,78 @@ class ProgressAPITests(TransactionTestCase):
 
     def post(self, client, url, value):
         return client.post(url, json.dumps(value), content_type="application/json")
+
+    def test_today_scope_uses_local_learning_date_after_midnight_without_rewriting_events(self):
+        from app.api import progress
+        from app.study import services as study
+        with patch('django.utils.timezone.now', return_value=datetime(2026, 10, 6, 18, tzinfo=timezone.utc)):
+            self.assertEqual(progress.scope(self.household.pk, self.learner_id)['as_of'], '2026-10-07')
+            self.assertEqual(study.evidence_report(self.owner, self.learner_entity.pk)['summary']['as_of'], '2026-10-07')
+
+    def test_same_day_attempt_order_matches_evidence_progress_and_profile_after_old_revision_edit(self):
+        ids = ["attempt-z-first", "attempt-a-correction", "attempt-m-redo", "attempt-b-retest"]
+        entered = [datetime(2026, 10, 1, hour, tzinfo=timezone.utc) for hour in (9, 10, 11, 12)]
+        kinds = ("first", "retry", "retry", "retest")
+        attempt_ids = []
+        original_header = learning.records.header
+
+        def timed_header(*args, **kwargs):
+            header = original_header(*args, **kwargs)
+            return replace(header, recorded_at=entered[len(attempt_ids)].isoformat())
+
+        with patch("app.web.learning_services._new_id", side_effect=ids):
+            with patch("app.web.learning_services.records.header", side_effect=timed_header):
+                for kind in kinds:
+                    choices = learning.learner_create_choices(self.owner, self.learner_id)
+                    event = learning.create_attempt(self.owner, self.learner_id,
+                        question_id=self.question_id, attempt_kind=kind,
+                        source_kind="independent_answer", independence="confirmed_independent",
+                        prompt_status="none_confirmed", prompts=(), actual_date_state="known",
+                        actual_date=date(2026, 10, 1), legibility="readable", answer_text="8",
+                        authorship_basis="人工确认合成作答", observation_values=[choices["observation_choices"][0][0]],
+                        previous_attempt_id=attempt_ids[-1] if attempt_ids else None,
+                        context=choices["context"], request_key=key())
+                    attempt_ids.append(event["attempt_id"])
+
+        edit = learning.attempt_edit_context(self.owner, attempt_ids[0])
+        old_revision = edit["attempt"].revisions[-1]
+        expected = {"edit_context": edit["edit_context"],
+            "observation_heads": edit["choices"]["context"]["observation_heads"]}
+        late_edit = datetime(2026, 10, 7, 22, tzinfo=timezone.utc)
+        with patch("app.web.learning_services.records.header", side_effect=lambda *args, **kwargs:
+                replace(original_header(*args, **kwargs), recorded_at=late_edit.isoformat())):
+            learning.append_attempt_revision(self.owner, attempt_ids[0],
+                attempt_kind=old_revision.attempt_kind, source_kind=old_revision.source_kind,
+                independence=old_revision.independence, prompt_status=old_revision.prompt_status,
+                prompts=old_revision.prompts, actual_date_state=old_revision.actual_date_state,
+                actual_date=old_revision.actual_date, legibility=old_revision.legibility,
+                answer_text=old_revision.answer_text, authorship_basis=old_revision.authorship_basis,
+                observation_values=[f"{item.observation_id}|{item.observation_revision_id}"
+                    for item in old_revision.observation_refs], expected_context=expected, request_key=key())
+
+        node = knowledge_services.save_node(self.owner, self.household.pk, "knowledge",
+            data={"definition": "合成知识", "sources": [self.source]}, request_key=key(), reason="合成排序测试")
+        node_entity = EntityRecord.objects.get(kind="knowledge", stable_id=node["stable_id"])
+        importer._accept(self.owner, node_entity, node["revision_id"], "核对合成知识", key())
+        link = knowledge_services.create_link(self.owner, self.household.pk, kind="knowledge",
+            question_revision_id=self.question_revision_id, node_revision_id=node["revision_id"],
+            role="applies", reason="合成排序关联", request_key=key())
+        link_entity = EntityRecord.objects.get(kind=link["kind"], stable_id=link["stable_id"])
+        importer._accept(self.owner, link_entity, link["revision_id"], "核对合成关联", key())
+
+        client = Client()
+        client.force_login(self.owner)
+        overview = client.get(self.url("overview")).json()
+        attempt_page = client.get(self.url("attempts") + "&page_size=100").json()
+        progress = client.get(self.url("progress")).json()
+        archived = learning.profile_detail(self.owner, self.learner_id)["attempts"]
+        expected_order = list(reversed(attempt_ids))
+
+        self.assertEqual([row["attempt_id"] for row in overview["recent_attempts"]], expected_order)
+        self.assertEqual([row["attempt_id"] for row in attempt_page["items"]], expected_order)
+        self.assertEqual([row["attempt_id"] for row in progress["groups"][0]["recent_attempts"]], expected_order[:3])
+        self.assertEqual([row["attempt"].attempt_id for row in archived], expected_order)
+        self.assertEqual(overview["recent_attempts"][-1]["ordering_basis"], "same_day_chain")
 
     def test_material_counts_are_read_only_and_keep_partial_unknown(self):
         client = Client()

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { notifyLearningUpdate } from '../../lib/learning-updates'
 import { api } from '../../api'
 import { errorText, isUnauthorized, type Remote } from '../../components/shared'
 import { Button } from '../../components/ui/button'
@@ -85,6 +86,7 @@ export function ProgressWorkspace({
   }, [onUnsavedChange])
 
   const refreshAfterScheduleChange = () => {
+    notifyLearningUpdate({ householdId, learnerId: learner.id })
     if (scheduleDirtyRef.current) {
       pendingScheduleRefreshRef.current = true
       return

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { notifyLearningUpdate } from '../../lib/learning-updates'
 import { createPortal } from 'react-dom'
 import { KnowledgeFormulaTools } from '../../components/knowledge-formula-tools'
 import { AlertCircle, LoaderCircle, RotateCcw } from 'lucide-react'
@@ -291,6 +292,7 @@ export function WorkspacePage({
     setSubmitPending(true)
     postWorkspaceForm(targetUrl, formData, csrfToken, controller.signal).then(async (result) => {
       if (controller.signal.aborted || submitControllerRef.current !== controller) return
+      if (result.response.ok) notifyLearningUpdate({ householdId: activePage.scope?.household_id || householdId, learnerId: activePage.scope?.learner_id || undefined })
       if (result.data.redirect) {
         pendingFormRestoreRef.current = null
         setDraftDirty(false)
@@ -335,7 +337,7 @@ export function WorkspacePage({
         setSubmitPending(false)
       }
     })
-  }, [csrfToken, onNavigate, onUnauthorized, onUnsavedChange, activePage, privateDraft.candidate, privateDraft.conflict, privateDraft.setMessage, privateDraft.tombstone, url])
+  }, [csrfToken, onNavigate, onUnauthorized, onUnsavedChange, activePage, privateDraft.candidate, privateDraft.conflict, privateDraft.setMessage, privateDraft.tombstone, url, householdId])
 
   useLayoutEffect(() => {
     const root = contentRef.current
@@ -408,7 +410,7 @@ export function WorkspacePage({
     const field = root?.querySelector('#id_display_markup')
     if (!root || !field || !root.querySelector('#id_definition')) { setFormulaHost(null); return }
     const host = document.createElement('div')
-    field.parentElement?.appendChild(host)
+    root.querySelector('#id_definition')?.parentElement?.appendChild(host)
     setFormulaHost(host)
     return () => { host.remove() }
   }, [activePage])

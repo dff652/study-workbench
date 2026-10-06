@@ -4,7 +4,9 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
+from app.domain.attempt_ordering import order_attempts
 from app.domain import SourceKind
 from app.persistence.adapter import ObjectKey
 from app.persistence import services as core
@@ -18,7 +20,7 @@ from . import evidence
 
 def scope(household_id, learner_id=None):
     result = {"household_id": str(household_id), "metric_version": "progress.v1",
-              "as_of": timezone.localdate().isoformat()}
+              "as_of": timezone.localdate(timezone=ZoneInfo('Asia/Shanghai')).isoformat()}
     if learner_id is not None:
         result["learner_id"] = learner_id
     return result
@@ -76,7 +78,7 @@ def materials(actor, household_id, material_ids=None):
 
 
 @transaction.atomic
-def learner(actor, household_id, learner_id):
+def learner(actor, household_id, learner_id, *, question_ids=None):
     report = evidence.projection(actor, household_id, learner_id, {})
     active = [row for row in report["items"] if row["state"] == "active"]
     insufficient = {row["attempt_id"] for row in report["findings"]["insufficient_evidence"]}
@@ -86,13 +88,19 @@ def learner(actor, household_id, learner_id):
     groups = []
     for node in nodes.order_by("kind", "stable_id"):
         trace = core.published_trace(actor, household_id, node=ObjectKey(node.kind, node.stable_id))
-        question_ids = set(RevisionRecord.objects.filter(pk__in=trace["question_revision_ids"])
-                           .values_list("entity__stable_id", flat=True))
-        attempts = [row for row in active if row["question_revision_id"] in trace["question_revision_ids"]]
+        linked = RevisionRecord.objects.filter(pk__in=trace['question_revision_ids'])
+        if question_ids is not None:
+            linked = linked.filter(entity__stable_id__in=question_ids)
+        revisions_and_questions = list(linked.values_list('pk', 'entity__stable_id'))
+        revision_ids = {revision for revision, _ in revisions_and_questions}
+        question_ids_for_group = {question for _, question in revisions_and_questions}
+        if question_ids is not None and not question_ids_for_group:
+            continue
+        attempts = [row for row in active if row["question_revision_id"] in revision_ids]
         payload = node.published_revision.payload
         groups.append({"id": node.stable_id, "kind": node.kind,
             "label": (payload.get("name") or payload.get("definition") or "待补名称")[:120],
-            "question_count": len(question_ids), "attempt_count": len(attempts),
+            "question_count": len(question_ids_for_group), "attempt_count": len(attempts),
             "independent_success_count": sum(row["independent_success"] for row in attempts),
             "unknown_evidence_count": sum(row["attempt_id"] in insufficient for row in attempts),
             "source_counts": {kind.value: sum(row["source_kind"] == kind.value for row in attempts) for kind in SourceKind},
@@ -106,7 +114,7 @@ def schedules(actor, household_id, learner_id):
     profile = evidence.scope(actor, household_id, learner_id)
     items = []
     counts = dict.fromkeys(("pending", "overdue", "completed", "cancelled"), 0)
-    today = timezone.localdate()
+    today = timezone.localdate(timezone=ZoneInfo('Asia/Shanghai'))
     report = evidence.projection(actor, household_id, learner_id, {})
     active = [item for item in report['items'] if item['state'] == 'active']
     for raw in study.home(actor, household_id)["schedules"]:
@@ -149,13 +157,11 @@ def schedules(actor, household_id, learner_id):
             "detail_url": reverse("study:schedule_detail", args=[row.pk]),
             "question_url": reverse('knowledge:question_detail', args=[target.pk]),
             "record_attempt_url": reverse('learning:attempt_new', args=[learner_id]) + '?' + urlencode(
-                {'question': target.stable_id, 'kind': 'retest'}),
+                {'question': target.stable_id, 'kind': 'retest', 'plan': row.pk}),
             "attempt_count": len(attempts), "latest_attempt": recent[0] if recent else None,
             "history": history, "attempt_choices": choices})
     return {"scope": scope(household_id, learner_id), "counts": counts, "items": items}
 
 
 def _recent(attempts):
-    # Unknown actual dates must never become a recent learning event via recorded_at.
-    return sorted(attempts, key=lambda row: (row['actual_date_state'] == 'known' and bool(row['actual_date']),
-        row['actual_date'] if row['actual_date_state'] == 'known' and row['actual_date'] else '', row['attempt_id']), reverse=True)
+    return order_attempts(attempts)

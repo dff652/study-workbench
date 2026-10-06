@@ -1,6 +1,7 @@
 """Authenticated learner archive pages."""
 from datetime import date
 from functools import wraps
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from django.contrib.auth.decorators import login_required
@@ -214,7 +215,7 @@ def profile_detail(request, learner_id):
             and date.fromisoformat(item["revision"].actual_date) <= to_date_value]
     data.update({"has_attempt_history": bool(data['attempts']),
         "has_filters": bool(question_filter or knowledge_filter or type_filter or review_filter or error_filter or from_date or to_date),
-        "attempts": sorted(attempts, key=lambda item: item["sort_date"], reverse=True),
+        "attempts": attempts,
         "filters": {"question": question_filter, "knowledge": knowledge_filter, "type": type_filter,
             "review": review_filter, "error": error_filter, "from": from_date, "to": to_date}})
     for item in data["attempts"]:
@@ -232,6 +233,11 @@ def profile_detail(request, learner_id):
                 "judgment": learning_label(JUDGMENT_LABELS, dimension.judgment),
                 "basis": learning_label(BASIS_LABELS, dimension.basis),
             } for dimension in assessment["revision"].dimensions]
+    processes = {}
+    for item in data['attempts']:
+        process = processes.setdefault(item['question_id'], {'label': item['question_label'], 'items': []})
+        process['items'].append(item)
+    data['question_processes'] = list(processes.values())
     return render(request, "learning/profile.html", data)
 
 
@@ -359,16 +365,36 @@ def attempt_new(request, learner_id):
         "prompt_status": PromptStatus.UNKNOWN.value, "actual_date_state": ActualDateState.UNKNOWN.value,
         "legibility": Legibility.UNKNOWN.value, "sources": "[]", "context_token": token}
     selected_question = request.GET.get('question')
+    if selected_question and selected_question not in {item['question_id'] for item in choices['questions']}:
+        raise Http404
     if selected_question in {item['question_id'] for item in choices['questions']}:
+        from .knowledge_services import practice_ready
+        if not practice_ready(records.entity(household_id, 'question', selected_question)):
+            raise Http404
         initial['question_id'] = selected_question
     if request.GET.get('kind') == AttemptKind.RETEST.value:
         initial['attempt_kind'] = AttemptKind.RETEST.value
+    plan_id = request.GET.get('plan', '')
+    if plan_id:
+        from app.study import services as study_services
+        try:
+            plan = study_services.schedule_detail(request.user, int(plan_id))
+            if plan['target_stale']:
+                return _failure(request, core.PersistenceError('stale_context', '计划目标题目版本已变化，请核对后重新安排。'))
+            if plan['schedule'].learner.stable_id != learner_id or plan['schedule'].target_question_revision.entity.stable_id != selected_question:
+                raise Http404
+        except (ValueError, core.PersistenceError):
+            raise Http404
     if request.method == "GET":
         form = AttemptForm(initial=initial, learner_id=learner_id, questions=choices["questions"],
             observations=choices["observation_choices"], prior_attempts=choices["prior_attempts"])
     else:
         form = AttemptForm(request.POST, learner_id=learner_id, questions=choices["questions"],
             observations=choices["observation_choices"], prior_attempts=choices["prior_attempts"])
+        if form.is_valid() and selected_question and form.cleaned_data['question_id'] != selected_question:
+            form.add_error('question_id', '当前学习任务的题目不能在这里替换，请返回选题后重新开始。')
+        if form.is_valid() and plan_id and form.cleaned_data['attempt_kind'] != AttemptKind.RETEST.value:
+            form.add_error('attempt_kind', '本复测计划应记录为复测；其他类型请从学习档案另行记录。')
         if form.is_valid():
             try:
                 context = records.read_context(form.cleaned_data["context_token"], household_id,
@@ -384,8 +410,14 @@ def attempt_new(request, learner_id):
                     request_key=str(form.cleaned_data["request_key"]))
             except core.PersistenceError as exc:
                 return _failure(request, exc)
-            return redirect("learning:attempt_detail", attempt_id=result["attempt_id"])
-    data = _attempt_form_data(form, choices, page_title="新增一次作答", learner_id=learner_id)
+            if plan_id:
+                return redirect(reverse('study:schedule_detail', args=[plan_id]) + '?' + urlencode({'attempt_revision': records.entity(household_id, 'attempt', result['attempt_id']).revisions.order_by('revision_no').first().pk}))
+            return redirect(reverse('learning:attempt_detail', kwargs={'attempt_id': result['attempt_id']}) + '?saved=1')
+    data = _attempt_form_data(form, choices, page_title="记录复测作答" if plan_id else "新增一次作答", learner_id=learner_id)
+    data["task_question"] = next((item for item in choices["questions"] if item["question_id"] == selected_question), None)
+    data["household_id"] = household_id
+    data["task_learner_name"] = records.entity(household_id, "learner", learner_id).identity.get("display_name", "当前学习者")
+    data["task_return_url"] = reverse("study:schedule_detail", args=[plan_id]) if plan_id else (reverse("knowledge:question_detail", args=[records.entity(household_id, "question", selected_question).pk]) + "?" + urlencode({"learner": learner_id}) if selected_question else "")
     data["profile_url"] = reverse("learning:profile_detail", kwargs={"learner_id": learner_id})
     return render(request, "learning/attempt_form.html", data,
                   status=400 if request.method == "POST" and not form.is_valid() else 200)
@@ -400,6 +432,9 @@ def attempt_detail(request, attempt_id):
         data = services.attempt_detail(request.user, attempt_id)
     except core.PersistenceError as exc:
         return _failure(request, exc)
+    question = EntityRecord.objects.filter(household_id=data['household_id'], kind='question', stable_id=data['attempt'].question_id).first()
+    data['practice_question_url'] = reverse('knowledge:question_detail', args=[question.pk]) + '?' + urlencode({'learner': data['learner'].learner_id}) if question else ''
+    data['saved_notice'] = request.GET.get('saved') == '1'
     data["edit_url"] = reverse("learning:attempt_edit", kwargs={"attempt_id": attempt_id})
     data["correction_url"] = reverse("learning:attempt_correct", kwargs={"attempt_id": attempt_id})
     data["assessment_new_url"] = reverse("learning:assessment_new", kwargs={"attempt_id": attempt_id})

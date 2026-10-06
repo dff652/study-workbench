@@ -3,9 +3,10 @@
 {% block title %}题目 {{ number }} · 知识地图{% endblock %}
 {% block content %}
   <link rel="stylesheet" href="{% static 'knowledge/knowledge.css' %}">
-  <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识库与题目地图</a><span aria-hidden="true">/</span><span>题目 {{ number }}</span></nav>
-  <div class="page-heading"><div><p class="eyebrow">题目与知识关联</p><h1>题目 {{ number }}</h1><p class="muted">先看题目自己试一试；需要提示时，再展开相关知识与方法。</p></div></div>
+  <nav class="breadcrumbs"><a href="{% url 'knowledge:index' %}?household_id={{ household.pk }}">知识与题库</a><span aria-hidden="true">/</span><span>题目 {{ number }}</span></nav>
+  <div class="page-heading"><div><p class="eyebrow">题目与知识关联</p><h1>题目 {{ number }}</h1><p class="muted">{% if practice_ready %}先自己尝试，再按需查看提示。保存时请如实确认作者、日期与提示情况。{% else %}这是待核对或历史题目，当前不能开始练习。请先补齐题干、来源并完成核定。{% endif %}</p></div></div>
   {% if current_missing %}<div class="notice warning-notice" role="status">当前题目存在缺失字段或来源区域，不能作为完整已审核题目使用。题干、区域缺口会保留在当前修订中。</div>{% endif %}
+  {% if not practice_ready %}<section class="panel" aria-label="继续整理题目"><p>{{ practice_unavailable_reason }}</p>{% if edit_url %}<a class="primary-button link-button" href="{{ edit_url }}">继续整理这道题</a>{% elif can_write %}<p class="muted">这道题没有可编辑的原资料记录，请按当前版本核对来源与审核。</p>{% else %}<p class="muted">请家庭所有者或审核成员继续核对；只读查看不会开放整理权限。</p>{% endif %}<a class="secondary-button link-button" href="#revision-{{ entity.head_revision_id }}">查看当前版本与审核</a></section>{% endif %}
   <section class="panel question-content"><div class="section-heading"><h2>当前题目 · 第 {{ entity.head_revision.revision_no }} 版</h2><span class="status-badge">{{ current_state_label }}</span></div>
     {% if variant %}<h3>AI 生成变式</h3><div class="long-text">{{ current.working_text|linebreaksbr }}</div>
       <p>来自 <a href="{% url 'knowledge:question_detail' entity_id=variant.parent_question_revision.entity_id %}#revision-{{ variant.parent_question_revision_id }}">父题 r{{ variant.parent_question_revision.revision_no }}</a>，目标 <a href="{% url 'knowledge:node_detail' entity_id=variant.target_method_revision.entity_id %}#revision-{{ variant.target_method_revision_id }}">方法 r{{ variant.target_method_revision.revision_no }}</a>。来源区域表示生成依据，题干需人工审核。</p>
@@ -14,6 +15,7 @@
     {% if current.missing_fields %}<p><strong>缺失字段：</strong>{{ current.missing_fields|ui_labels }}</p>{% endif %}
     <h3>当前来源</h3>{% include "knowledge/_sources.html" with cards=source_cards only %}
   </section>
+  {% if practice_ready %}<section class="panel" aria-label="练习任务"><h2>完成这道题后</h2>{% if practice_learner and can_write %}<a class="primary-button link-button" href="{% url 'learning:attempt_new' practice_learner %}?question={{ entity.stable_id|urlencode }}">记录这次真实作答</a>{% else %}<p class="muted">选择学习者后记录作答；只读成员可请家长协助保存。</p>{% endif %}<a class="secondary-button link-button" href="{% url 'knowledge:index' %}?household_id={{ household.pk|urlencode }}&mode=learn">继续选题</a></section>{% endif %}
   <details class="panel disclosure"><summary>需要帮助时查看知识与方法</summary><div class="disclosure-content"><h2>当前题目版本的知识、方法與题型</h2>
     {% if current_links %}<ul class="association-list">{% for item in current_links %}<li>
       <a href="{{ item.node_url }}">{{ item.kind|ui_label }} · {{ item.node.head_revision.payload.name|default:item.node.head_revision.payload.definition|truncatechars:80 }}</a>
@@ -22,7 +24,7 @@
     </li>{% endfor %}</ul>{% else %}<p class="muted">当前题目还没有可用的知识或方法提示。{% if can_write %}<a href="#question-associations">补充题目关联</a>{% endif %}</p>{% endif %}
     <p class="muted small-text">题目版本发生修订时，旧关联仍固定指向旧版本；需要人工另建关联并审核。</p>
   </div></details>
-  <details class="panel disclosure"><summary>查看家长参考答案（完成尝试后再打开）</summary><div class="disclosure-content">{% if reference_answer %}<p>{{ reference_answer.body|linebreaksbr }}</p><p class="muted">核对依据：{{ reference_answer.basis }}</p>{% else %}<p>当前题目版本尚无已接受的家长答案；这不影响先尝试题目。</p>{% endif %}</div></details>
+  <details class="panel disclosure"><summary>查看家长参考答案（完成尝试后再打开）</summary><div class="disclosure-content">{% if reference_answer %}<p>{{ reference_answer.body|linebreaksbr }}</p><p class="muted">核对依据：{{ reference_answer.basis }}</p>{% else %}<p>当前题目版本尚无已接受的家长答案；{% if practice_ready %}这不影响先尝试题目。{% else %}请先继续核对题目。{% endif %}</p>{% endif %}</div></details>
   {% if can_write %}
   <details id="question-associations" class="panel disclosure" {% if link_form.errors %}open{% endif %}><summary>家长整理题目关联</summary><div class="disclosure-content"><h2>从题目建立节点关联</h2><p class="muted">先选择题目版本，再选择知识点、方法或题型的精确版本。关联需另行审核。</p>
     <form method="post" action="{% url 'knowledge:question_link' entity_id=entity.pk %}" class="link-editor">{% csrf_token %}

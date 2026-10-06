@@ -110,7 +110,8 @@ class UXRecordTests(TransactionTestCase):
         self.assertEqual(response.context['form'].initial['question_id'], self.question_id)
         self.assertEqual(response.context['form'].initial['attempt_kind'], 'retest')
         outside = self.client.get(reverse('learning:attempt_new', args=[learner]), {'question': 'outside'})
-        self.assertNotIn('question_id', outside.context['form'].initial)
+        self.assertEqual(outside.status_code, 404)
+        self.assertNotIn('form', outside.context)
 
     def test_practice_excludes_drafts_while_manager_keeps_them(self):
         draft = materials.save_question(self.owner, self.material.pk, printed_text='尚未核定的合成题',

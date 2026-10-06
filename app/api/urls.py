@@ -1,4 +1,5 @@
 from django.urls import path
+from . import documents
 from . import views
 from . import workflow_views as workflow
 from . import progress_views as progress
@@ -10,6 +11,7 @@ from . import knowledge_views as knowledge
 
 app_name = "api"
 urlpatterns = [
+    path("documents/", documents.catalogue, name="documents"),
     path("materials/<uuid:material_id>/classification/", workflow.classification, name="material_classification"),
     path("materials/<uuid:material_id>/classification/save/", workflow.classification_save, name="material_classification_save"),
     path("materials/<uuid:material_id>/knowledge-explanations/", knowledge.workspace, name="knowledge_explanations"),

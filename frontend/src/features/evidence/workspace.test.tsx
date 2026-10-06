@@ -186,6 +186,7 @@ describe('EvidenceWorkspace', () => {
     expect(recentText.indexOf('最近题目 B')).toBeLessThan(recentText.indexOf('日期未知题目'))
     expect(recentText).toContain('实际作答日期未知')
 
+    await user.click(screen.getByText('家长关注 · 过程观察与待核实证据'))
     const groups = await screen.findByRole('heading', { name: '尚未充分核实' })
     const unconfirmedSection = groups.closest('section')
     const eventList = unconfirmedSection?.querySelector('ul')
@@ -197,7 +198,7 @@ describe('EvidenceWorkspace', () => {
     expect(within(unconfirmedSection as HTMLElement).getAllByText('过程尚未记录')).toHaveLength(1)
     expect(screen.getByText('符号需要对照原图')).toBeTruthy()
     expect(screen.getByText('另一评价版本的原始原因')).toBeTruthy()
-    const sectionFlow = unconfirmedSection?.parentElement
+    const sectionFlow = unconfirmedSection?.parentElement?.parentElement
     expect(sectionFlow?.className).toContain('space-y-8')
     expect(sectionFlow?.className).not.toContain('grid')
     const correctSection = screen.getByRole('heading', { name: '已观察到的正确方法与过程' }).closest('section')

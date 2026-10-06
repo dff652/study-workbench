@@ -7,6 +7,7 @@ from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
+from app.domain.attempt_ordering import order_attempts
 from app.domain import (
     ActualDateState, Assessment, AssessmentDimension, AssessmentRevision,
     Attempt, AttemptKind, AttemptRevision, AttemptState, AuthorState, BasisKind,
@@ -247,6 +248,13 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
         type_nodes = types_by_question.get(question_revision_id, ())
         attempt_infos.append({
             "attempt": attempt,
+            "attempt_id": attempt.attempt_id,
+            "previous_attempt_id": attempt.previous_attempt_id,
+            "question_id": attempt.question_id,
+            "learner_id": attempt.learner_id,
+            "actual_date_state": current.actual_date_state.value,
+            "actual_date": str(current.actual_date) if current.actual_date_state is ActualDateState.KNOWN and current.actual_date else None,
+            "created_at": attempt.revisions[0].header.recorded_at,
             "revision": current,
             "question_label": question_label,
             "knowledge_labels": tuple(item["label"] for item in knowledge_nodes),
@@ -257,6 +265,7 @@ def _profile_view(actor, household_id, bundle, profile, observations, attempts):
             "independent_success": _independent_success(actor, household_id, bundle, attempt, assessment_rows),
             "sort_date": str(current.actual_date) if current.actual_date_state is ActualDateState.KNOWN and current.actual_date else '',
         })
+    attempt_infos = order_attempts(attempt_infos)
     obs_infos = []
     for observation in observations:
         latest = observation.revisions[-1]

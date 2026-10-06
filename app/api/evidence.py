@@ -4,8 +4,9 @@ from datetime import date
 from django.urls import reverse
 from django.db import transaction
 
+from app.domain.attempt_ordering import order_attempts
 from app.domain import SourceKind
-from app.persistence.models import EntityRecord
+from app.persistence.models import EntityRecord, RevisionRecord
 from app.persistence import services as core
 from app.study import services as study
 from app.web import records
@@ -38,6 +39,14 @@ def projection(actor, household_id, learner_id, query):
     selected = filters(query)
     report = study.evidence_report(actor, learner.pk)
     history_count = sum(row['state'] == 'active' for row in report['attempts'])
+    attempt_ids = [row['attempt_id'] for row in report['attempts']]
+    initial_recorded_at = {
+        stable_id: payload.get('header', {}).get('recorded_at')
+        for stable_id, payload in RevisionRecord.objects.filter(
+            entity__household_id=household_id, entity__kind="attempt",
+            entity__stable_id__in=attempt_ids, revision_no=1,
+        ).values_list("entity__stable_id", "payload")
+    }
     question_pks = dict(EntityRecord.objects.filter(household_id=household_id, kind="question")
                         .values_list("stable_id", "pk"))
     rows = []
@@ -59,10 +68,12 @@ def projection(actor, household_id, learner_id, query):
                 continue
         row = dict(raw)
         row["attempt_url"] = reverse("learning:attempt_detail", args=[row["attempt_id"]])
+        row["learner_id"] = learner_id
+        row["created_at"] = initial_recorded_at.get(row["attempt_id"])
         pk = question_pks.get(row["question_id"])
         row["question_url"] = reverse("knowledge:question_detail", args=[pk]) if pk else None
         rows.append(row)
-    rows.sort(key=lambda item: (item["recorded_at"], item["attempt_id"]), reverse=True)
+    rows = order_attempts(rows)
     active = [row for row in rows if row["state"] == "active"]
     ids = {row["attempt_id"] for row in active}
     findings = {
@@ -85,7 +96,7 @@ def projection(actor, household_id, learner_id, query):
         "repeated_error_count": len(findings["repeated_errors"]),
         "insufficient_evidence_count": len({row["attempt_id"] for row in findings["insufficient_evidence"]}),
     }
-    recent = sorted(active, key=lambda row: (row['actual_date_state'] == 'known' and bool(row['actual_date']), row['actual_date'] if row['actual_date_state'] == 'known' and row['actual_date'] else '', row['attempt_id']), reverse=True)[:6]
+    recent = active[:6]
     finding_ids = {row['attempt_id'] for key in ('observed_correct_methods', 'insufficient_evidence')
                    for row in findings[key]}
     return {"history_attempt_count": history_count, "recent_attempts": recent,

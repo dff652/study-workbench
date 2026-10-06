@@ -2,8 +2,10 @@
 {% load static product %}
 {% block title %}复习计划 · {{ learner.display_name }}{% endblock %}
 {% block content %}
+{% if saved_attempt_pending %}<p class="notice" role="status">复测作答已保存，待确认关联。下方已选中这次精确作答版本；请核对后确认完成计划。</p>{% elif saved_attempt_unavailable %}<p class="notice" role="status">作答版本目前不符合本计划的关联条件。请核对题目版本、实际日期、来源或最新修订；计划尚未完成。</p>{% endif %}
   <nav class="breadcrumbs"><a href="{{ index_url }}">复习安排</a><span aria-hidden="true">/</span><span>复习计划</span></nav>
   <div class="workspace-toolbar"><div><p class="eyebrow">计划与实际作答</p><h1>{{ learner.display_name }}的复习计划</h1></div><div class="workspace-actions"><a class="secondary-button" href="{{ index_url }}">{% if current_revision.action == "planned" or current_revision.action == "rescheduled" %}返回列表{% else %}返回复习安排{% endif %}</a></div></div>
+  {% if can_write and not target_stale %}{% if current_revision.action == "planned" or current_revision.action == "rescheduled" %}<p><a class="primary-button link-button" href="{{ record_attempt_url }}">开始这次复测</a></p>{% endif %}{% endif %}
   <div class="workspace-columns">
     <div class="workspace-reading">
       <section class="panel study-plan-detail">
@@ -14,13 +16,13 @@
       {% if completion_history %}<section class="panel"><h2>完成记录</h2><ol class="study-events">{% for item in completion_history %}<li><strong>{{ item.event.recorded_at }}</strong>{% if item.revision %}<span>实际作答日期：{% if item.actual_date %}{{ item.actual_date }}{% else %}未知{% endif %} · 录入日期：{{ item.recorded_at }}</span><span>来源：{{ item.revision.source_kind.value|ui_label }} · 提示：{{ item.revision.prompt_status.value|ui_label }}{% if item.revision.prompts %}（{{ item.revision.prompts|join:"、" }}）{% endif %} · 独立性：{{ item.revision.independence.value|ui_label }} · 可读性：{{ item.revision.legibility.value|ui_label }}</span>{% else %}<span>作答历史无法定位；完成事件仍保留。</span>{% endif %}</li>{% endfor %}</ol></section>{% endif %}
     </div>
     <div class="workspace-reading">
-      {% if current_revision.action == "planned" or current_revision.action == "rescheduled" %}<form method="post" class="study-form panel">
+      {% if can_write %}{% if current_revision.action == "planned" or current_revision.action == "rescheduled" %}<details {% if saved_attempt_pending or form.errors %}open{% endif %}><summary>修改计划与确认已有作答</summary><form method="post" class="study-form panel">
         <h2>追加计划事件</h2><p class="muted">改期、取消和完成会新增历史记录；旧计划事件不会被覆盖。</p>
         {% csrf_token %}{{ form.request_key }}{{ form.context_token }}
         {% if form.non_field_errors %}<div class="notice error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
         {% for field in form.visible_fields %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
         <div class="form-actions"><button class="primary-button" type="submit">追加计划事件</button></div>
-      </form>{% endif %}
+      </form></details>{% endif %}{% endif %}
       <section class="panel"><h2>计划历史</h2><ol class="study-events">{% for event in history %}<li><strong>{{ event.action|ui_label }} · {{ event.recorded_at }}</strong><span>日期：{{ event.due_date }} · 目标：{{ event.goal }}</span><span>提示安排：{{ event.prompt_plan|default:"未指定" }} · 依据：{{ event.reason }}</span>{% if event.completed_attempt_revision_id %}<span>已关联实际作答，详情见完成记录。</span>{% endif %}</li>{% endfor %}</ol></section>
     </div>
   </div>

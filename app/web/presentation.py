@@ -26,7 +26,7 @@ LABELS = {
     "attempt": "作答", "teaching_diagram": "教学图", "erratum": "资料勘误",
     "parent_answers": "家长答案", "student_practice": "学生练习",
     "independent_retest": "无提示复测", "knowledge_summary": "知识整理",
-    "parent_observation": "家长观察", "independent_practice": "无提示练习", "classification_index": "分类索引", "learning_report": "学习报告",
+    "parent_observation": "家长观察", "independent_practice": "无提示练习", "classification_index": "分类索引", "learning_report": "学习报告", "evidence_report": "学习证据报告",
     "printed_text": "题干待补", "original_number": "原题号待补",
     "region": "来源区域待补", "region_id": "来源区域待补",
     "region_revision_id": "来源区域待补", "unit": "单位待确认",

@@ -64,6 +64,9 @@ def detail(actor, material_id):
         questions.append({"id": revision.entity.stable_id, "revision_id": revision.pk,
             "number": item.original_number, "printed_text": revision.payload.get("printed_text") or "",
             "working_text": revision.payload.get("working_text") or "",
+            "missing_fields": revision.payload.get('missing_fields', []),
+            "sources_ready": bool(revision.payload.get('evidence_refs')) and not any(
+                ref.get('region_missing') or ref.get('gaps') for ref in revision.payload.get('evidence_refs', [])),
             "sources": [{"page_id": ref["page_id"], "bbox": ref["original_bbox"]} for ref in item.sources],
             "confirmed": revision.entity.published_revision_id == revision.pk and revision.review_projection.state == "accepted",
             "answer": {"body": answer.body, "formulas": answer.formulas, "basis": answer.basis,

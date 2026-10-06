@@ -685,6 +685,31 @@ def node_revision_choices(bundle, household_id, kind=None, stable_id=None):
     return sorted(choices, key=lambda row: (row[1].casefold(), row[0]))
 
 
+def practice_ready(entity):
+    revision = entity.head_revision
+    payload = revision.payload
+    if entity.published_revision_id != revision.pk or revision.review_projection.state != 'accepted':
+        return False
+    if payload.get('missing_fields') or not payload.get('evidence_refs') or not (payload.get('working_text') or payload.get('printed_text') or '').strip():
+        return False
+    if any(ref.get('region_missing') or ref.get('gaps') for ref in payload['evidence_refs']):
+        return False
+    heads = {(kind, stable): head for kind, stable, head in EntityRecord.objects.filter(
+        household_id=entity.household_id).values_list('kind', 'stable_id', 'head_revision_id')}
+    return all(heads.get((item['kind'], item['stable_id'])) == item['head_revision_id'] for item in revision.dependency_heads)
+
+
+def practice_unavailable_reason(entity):
+    revision = entity.head_revision
+    if entity.published_revision_id != revision.pk:
+        return '当前题目版本尚未发布；旧发布版本仍保留为历史。'
+    if revision.review_projection.state != 'accepted':
+        return '当前题目版本尚未通过人工核定。'
+    if revision.payload.get('missing_fields') or not revision.payload.get('evidence_refs'):
+        return '题干或来源仍有缺项，请继续整理后核定。'
+    return '来源或依赖版本需要重新核对，请继续整理并查看审核历史。'
+
+
 @transaction.atomic
 def question_detail(actor, entity_id):
     entity = EntityRecord.objects.select_related("household", "head_revision", "published_revision").get(pk=entity_id)
@@ -716,7 +741,8 @@ def question_detail(actor, entity_id):
     can_write = HouseholdMember.objects.filter(household=entity.household, user=actor,
         user__is_active=True, role__in=('owner', 'reviewer')).exists()
     return {**data, "entity": entity, "history": history, "associations": associations,
-        "reference_answer": reference_answer, "can_write": can_write,
+        "reference_answer": reference_answer, "can_write": can_write, "practice_ready": practice_ready(entity),
+        "practice_unavailable_reason": practice_unavailable_reason(entity),
         "current_sources": _source_cards(actor, entity.household_id, entity.head_revision),
         "current_links": associations.get(current_revision_id, []),
         "number": ", ".join(dict.fromkeys(labels.get(entity.pk, ()))) or "—",

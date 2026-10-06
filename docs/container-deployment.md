@@ -1,6 +1,12 @@
 # Single-host container service
 
-## 当前 Web 整合交付（2026-10-05）
+## 当前 UI UX 整改部署（2026-10-06）
+
+36 当前运行 `4ab5a22`／`test-20261006-ux-4ab5a22`，仍为 `0.2.0-dev`。主代理 38 项运维及 15 组实际 HTTPS 检查通过；52 张表旧业务记录与 24 文件保持，没有新增迁移。PRE／POST 配套备份分别实际空恢复，并在 PRE 恢复实例启动新镜像验证兼容；原数据库／卷、代理及 CA 保持，旧镜像与恢复点保留。独立运行 review、文档交付与人工未验范围见 [本轮部署验收](reviews/ux-remediation-deployment-20261006.md)。后续仍使用两个 Compose 文件，不能把文档提交当作新镜像。
+
+以下记录保留为前轮历史，镜像／表数量均只适用于对应阶段；当前身份以上节为准。
+
+## 前轮 Web 整合交付（2026-10-05）
 
 36 已升级到 `66e7fb2`／`test-20261005-integration-66e7fb2`，32 项运维、18 组实际 HTTPS 浏览器及前后配套空恢复通过。旧版恢复后已演练候选迁移；新增 `workflows.0003_workspacedraft`，50 张旧表记录和 24 私有文件、原 DB／卷、代理及 CA 保持，当前 51 张表。详见 [部署验收](reviews/web-deployment-20261005.md)；真实家庭 Web、Word 和模型仍待实际结果。
 
@@ -31,7 +37,7 @@ The runtime image uses the Python 3.12.14 slim Bookworm base by digest, Django a
 
 The image also installs the Bookworm packages `fonts-noto-cjk=1:20220127+repack1-1` and `fonts-dejavu-core=2.37-6` from Debian's [Bookworm package metadata for Noto](https://packages.debian.org/bookworm/fonts-noto-cjk) and [DejaVu](https://packages.debian.org/bookworm/fonts-dejavu-core). These provide the original TTC/TTF inputs at the paths used by the printing service. The two license notices are copied into `/app/licenses/`. The container font package revisions differ from the host revisions recorded in [third-party notices](third-party-notices.md), so generated print snapshots record their actual font hashes; container output is not claimed to be byte-for-byte or pixel-identical to prior host output.
 
-The PC companion implementation adds Debian `poppler-utils` for PDF page-count verification and page previews. Its Debian package revision is not pinned; the executed `pdftoppm` version is recorded in each immutable output recipe. Rendering also preserves the actual native generator, font, adapter and fixed companion source hashes. The deterministic solution queue shares the existing background worker and runs with the model disabled. `solutions.0001` and `0002` add draft, confirmation, PNG and output/event history; upgrade and recovery require the paired database and complete private directory. Host 36 now runs source `66e7fb2`, with `pdftoppm` 22.12.0 verified in the running image. See the [PC contract](pc-companion-contract.md) and current DEV_STATE for actual acceptance.
+The PC companion implementation adds Debian `poppler-utils` for PDF page-count verification and page previews. Its Debian package revision is not pinned; the executed `pdftoppm` version is recorded in each immutable output recipe. Rendering also preserves the actual native generator, font, adapter and fixed companion source hashes. The deterministic solution queue shares the existing background worker and runs with the model disabled. `solutions.0001` and `0002` add draft, confirmation, PNG and output/event history; upgrade and recovery require the paired database and complete private directory. The historical integration deployment ran source `66e7fb2`, with `pdftoppm` 22.12.0 verified in the running image. See the [PC contract](pc-companion-contract.md) and current DEV_STATE for actual acceptance.
 
 The Web process runs as uid/gid `10001`, has no Linux capabilities, uses a read-only root filesystem, and writes uploads and generated materials only under the private named volume mounted at `/var/lib/study-workbench/private`. PostgreSQL uses a separate named volume. Compose labels both projects' owned containers, volumes, networks, and the built application image; the acceptance script refuses existing resource names and removes only resources whose labels match its generated project and owner IDs.
 

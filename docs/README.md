@@ -22,6 +22,7 @@
 - [整合与体验验收](reviews/pc-integration-20261005.md)：当前整合工作树的实际验证与独立审查。
 - [UI UX 评估与整改主基线](reviews/learning-system-ux-remediation-baseline-20261006.md)：后续整改唯一维护入口，整合 DOCX、现场评估及用户核对意见；57 项问题、42 项任务、四项候选与验收。当前源码已按清单实施，工程／浏览器与真实家庭产品验收分别记录。
 - [UI/UX 整改实施、验收与交付记录](reviews/ux-remediation-implementation-20261006.md)：主基线任务的源码依据、IA 决策、候选定义及本轮验证证据。
+- [36 UI UX 整改部署与恢复验收](reviews/ux-remediation-deployment-20261006.md)：当前运行身份、前后配套空恢复、实际 HTTPS、独立复核及人工未验项。
 - [UI UX 本地提交与交付 review](reviews/ux-remediation-handoff-20261006.md)：源码／文档本地提交、已验字节、独立交付 review 与后续手动 push 边界。
 - [现场评估与设计参考快照](reviews/learning-system-ux-20261006.md)：保留分享建议采纳与现场证据，任务状态以整改主基线为准。
 - [本机容器启动与恢复](container-deployment.md)：私有配置、账号／家庭、Web／worker 和联合恢复。

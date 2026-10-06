@@ -4,6 +4,8 @@
 
 ## 使用与当前交付
 
+- [后续整改统一部署与验收（2026-10-07）](reviews/learning-system-follow-up-deployment-20261007.md)：HTTP／HTTPS／worker同版、39项运维、17组正式浏览器、配套空恢复、回退及真实待验项。
+
 - [后续整改实施与验收回执（2026-10-07）](reviews/learning-system-follow-up-implementation-20261007.md)：源码、合成验证、提交、部署与产品待验门槛。
 - [目标用户与客户端验收记录](reviews/learning-system-target-user-acceptance-20261007.md)：真实学生／家长任务和Word／内置客户端，未测结果保持未测试。
 

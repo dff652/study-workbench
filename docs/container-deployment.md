@@ -1,6 +1,12 @@
 # Single-host container service
 
-## 当前双入口（2026-10-06）
+## 当前双入口与统一版本（2026-10-07）
+
+HTTP `http://192.168.2.36:18080/app/`与HTTPS `https://192.168.2.36:18443/app/`以及worker已统一为`d08a509`／`test-20261007-acceptance-d08a509`，版本仍为`0.2.0-dev`。39项运维、17组正式双入口浏览器及PRE／POST实际空恢复通过；52表、28文件及48迁移保持。整项目使用三个Compose文件；备份前必须暂停HTTP、Web和worker全部写入服务。本次无迁移，故障回退保留当前数据库及新写入，旧配套备份用于独立空恢复。见[本轮部署验收](reviews/learning-system-follow-up-deployment-20261007.md)。
+
+以下为HTTP新增时的历史状态，旧源码版本不代表当前运行。
+
+## 前轮新增双入口（2026-10-06）
 
 新增内网 HTTP `http://192.168.2.36:18080/app/`，原 HTTPS `https://192.168.2.36:18443/app/` 保持。HTTP 源码 `02ce455`／`test-20261006-http-02ce455`，原 HTTPS Web／worker 仍 `4ab5a22`；共享原数据库／资料卷，各自会话名字。当前使用 `compose.yaml`＋`compose.mobile.yaml`＋`compose.http.yaml` 三文件，启动／回退和验收状态见 [HTTP 支持](reviews/http-support-deployment-20261006.md)。下方两个配置文件的叙述为相应历史阶段或未启用 HTTP 伴随服务的配置，不能作为本次整项目操作文件列表。
 
@@ -169,7 +175,7 @@ Do not use `down --volumes` unless permanent deletion of both PostgreSQL records
 
 ## 36 LAN test instance
 
-The authorized test runs on host 36 as Compose project `study-workbench-36`, with dedicated database/private volumes. Its exact LAN listener is recorded only in the ignored `data/runtime-36/deployment.local.json`. This initially used LAN HTTP; the authorized MOB-01 upgrade now uses LAN HTTPS with a separate private CA. It is not a public deployment; both Compose files are required for subsequent service updates. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); account details stay in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
+The authorized test runs on host 36 as Compose project `study-workbench-36`, with dedicated database/private volumes. Its exact LAN listener is recorded only in the ignored `data/runtime-36/deployment.local.json`. This initially used LAN HTTP; the authorized MOB-01 upgrade now uses LAN HTTPS with a separate private CA. It is not a public deployment; all three Compose files (`compose.yaml`, `compose.mobile.yaml`, `compose.http.yaml`) are required for current project updates. Its protected configuration and generated account are under `data/runtime-36/` (directory 0700, files 0600); account details stay in `credentials.local.json`. Only clearly labeled synthetic sample data was seeded. Do not copy private configuration into Git or paste the password into chat.
 
 Use the existing configuration without displaying its contents:
 

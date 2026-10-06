@@ -1,6 +1,6 @@
 # 学习工作台目标用户与客户端验收记录
 
-对应[后续任务V-04／V-08](learning-system-acceptance-follow-up-20261006.md)。当前状态：**未执行**。工程整改回执见[实施与验收记录](learning-system-follow-up-implementation-20261007.md)。本表不邀请参与者、不创建真实记录，也不替用户填写测试成绩。
+对应[后续任务V-04／V-08](learning-system-acceptance-follow-up-20261006.md)。真实用户与指定客户端状态：**未执行**。正式HTTP／HTTPS已部署，普通Chromium运行验收见[部署回执](learning-system-follow-up-deployment-20261007.md)；这不替代下表真人／客户端任务。工程整改回执见[实施与验收记录](learning-system-follow-up-implementation-20261007.md)。本表不邀请参与者、不创建真实记录，也不替用户填写测试成绩。
 
 使用经明确授权的受控资料及学习者。至少3名目标学生、3名家长；私有记录用匿名编号S01～03、P01～03，姓名、照片、账号及作答不进入Git。每个任务记录起止时间、是否无帮助完成、求助／跳转／误入管理／放弃及证据位置。真实参与者可以终止任务；不能用代理操作替代其完成。
 

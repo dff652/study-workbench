@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { getErrorMessage, getJson, postJson } from '../../api'
 import { isUnauthorized } from '../../components/shared'
 import { Button } from '../../components/ui/button'
+import { requestKeyFor } from './request-keys'
 
 export const SUBJECTS = [['unknown', '未分类'], ['mathematics', '数学'], ['chinese', '语文'], ['english', '英语'],
   ['physics', '物理'], ['chemistry', '化学'], ['biology', '生物'], ['history', '历史'], ['geography', '地理'],
@@ -58,10 +59,9 @@ export function SubjectEditor({ materialId, csrfToken, writable, onUnauthorized,
     const requestMaterial = materialId
     setBusy(true); setError('')
     const signature = JSON.stringify([materialId, loaded.version, subject, reason])
-    if (request.current?.signature !== signature) request.current = { signature, key: crypto.randomUUID() }
     try {
       const data = await postJson<{ material: { classification: Classification }; saved_classification?: Classification }>(`/api/v1/materials/${encodeURIComponent(materialId)}/classification/save/`,
-        { subject, expected_version: loaded.version, reason, request_key: request.current.key }, csrfToken)
+        { subject, expected_version: loaded.version, reason, request_key: requestKeyFor(request, signature) }, csrfToken)
       if (!alive.current || scope.current !== requestMaterial) return
       const saved = data.saved_classification || data.material.classification
       setLoaded(saved); setStatus(`学科分类已保存为第 ${saved.version} 版。`); request.current = null; onSaved?.()

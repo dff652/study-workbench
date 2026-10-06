@@ -34,6 +34,33 @@ describe('manual school subject classification', () => {
     expect(dirty).toHaveBeenLastCalledWith(false)
   })
 
+  it('saves on HTTP without randomUUID, using a cryptographic request key', async () => {
+    const user = userEvent.setup(); const writes: Array<Record<string, unknown>> = []
+    const getRandomValues = crypto.getRandomValues.bind(crypto)
+    vi.stubGlobal('crypto', { getRandomValues })
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        writes.push(JSON.parse(String(init.body)))
+        return json({ material: { classification: { subject: 'english', version: 1 } } })
+      }
+      return json({ classification: initial, history: [], history_next_before: null })
+    }))
+    render(<SubjectEditor {...props} />); await edit(user)
+    await user.click(screen.getByRole('button', { name: '保存分类新版本' }))
+    await screen.findByText(/学科分类已保存为第 1 版/)
+    expect(writes[0].request_key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  })
+
+  it('allows another save after secure random identifier generation fails', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('crypto', {})
+    vi.stubGlobal('fetch', vi.fn(async () => json({ classification: initial, history: [], history_next_before: null })))
+    render(<SubjectEditor {...props} />); await edit(user)
+    await user.click(screen.getByRole('button', { name: '保存分类新版本' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('无法生成安全的请求标识')
+    expect((screen.getByRole('button', { name: '保存分类新版本' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('preserves its selection on a stale version and appends only after explicit comparison', async () => {
     const user = userEvent.setup(); const writes: Array<Record<string, unknown>> = []
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {

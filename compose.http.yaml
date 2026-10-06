@@ -1,0 +1,30 @@
+# Optional companion to compose.yaml + compose.mobile.yaml; HTTPS stays intact.
+services:
+  http:
+    extends:
+      file: compose.yaml
+      service: web
+    image: study-workbench:${SWB_HTTP_IMAGE_TAG:?Set the fixed HTTP image tag}
+    build:
+      args:
+        SWB_SOURCE_REVISION: ${SWB_HTTP_SOURCE_REVISION:?Set the HTTP source revision}
+        SWB_BUILD_DATE: ${SWB_HTTP_BUILD_DATE:-}
+    ports: !override
+      - "${SWB_HTTP_BIND_ADDRESS:-127.0.0.1}:${SWB_HTTP_HOST_PORT:-18080}:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: app.http_production
+      SWB_ALLOWED_HOSTS: ${SWB_HTTP_HOST:?Set the HTTP hostname or IP}
+      SWB_CSRF_TRUSTED_ORIGINS: http://${SWB_HTTP_HOST:?Set the HTTP hostname or IP}:${SWB_HTTP_HOST_PORT:-18080}
+      SWB_SECURE_SSL_REDIRECT: "false"
+      SWB_SECURE_COOKIES: "false"
+      SWB_TRUST_PROXY_HEADERS: "false"
+    # The companion checks the existing schema, without running migrations.
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        python manage.py check
+        python manage.py migrate --check
+        python manage.py collectstatic --noinput
+        exec gunicorn app.wsgi:application --bind=0.0.0.0:8000 --workers=1 --threads=4 --timeout=60 --error-logfile=-
+    labels:
+      com.study-workbench.service: http

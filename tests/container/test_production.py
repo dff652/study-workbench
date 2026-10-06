@@ -96,6 +96,74 @@ print(json.dumps({
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class HTTPCompanionSettingsTests(unittest.TestCase):
+    def test_http_cookie_names_are_separate_and_proxy_headers_are_ignored(self):
+        source = """
+import django
+from django.conf import settings
+from django.test import RequestFactory
+django.setup()
+assert settings.SESSION_COOKIE_NAME == 'swb_http_sessionid'
+assert settings.CSRF_COOKIE_NAME == 'swb_http_csrftoken'
+assert not settings.SESSION_COOKIE_SECURE and not settings.CSRF_COOKIE_SECURE
+assert not settings.SECURE_SSL_REDIRECT and settings.SECURE_PROXY_SSL_HEADER is None
+request = RequestFactory().get('/', HTTP_X_FORWARDED_PROTO='https')
+assert not request.is_secure()
+"""
+        result = run_python(source, service_environment(DJANGO_SETTINGS_MODULE='app.http_production'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = run_python(
+            "from django.conf import settings; assert settings.SESSION_COOKIE_NAME == 'sessionid' and settings.CSRF_COOKIE_NAME == 'csrftoken' and settings.SESSION_COOKIE_SECURE",
+            service_environment(SWB_SECURE_COOKIES='true', SWB_TRUST_PROXY_HEADERS='true'),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_http_listener_rejects_https_only_flags(self):
+        for overrides in (
+            {'SWB_TRUST_PROXY_HEADERS': 'true'},
+            {'SWB_TRUST_PROXY_HEADERS': 'true', 'SWB_SECURE_COOKIES': 'true'},
+            {'SWB_TRUST_PROXY_HEADERS': 'true', 'SWB_SECURE_SSL_REDIRECT': 'true'},
+        ):
+            with self.subTest(overrides=overrides):
+                result = run_python('from django.conf import settings; print(settings.DEBUG)',
+                    service_environment(DJANGO_SETTINGS_MODULE='app.http_production', **overrides))
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('HTTP requires', result.stderr)
+
+    def test_http_csrf_cookie_token_and_origin_checks_still_apply(self):
+        source = """
+import django
+from django.test import RequestFactory
+from django.http import HttpResponse
+from django.middleware.csrf import CsrfViewMiddleware, get_token
+django.setup()
+factory = RequestFactory()
+middleware = CsrfViewMiddleware(lambda request: HttpResponse())
+request = factory.get('/')
+token = get_token(request)
+response = middleware.process_response(request, HttpResponse())
+cookie = response.cookies['swb_http_csrftoken']
+assert not cookie['secure']
+assert 'csrftoken' not in response.cookies
+secret = cookie.value
+for origin, provided_token, accepted in (
+    ('http://example.test:18080', token, True),
+    ('http://example.test:18080', '', False),
+    ('http://foreign.test:18080', token, False),
+    ('https://example.test:18443', token, False),
+):
+    request = factory.post('/', HTTP_HOST='example.test:18080', HTTP_ORIGIN=origin,
+        HTTP_X_CSRFTOKEN=provided_token, HTTP_X_FORWARDED_PROTO='https')
+    request.COOKIES['swb_http_csrftoken'] = secret
+    middleware.process_request(request)
+    result = middleware.process_view(request, lambda request: HttpResponse(), (), {})
+    assert (result is None) == accepted, (origin, bool(provided_token))
+"""
+        result = run_python(source, service_environment(DJANGO_SETTINGS_MODULE='app.http_production',
+            SWB_CSRF_TRUSTED_ORIGINS='http://example.test:18080'))
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class HealthViewTests(unittest.TestCase):
     def test_health_view_reports_database_readiness(self):
         source = """

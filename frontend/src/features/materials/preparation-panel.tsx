@@ -229,17 +229,17 @@ export function WorkflowPreparationPanel({
       <CardContent className='space-y-5 px-5 py-5'>
         {remote.status === 'loading' ? <LoadingState label='正在读取准备配置与阶段历史…' /> : null}
         {remote.status === 'error' ? <RetryState message={remote.message} onRetry={refresh} title='无法读取准备阶段' /> : null}
-        {error ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950'>{error}</p> : null}
-        {notice ? <p role='status' className='rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900'>{notice}</p> : null}
+        {error ? <p role='alert' className='workspace-notice workspace-notice--danger'>{error}</p> : null}
+        {notice ? <p role='status' className='workspace-notice workspace-notice--success'>{notice}</p> : null}
         {remote.status === 'loaded' ? (
           <>
             <section className='space-y-2 rounded-lg border bg-muted/15 p-4' aria-label='当前模型配置和准备限额'>
               <div className='flex flex-wrap items-center gap-2'><Badge variant={remote.data.config.enabled ? 'secondary' : 'outline'}>{remote.data.config.enabled ? '模型准备已启用' : '模型准备未启用'}</Badge><span className='text-sm'>外发范围：{scopeLabel(remote.data.config.outbound_scope)}</span></div>
               <p className='text-xs leading-5 text-muted-foreground'>本批累计请求 {remote.data.limits.used_requests} / {remote.data.limits.max_requests} 次 · 最长 {remote.data.limits.max_seconds} 秒{remote.data.config.budget_usd ? ` · 预算上限 ${remote.data.config.budget_usd} USD` : ''}。来源区域由你明确选择。</p>
-              {!remote.data.config.enabled || remote.data.config.outbound_scope !== 'selected_regions' ? <div className='flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950'><CircleHelp className='size-4 shrink-0' aria-hidden='true' /><span>当前配置不能准备图像区域；模型关闭时仍可人工核对和保存待补内容。</span><Button type='button' variant='outline' size='sm' onClick={onOpenContent}>打开同页人工核对</Button></div> : null}
-              {!packageCanPrepare ? <p className='rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'>请先完成上方原始来源包的逐项核对，再开始新的准备阶段。</p> : null}
+              {!remote.data.config.enabled || remote.data.config.outbound_scope !== 'selected_regions' ? <div className='workspace-notice workspace-notice--warning flex flex-wrap items-center gap-3'><CircleHelp className='size-4 shrink-0' aria-hidden='true' /><span>当前配置不能准备图像区域；模型关闭时仍可人工核对和保存待补内容。</span><Button type='button' variant='outline' size='sm' onClick={onOpenContent}>打开同页人工核对</Button></div> : null}
+              {!packageCanPrepare ? <p className='workspace-notice workspace-notice--warning'>请先完成上方原始来源包的逐项核对，再开始新的准备阶段。</p> : null}
               {!stageJobCanPrepare ? <p className='text-sm text-muted-foreground'>当前任务已进入交付阶段，不能新增模型准备；现有阶段历史仍可查看。</p> : null}
-              {!remainingRequest ? <p className='text-sm text-amber-900'>本批请求次数已达上限；可以继续查看或核对已有阶段。</p> : null}
+              {!remainingRequest ? <p className='text-sm workspace-inline-state--warning'>本批请求次数已达上限；可以继续查看或核对已有阶段。</p> : null}
             </section>
 
             {canWrite && configured && stageJobCanPrepare && packageCanPrepare && remainingRequest ? (
@@ -256,10 +256,10 @@ export function WorkflowPreparationPanel({
                   {sources.length ? <ul className='space-y-2'>{sources.map((source, index) => {
                     const sourcePage = pages.find((page) => page.id === source.page_id)
                     return <li key={`${source.page_id}:${index}`} className='flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm'><span>资料页 {sourcePage?.position ?? '未知'} · 原图区域 [{source.bbox.join(', ')}] px</span>{!redoQuestionId ? <button type='button' className='text-destructive underline' onClick={() => setSources((current) => current.filter((_, sourceIndex) => sourceIndex !== index))} disabled={busy}>移除准备来源</button> : <span className='text-xs text-muted-foreground'>重做阶段会固定沿用原来源</span>}</li>
-                  })}</ul> : <p className='rounded-md border border-dashed px-3 py-3 text-sm text-amber-900'>请至少选定一个原图区域。看不清的题干可以在模型结果或人工核对中保持未知。</p>}
+                  })}</ul> : <p className='workspace-notice workspace-notice--warning border-dashed'>请至少选定一个原图区域。看不清的题干可以在模型结果或人工核对中保持未知。</p>}
                 </> : <p className='rounded-md border border-dashed p-3 text-sm text-muted-foreground'>当前资料没有可选原图页。请在资料中先上传原图。</p>}
                 <label className='block text-sm font-medium'>准备原因（必填）<input className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} required /></label>
-                <label className='flex items-start gap-2 rounded-md bg-amber-50/70 p-3 text-sm leading-5 text-amber-950'><input type='checkbox' className='mt-1' checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} disabled={busy} />我已对照原图并明确选定这些区域，同意按上方显示的模型外发范围发送本次准备请求。</label>
+                <label className='workspace-notice workspace-notice--warning flex items-start gap-2 text-sm leading-5'><input type='checkbox' className='mt-1' checked={sendConfirmed} onChange={(event) => setSendConfirmed(event.target.checked)} disabled={busy} />我已对照原图并明确选定这些区域，同意按上方显示的模型外发范围发送本次准备请求。</label>
                 <Button type='submit' disabled={!canStartPreparation}>{queueBusy ? '正在提交准备请求…' : '明确发送准备请求'}</Button>
               </form>
             ) : null}

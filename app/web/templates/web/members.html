@@ -27,12 +27,12 @@
             <li>
               <div class="member-summary">
                 <strong>{{ item.membership.user.get_username }}</strong>
-                <span class="muted">
+                <span class="status-badge">
                   {% if item.membership.role == "owner" %}家庭所有者
                   {% elif item.membership.role == "reviewer" %}审核成员
                   {% else %}只读成员{% endif %}
-                  · {% if item.membership.user.is_active %}账号可登录{% else %}账号已停用{% endif %}
                 </span>
+                <span class="status-badge {% if item.membership.user.is_active %}status-accepted{% else %}status-draft{% endif %}">{% if item.membership.user.is_active %}账号可登录{% else %}账号已停用{% endif %}</span>
               </div>
               <details class="member-permissions"><summary>关联学习者、权限与登录状态</summary><p class="small-text">关联学习者：未记录（账号与学习档案分别保存）</p><p class="small-text">权限：{% if item.membership.role == "owner" %}查看、整理、审核、成员与模型配置管理{% elif item.membership.role == "reviewer" %}查看、整理与审核；成员和模型配置由所有者管理{% else %}查看家庭资料与学习记录{% endif %}</p><p class="small-text">最近活动：{% if item.membership.user.last_login %}最近登录 {{ item.membership.user.last_login|date:"Y-m-d H:i" }}{% else %}尚无登录记录{% endif %}</p></details>
               {% if item.protected %}

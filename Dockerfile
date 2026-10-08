@@ -1,8 +1,10 @@
 FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df AS frontend
-WORKDIR /build
+WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY frontend/ ./
+COPY DESIGN.md /build/DESIGN.md
+COPY app/web/static/web/design-tokens.css /build/app/web/static/web/design-tokens.css
 RUN npm run build
 
 FROM python:3.12.14-slim-bookworm@sha256:d5ae74acb8026b32a2f6deea45003c5bd4e2880700c19c44bda54670ad3eff90
@@ -28,7 +30,7 @@ RUN groupadd --gid 10001 swb \
     && install -d --owner=10001 --group=10001 --mode=0700 /var/lib/study-workbench/private
 
 COPY --chown=10001:10001 app ./app
-COPY --from=frontend --chown=10001:10001 /build/dist ./frontend/dist
+COPY --from=frontend --chown=10001:10001 /build/frontend/dist ./frontend/dist
 COPY --chown=10001:10001 frontend/LICENSE ./licenses/shadcn-admin-MIT.txt
 COPY --chown=10001:10001 frontend/DEPENDENCY_LICENSES.txt ./licenses/frontend-dependency-notices.txt
 COPY --chown=10001:10001 licenses ./licenses

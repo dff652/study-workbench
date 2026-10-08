@@ -435,7 +435,7 @@ export function MaterialWorkspace({
   }
 
   return (
-    <div className='grid min-w-0 gap-5 xl:grid-cols-[minmax(16rem,0.28fr)_minmax(0,1fr)]'>
+    <div className='grid min-w-0 items-start gap-5 xl:grid-cols-[minmax(16rem,0.28fr)_minmax(0,1fr)]'>
       <section className='min-w-0 space-y-3' aria-label='资料列表'>
           <WorkspaceHeading title='资料列表' actions={<>
           {onProcessingProgress ? <Button type='button' variant='outline' size='sm' onClick={onProcessingProgress} disabled={scopeBusy}>处理进度</Button> : null}
@@ -486,14 +486,14 @@ export function MaterialWorkspace({
         {createOpen ? <form className='grid gap-2 border-t pt-3 sm:grid-cols-[minmax(0,1fr)_auto]' onSubmit={(event) => void createMaterial(event)}>
           <label className='text-sm font-medium'>资料名称<input autoFocus required maxLength={200} disabled={scopeBusy || hasTitlePendingDraft} className='mt-1 h-10 w-full rounded-md border bg-background px-3 font-normal' value={title} onChange={(event) => { const value = event.target.value; setTitleEntry({ householdId, value }); setTitleEdited(true); setTitleSavePending(true) }} /></label>
           <div className='flex items-end'><Button type='submit' disabled={scopeBusy || !title.trim()}>{createBusy ? '正在创建…' : '创建资料'}</Button></div>
-          {createError ? <p role='alert' className='text-sm text-destructive sm:col-span-2'>{createError}</p> : null}
-          {titleDraft.loadError ? <p role='alert' className='text-sm text-amber-900 sm:col-span-2'>私人草稿暂时无法读取，自动保存已暂停；当前输入仍保留在页面中。</p> : null}
+          {createError ? <p role='alert' className='text-sm workspace-inline-state--danger sm:col-span-2'>{createError}</p> : null}
+          {titleDraft.loadError ? <p role='alert' className='text-sm workspace-inline-state--warning sm:col-span-2'>私人草稿暂时无法读取，自动保存已暂停；当前输入仍保留在页面中。</p> : null}
           {titleDraft.message ? <p role='status' className='text-sm text-muted-foreground sm:col-span-2'>{titleDraft.message}</p> : null}
         </form> : null}
       </section>
 
       <section className='min-w-0 space-y-4' aria-label='当前资料详情'>
-        {selectedMaterialId && currentMaterials.status === 'loaded' && !currentMaterials.data.items.some((item) => item.id === selectedMaterialId) ? <p role='status' className='rounded-md border border-amber-300 p-3 text-sm'>当前打开的资料不在本页筛选结果中，右侧仍保留该资料及输入。可调整搜索／学科、返回上一页，或继续当前工作。</p> : null}
+        {selectedMaterialId && currentMaterials.status === 'loaded' && !currentMaterials.data.items.some((item) => item.id === selectedMaterialId) ? <p role='status' className='workspace-notice workspace-notice--warning'>当前打开的资料不在本页筛选结果中，右侧仍保留该资料及输入。可调整搜索／学科、返回上一页，或继续当前工作。</p> : null}
         {!selectedMaterialId ? <EmptyState title='选择一份资料' detail='资料名称、原图和整理状态会显示在这里。' /> : <>
           <WorkspaceHeading
             title={currentDetail.status === 'loaded' ? currentDetail.data.material.title : materialTitle(currentMaterials, selectedMaterialId)}
@@ -503,7 +503,7 @@ export function MaterialWorkspace({
           {currentDetail.status === 'error' ? <RetryState message={currentDetail.message} onRetry={refreshDetail} title='无法读取资料详情' /> : null}
           {currentDetail.status === 'loaded' ? <>
             <SubjectEditor key={selectedMaterialId} materialId={selectedMaterialId} csrfToken={csrfToken} writable={canWrite} onUnauthorized={onUnauthorized} onSaved={() => { refreshDetail(); setListRetry((value) => value + 1) }} onDirtyChange={setSubjectDirty} onBusyChange={setSubjectBusy} />
-            {detailRefreshError ? <div role='alert' className='flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/30'><span>资料暂时无法刷新：{detailRefreshError}。当前输入仍保留。</span><Button type='button' size='sm' variant='outline' onClick={() => refreshDetail()}>重试刷新资料</Button></div> : null}
+            {detailRefreshError ? <div role='alert' className='workspace-notice workspace-notice--danger flex flex-wrap items-center gap-3'><span>资料暂时无法刷新：{detailRefreshError}。当前输入仍保留。</span><Button type='button' size='sm' variant='outline' onClick={() => refreshDetail()}>重试刷新资料</Button></div> : null}
             <PrivateDraftRecovery
               title='发现一份未完成的整理任务设置'
               loadError={workflowDraft.loadError}
@@ -517,8 +517,8 @@ export function MaterialWorkspace({
               onKeepCurrent={workflowDraft.keepCurrent}
               onClearInvalid={workflowDraft.keepCurrent}
             />
-            {workflowError ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950'>{workflowError}</p> : null}
-            {workflowNotice ? <div role='status' className='flex flex-wrap items-center justify-between gap-3 rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950'><span>{workflowNotice}</span><Button type='button' variant='outline' size='sm' onClick={() => changeTab('tasks')}>查看当前任务</Button></div> : null}
+            {workflowError ? <p role='alert' className='workspace-notice workspace-notice--danger'>{workflowError}</p> : null}
+            {workflowNotice ? <div role='status' className='workspace-notice workspace-notice--success flex flex-wrap items-center justify-between gap-3'><span>{workflowNotice}</span><Button type='button' variant='outline' size='sm' onClick={() => changeTab('tasks')}>查看当前任务</Button></div> : null}
             <WorkspaceTabs id='materials' label='资料工作区' tabs={[
               { value: 'pages', label: '原图与进度', count: currentDetail.data.pages.length },
               { value: 'content', label: '题面核对', count: currentDetail.data.readiness.questions.length },
@@ -570,7 +570,7 @@ export function MaterialWorkspace({
                         <label className='flex items-start gap-2 text-sm'><input type='radio' name='evidence-scope' value='material_questions' checked={evidenceScope === 'material_questions'} onChange={() => { setEvidenceScope('material_questions'); setWorkflowEdited(true); setWorkflowSavePending(true); workflowDraft.setMessage('') }} /><span><span className='font-medium'>本资料题目的全部作答记录</span><span className='mt-0.5 block text-xs text-muted-foreground'>默认只看当前资料中题目的历次作答。</span></span></label>
                         <label className='flex items-start gap-2 text-sm'><input type='radio' name='evidence-scope' value='selected_learner_history' checked={evidenceScope === 'selected_learner_history'} onChange={() => { setEvidenceScope('selected_learner_history'); setWorkflowEdited(true); setWorkflowSavePending(true); workflowDraft.setMessage('') }} /><span><span className='font-medium'>所选学习者的全部历史记录</span><span className='mt-0.5 block text-xs text-muted-foreground'>{learnerId ? '包括这名学习者在其他资料中的作答。' : '尚未选择学习者，创建后会列出待测项目，不会关联个人历史。'}</span></span></label>
                       </fieldset>
-                      {proposalNeedsReselect ? <p role='status' className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950'>已恢复其他任务设置。此前选择的本机文件没有随草稿保存，请重新选择并核对后再创建。</p> : null}
+                      {proposalNeedsReselect ? <p role='status' className='workspace-notice workspace-notice--warning'>已恢复其他任务设置。此前选择的本机文件没有随草稿保存，请重新选择并核对后再创建。</p> : null}
                       {workflowDraft.message ? <p role='status' className='text-sm text-muted-foreground'>{workflowDraft.message}</p> : null}
                       <div className='flex flex-wrap gap-2'><Button type='button' onClick={() => void createWorkflow()} disabled={scopeBusy || hasWorkflowPendingDraft || Boolean(proposalNeedsReselect)}>{workflowBusy ? '正在创建…' : '创建并查看任务'}</Button><Button type='button' variant='outline' onClick={() => setCreateWorkflowOpen(false)} disabled={scopeBusy}>取消</Button></div>
                     </CardContent>
@@ -629,9 +629,9 @@ function PrivateDraftRecovery<T>({
   const hasConflict = conflict !== undefined
   const pendingDraft = hasConflict ? conflict : candidate
   if (!loadError && !message && !pendingDraft && !hasConflict && !candidate && !invalidDraft) return null
-  return <section className='space-y-3 rounded-lg border border-sky-200 bg-sky-50/60 p-4 dark:border-sky-900 dark:bg-sky-950/30' aria-label='私人草稿'>
-    {loadError ? <p role='alert' className='text-sm text-amber-950 dark:text-amber-200'>私人草稿暂时无法读取，自动保存已暂停；当前页面的输入仍保留。刷新页面后可以重试。</p> : null}
-    {invalidDraft ? <div role='alert' className='flex flex-wrap items-center gap-3 text-sm text-amber-950 dark:text-amber-200'><span>这份私人草稿格式无法识别，当前内容没有被替换。</span><Button type='button' size='sm' variant='outline' onClick={onClearInvalid}>清理不可恢复草稿</Button></div> : null}
+  return <section className='space-y-3 rounded-lg border bg-muted/20 p-4' aria-label='私人草稿'>
+    {loadError ? <p role='alert' className='text-sm workspace-inline-state--warning'>私人草稿暂时无法读取，自动保存已暂停；当前页面的输入仍保留。刷新页面后可以重试。</p> : null}
+    {invalidDraft ? <div role='alert' className='flex flex-wrap items-center gap-3 text-sm workspace-inline-state--warning'><span>这份私人草稿格式无法识别，当前内容没有被替换。</span><Button type='button' size='sm' variant='outline' onClick={onClearInvalid}>清理不可恢复草稿</Button></div> : null}
     {hasConflict || candidate ? <>
       <div><h3 className='font-semibold'>{hasConflict ? '另一窗口也修改了这项内容' : title}</h3><p className='mt-1 text-sm text-muted-foreground'>请先比较两边内容，再选择恢复草稿或保留当前输入；系统不会替你覆盖。</p></div>
       <dl className='grid gap-3 sm:grid-cols-2'>

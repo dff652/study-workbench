@@ -94,14 +94,14 @@ export function PreparationStageCard({
         <CardDescription>阶段保留原始选择的资料页区域；核对时只修改草稿内容，不会替换来源。</CardDescription>
       </CardHeader>
       <CardContent className='space-y-4 px-5 py-4'>
-        {stage.error_code ? <p className='rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'>{preparationErrorMessage(stage.error_code)}</p> : null}
+        {stage.error_code ? <p role='alert' className='workspace-notice workspace-notice--danger'>{preparationErrorMessage(stage.error_code)}</p> : null}
         {stage.proposal ? (
           <>
             <section className='space-y-3' aria-label='本阶段固定原图来源'>
               <h4 className='text-sm font-semibold'>本阶段固定原图来源</h4>
               <SourcePreviews sources={stage.sources} pages={pages} />
             </section>
-            {stage.proposal.missing_fields.length ? <div className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm'><p className='font-medium text-amber-950'>模型列出的待补项</p><ul className='mt-1 list-inside list-disc text-amber-900'>{stage.proposal.missing_fields.map((field, index) => <li key={`${field}:${index}`}>{missingFieldLabel(field)}</li>)}</ul></div> : null}
+            {stage.proposal.missing_fields.length ? <div className='workspace-notice workspace-notice--warning text-sm'><p className='font-medium'>模型列出的待补项</p><ul className='mt-1 list-inside list-disc'>{stage.proposal.missing_fields.map((field, index) => <li key={`${field}:${index}`}>{missingFieldLabel(field)}</li>)}</ul></div> : null}
             {stage.can_confirm ? (
               <form className='space-y-4' onSubmit={confirm}>
                 <div className='grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]'>
@@ -137,11 +137,11 @@ export function PreparationStageCard({
               </form>
             ) : (
               <div className='space-y-3'>
-                {stage.proposal.printed_text ? <p className='whitespace-pre-wrap rounded-md bg-muted/30 p-3 text-sm'>{stage.proposal.printed_text}</p> : <p className='rounded-md bg-amber-50 p-3 text-sm text-amber-950'>题干未识别，保持未知；人工核对后再补写。</p>}
+                {stage.proposal.printed_text ? <p className='whitespace-pre-wrap rounded-md bg-muted/30 p-3 text-sm'>{stage.proposal.printed_text}</p> : <p className='workspace-notice workspace-notice--warning'>题干未识别，保持未知；人工核对后再补写。</p>}
                 {stage.proposal.answer ? <p className='text-sm'>包含一份家长答案草稿{answerFormulas.length ? `和 ${answerFormulas.length} 个原样保留的公式` : ''}。</p> : null}
                 {stage.state === 'queued' || stage.state === 'running' ? <p role='status' className='text-sm text-muted-foreground'>本阶段仍在处理。页面不会自动轮询；点击“刷新准备阶段”查看结果。</p> : null}
-                {stage.state === 'awaiting_review' && !stage.can_confirm ? <p role='status' className='text-sm text-amber-900'>阶段上下文已变化，当前结果不能确认。请刷新查看最新状态。</p> : null}
-                {stage.state === 'applied' ? <p className='text-sm text-emerald-800'>本阶段内容已人工确认并保存；其他阶段历史仍保留。</p> : null}
+                {stage.state === 'awaiting_review' && !stage.can_confirm ? <p role='status' className='text-sm workspace-inline-state--warning'>阶段上下文已变化，当前结果不能确认。请刷新查看最新状态。</p> : null}
+                {stage.state === 'applied' ? <p className='text-sm workspace-inline-state--success'>本阶段内容已人工确认并保存；其他阶段历史仍保留。</p> : null}
               </div>
             )}
           </>
@@ -166,7 +166,7 @@ function SourcePreviews({ sources, pages }: { sources: PreparationStage['sources
   for (const source of sources) grouped.set(source.page_id, [...(grouped.get(source.page_id) || []), source])
   return <div className='grid gap-4 lg:grid-cols-2'>{Array.from(grouped.entries()).map(([pageId, refs]) => {
     const page = pages.find((item) => item.id === pageId)
-    if (!page) return <p key={pageId} className='rounded-md border border-dashed p-3 text-sm text-amber-900'>本阶段包含的来源页已不在当前资料列表中。</p>
+    if (!page) return <p key={pageId} className='workspace-notice workspace-notice--warning border-dashed'>本阶段包含的来源页已不在当前资料列表中。</p>
     return <div key={pageId} className='space-y-2 rounded-md border p-3'>
       <p className='text-sm font-medium'>资料页 {page.position} · {refs.length} 个固定来源区域</p>
       <ImageBoxPicker page={page} boxes={refs.map((ref, index) => ({ bbox: ref.bbox, label: `本阶段来源区域 ${index + 1}`, color: '#356c3f' }))} onAdd={() => undefined} disabled />

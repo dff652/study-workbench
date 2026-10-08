@@ -3,7 +3,7 @@
 {% block content %}
   <div class="workspace-toolbar"><h1>模型服务配置</h1><a href="{% url 'ai:index' %}?household={{ household_id|urlencode }}">模型任务</a></div>
   <section class="panel" aria-labelledby="model-summary-title"><h2 id="model-summary-title">当前模型状态</h2>
-    {% if config %}<dl class="summary-grid"><div><dt>调用状态</dt><dd>{% if config.cloud_enabled and external_ready %}已启用并确认外发{% elif config.cloud_enabled %}已启用，尚缺外发确认{% else %}未启用{% endif %}</dd></div><div><dt>模型</dt><dd>{{ config.provider_label }} · {{ config.model }}</dd></div><div><dt>本批预算上限</dt><dd>{{ config.batch_budget }} USD</dd></div><div><dt>外发范围</dt><dd>{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}</dd></div></dl>
+    {% if config %}<dl class="summary-grid"><div><dt>调用状态</dt><dd><span class="status-badge{% if config.cloud_enabled and external_ready %} status-accepted{% elif config.cloud_enabled %} status-draft{% endif %}">{% if config.cloud_enabled and external_ready %}已启用并确认外发{% elif config.cloud_enabled %}已启用，尚缺外发确认{% else %}未启用{% endif %}</span></dd></div><div><dt>模型</dt><dd>{{ config.provider_label }} · {{ config.model }}</dd></div><div><dt>本批预算上限</dt><dd>{{ config.batch_budget }} USD</dd></div><div><dt>外发范围</dt><dd>{% if config.outbound_scope == "selected_regions" %}已选文字及主动选择的图像区域{% else %}仅外发已选的已发布文字{% endif %}</dd></div></dl>
     <p class="muted">费用按记录单价与调用结果计算；未计得费用或单价为零，不表示供应商免费。</p>{% else %}<p>尚未配置，远程调用保持关闭。可以继续人工整理和记录学习。</p>{% endif %}
   </section>
   <section class="workspace-reading"><h2>修改配置</h2><p class="muted">保存将追加配置版本，不覆盖历史。API 密钥由服务管理员在本机配置；启用外发前需填写上游和留存状态并手动确认。</p>

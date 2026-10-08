@@ -63,16 +63,16 @@ export function MaterialReadiness({
         </CardHeader>
         <CardContent className='grid gap-5 pt-5 xl:grid-cols-2'>
           <section>
-            <h3 className='mb-2 flex items-center gap-2 text-sm font-semibold'><CircleAlert className='size-4 text-amber-700' aria-hidden='true' />阻塞项</h3>
-            {readiness.gaps.length === 0 ? <p className='rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900'>当前没有阻塞项。</p> : (
+            <h3 className='mb-2 flex items-center gap-2 text-sm font-semibold'><CircleAlert className='size-4 workspace-inline-state--warning' aria-hidden='true' />阻塞项</h3>
+            {readiness.gaps.length === 0 ? <p className='workspace-notice workspace-notice--success'>当前没有阻塞项。</p> : (
               <ul className='space-y-2'>
-                {readiness.gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-amber-50 px-3 py-2 text-sm leading-5 text-amber-950'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
+                {readiness.gaps.map((gap, index) => <li key={`${index}-${gap}`} className='workspace-notice workspace-notice--warning'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
               </ul>
             )}
-            <h3 className='mb-2 mt-5 flex items-center gap-2 text-sm font-semibold'><FileText className='size-4 text-sky-700' aria-hidden='true' />待补内容与页面覆盖</h3>
+            <h3 className='mb-2 mt-5 flex items-center gap-2 text-sm font-semibold'><FileText className='size-4 text-muted-foreground' aria-hidden='true' />待补内容与页面覆盖</h3>
             {readiness.content_gaps.length === 0 ? <p className='rounded-md bg-muted/40 px-3 py-2 text-sm text-muted-foreground'>当前没有待补提示。</p> : (
               <ul className='space-y-2'>
-                {readiness.content_gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-sky-50 px-3 py-2 text-sm leading-5 text-sky-950'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
+                {readiness.content_gaps.map((gap, index) => <li key={`${index}-${gap}`} className='rounded-md bg-muted/40 px-3 py-2 text-sm leading-5 text-foreground'>{gap}<GapActions gap={gap} detail={detail} /></li>)}
               </ul>
             )}
           </section>

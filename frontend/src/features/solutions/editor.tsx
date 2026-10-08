@@ -239,7 +239,7 @@ function QuestionEditor({
     <Card className='gap-0 py-0 shadow-none'>
       <CardHeader className='border-b py-4'><CardTitle className='text-base'>原图来源</CardTitle><CardDescription>来源范围用原图像素坐标保存；整页来源保留范围未知。看不清或没核对的范围继续保留未知。</CardDescription></CardHeader>
       <CardContent className='space-y-3 pt-4'>
-        {pages.length ? <label className='block max-w-sm text-sm font-medium'>选择资料页<select className={fieldClass} disabled={!canWrite || assetRequestBusy} value={sourcePageId} onChange={(event) => setSourcePageId(event.target.value)}>{pages.map((page) => <option key={page.id} value={page.id}>{page.label}</option>)}</select></label> : <p className='text-sm text-amber-900'>当前资料没有原图页。可以先保存私人草稿；生成前需要补充原图来源。</p>}
+        {pages.length ? <label className='block max-w-sm text-sm font-medium'>选择资料页<select className={fieldClass} disabled={!canWrite || assetRequestBusy} value={sourcePageId} onChange={(event) => setSourcePageId(event.target.value)}>{pages.map((page) => <option key={page.id} value={page.id}>{page.label}</option>)}</select></label> : <p className='text-sm workspace-inline-state--warning'>当前资料没有原图页。可以先保存私人草稿；生成前需要补充原图来源。</p>}
         {imagePage ? <ImageBoxPicker page={imagePage} boxes={selectedSources.flatMap((source) => source.region ? [{ bbox: source.region, label: '已记录解析来源区域' }] : [])} onAdd={(region) => change({ sources: [...question.sources, { page_id: sourcePageId, region }] })} disabled={!canWrite || assetRequestBusy} addLabel='将原图选区加入本题来源' /> : null}
         {sourcePage && canWrite ? <Button type='button' size='sm' variant='outline' disabled={assetRequestBusy} onClick={() => change({ sources: [...question.sources, { page_id: sourcePage.id, region: null }] })}>加入整页来源（范围未知）</Button> : null}
         {question.sources.length ? <ul className='space-y-2'>
@@ -451,7 +451,7 @@ export function StepFormulaPreview({ stepId, stepNumber, value, csrfToken, disab
       {!value.trim() ? <p className='text-sm text-muted-foreground'>输入公式后自动预览。</p> : null}
       {value.trim() && (!currentPreview || currentPreview.status === 'loading') ? <p className='text-sm text-muted-foreground' role='status'>正在生成公式预览…</p> : null}
       {currentPreview?.status === 'ready' ? <FormulaDisplay value={currentPreview.formula} /> : null}
-      {currentPreview?.status === 'error' ? <p className='text-sm text-amber-900' role='alert'>预览失败：{currentPreview.message}。公式原文已保留；修改表达式后可重试。</p> : null}
+      {currentPreview?.status === 'error' ? <p className='text-sm workspace-inline-state--danger' role='alert'>预览失败：{currentPreview.message}。公式原文已保留；修改表达式后可重试。</p> : null}
     </div>
   </div>
 }
@@ -513,7 +513,7 @@ function FormulaExpressionField({ label, value, csrfToken, disabled, onUnauthori
       {!value.trim() ? <p className='text-sm text-muted-foreground'>输入公式表达式后自动预览。</p> : null}
       {value.trim() && (!currentPreview || currentPreview.status === 'loading') ? <p className='text-sm text-muted-foreground' role='status'>正在生成公式预览…</p> : null}
       {currentPreview?.status === 'ready' ? <FormulaDisplay value={currentPreview.formula} /> : null}
-      {currentPreview?.status === 'error' ? <p className='text-sm text-amber-900' role='alert'>预览失败：{currentPreview.message}。公式原文已保留；修改表达式后可重试。</p> : null}
+      {currentPreview?.status === 'error' ? <p className='text-sm workspace-inline-state--danger' role='alert'>预览失败：{currentPreview.message}。公式原文已保留；修改表达式后可重试。</p> : null}
     </div>
   </div>
 }
@@ -660,10 +660,10 @@ export function AssetUploader({ question, pages, assets, materialId, csrfToken, 
       <label className='text-xs font-medium'>图示名称<input className={fieldClass} maxLength={160} disabled={disabled || busy} value={label} onChange={(event) => setLabel(event.target.value)} /></label>
       <label className='text-xs font-medium'>依据<input className={fieldClass} maxLength={1000} disabled={disabled || busy} value={basis} onChange={(event) => setBasis(event.target.value)} placeholder='说明用途或来源' /></label>
     </div>
-    {kind === 'source_crop' && selectedSource && !selectedSource.region ? <p className='text-xs text-amber-900'>裁切图需要一个已框选的来源区域。</p> : null}
-    {kind === 'source_image' && selectedSource?.region ? <p className='text-xs text-amber-900'>整张原图需要选择范围为未知的整页来源。</p> : null}
+    {kind === 'source_crop' && selectedSource && !selectedSource.region ? <p className='text-xs workspace-inline-state--warning'>裁切图需要一个已框选的来源区域。</p> : null}
+    {kind === 'source_image' && selectedSource?.region ? <p className='text-xs workspace-inline-state--warning'>整张原图需要选择范围为未知的整页来源。</p> : null}
     <div className='flex flex-wrap items-center gap-2'><Button type='button' size='sm' variant='outline' disabled={!canSubmit} onClick={() => void submit()}>{busy ? '正在验证并上传…' : '上传素材'}</Button>{file ? <span className='text-xs text-muted-foreground'>{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MiB</span> : null}</div>
-    {notice ? <p role='status' className='text-xs text-emerald-800'>{notice}</p> : null}{error ? <p role='alert' className='text-xs text-destructive'>{error}</p> : null}
+    {notice ? <p role='status' className='text-xs workspace-inline-state--success'>{notice}</p> : null}{error ? <p role='alert' className='text-xs workspace-inline-state--danger'>{error}</p> : null}
     {assets.length ? <p className='text-xs text-muted-foreground'>当前资料已收存 {assets.length} 张素材。</p> : null}
   </section>
 }

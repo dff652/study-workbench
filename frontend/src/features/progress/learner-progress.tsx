@@ -168,7 +168,7 @@ function AssessmentEvidence({ assessment }: { assessment: Assessment }) {
           <p className='font-medium'>{dimension.dimension_label || '评价项目未命名'}</p>
           <p className='mt-1 text-xs text-muted-foreground'>{dimension.judgment_label || '判断未提供'} · {dimension.basis_label || '依据未提供'}</p>
           {dimension.rationale ? <p className='mt-1 whitespace-pre-wrap text-sm'>{dimension.rationale}</p> : null}
-          {dimension.unknown_reason ? <p className='mt-1 text-sm text-amber-900'>未确定原因：{dimension.unknown_reason}</p> : null}
+          {dimension.unknown_reason ? <p className='mt-1 text-sm workspace-inline-state--warning'>未确定原因：{dimension.unknown_reason}</p> : null}
           <div className='mt-2'><SourceEvidence sources={dimension.sources} /></div>
         </div>
       )) : <p className='text-sm text-muted-foreground'>评价没有记录维度。</p>}

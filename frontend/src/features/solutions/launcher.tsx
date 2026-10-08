@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { api, getErrorMessage } from '../../api'
-import { isUnauthorized } from '../../components/shared'
+import { EmptyState, isUnauthorized, RetryState } from '../../components/shared'
 import { Button } from '../../components/ui/button'
 import { WorkspaceHeading } from '../../components/workspace-tabs'
 import type { MaterialListResponse } from '../../types'
@@ -48,7 +48,7 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
         {query ? <Button type='button' variant='ghost' size='sm' onClick={() => { setSearchText(''); setPage(1); setQuery('') }}>清除</Button> : null}
       </form>
       {remote.status === 'loading' ? <p role='status' className='text-sm text-muted-foreground'>正在读取家庭资料…</p> : null}
-      {remote.status === 'error' ? <div role='alert' className='flex flex-wrap items-center gap-3 text-sm'><span>{remote.message}</span><Button type='button' size='sm' variant='outline' onClick={() => setRetry((value) => value + 1)}>重试</Button></div> : null}
+      {remote.status === 'error' ? <RetryState title='无法读取讲解资料' message={remote.message} onRetry={() => setRetry((value) => value + 1)} /> : null}
       {remote.status === 'loaded' && remote.data.items.length > 0 ? <>
         <p className='text-sm text-muted-foreground'>已有文档可直接预览或下载；每份资料显示该类型最近一批可用输出。历史版本仍可从文档工作区查看。</p>
         {!onPrepareDocuments ? <p className='text-sm text-muted-foreground'>当前成员可查看讲解文档；制作练习册由家庭所有者或审核成员操作。</p> : null}
@@ -56,7 +56,7 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
           {[...remote.data.items].sort((a, b) => (b.available_outputs?.find((o) => o.mode === mode)?.created_at || '').localeCompare(a.available_outputs?.find((o) => o.mode === mode)?.created_at || '')).map((item) => {
             const output = item.available_outputs?.find((entry) => entry.mode === mode)
             return <li key={item.id} className='space-y-3 py-4'>
-              <div className='flex flex-wrap items-center justify-between gap-3'><div><h3 className='font-semibold'>{item.title}</h3><p className='mt-1 text-xs text-muted-foreground'>{item.page_count} 页原图 · {output ? `文档版本 ${output.revision_version} · ${output.state === 'complete' ? '检查已记录' : '输出待审校'} · ${new Date(output.created_at).toLocaleString('zh-CN')}` : '尚无可用文档'}</p></div><Button type='button' size='sm' variant='outline' onClick={() => onOpen(item.id, Boolean(output))}>{output ? '查看文档与历史' : mode === 'knowledge' ? '整理知识讲解' : '整理家长解析'}</Button></div>
+              <div className='flex flex-wrap items-center justify-between gap-3'><div><h3 className='font-semibold'>{item.title}</h3><p className='mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground'><span>{item.page_count} 页原图</span>{output ? <><span>文档版本 {output.revision_version}</span><span className={`workspace-status-badge ${output.state === 'complete' ? 'workspace-status-badge--success' : 'workspace-status-badge--warning'}`}>{output.state === 'complete' ? '检查已记录' : '输出待审校'}</span><span>{new Date(output.created_at).toLocaleString('zh-CN')}</span></> : <span>尚无可用文档</span>}</p></div><Button type='button' size='sm' variant='outline' onClick={() => onOpen(item.id, Boolean(output))}>{output ? '查看文档与历史' : mode === 'knowledge' ? '整理知识讲解' : '整理家长解析'}</Button></div>
               {output?.documents.map((doc) => <div key={doc.id} className='flex flex-wrap items-center gap-3 text-sm'><span>{doc.title} · {doc.page_count} 页</span>{doc.pdf_url ? <a href={doc.pdf_url} data-preview-title={doc.title} data-preview-pages={JSON.stringify(doc.previews)} className="text-primary underline">预览 PDF</a> : null}{doc.docx_url ? <a href={doc.docx_url} download className='font-medium text-primary underline'>下载 Word</a> : null}</div>)}
               {output?.zip_url ? <a href={output.zip_url} download className='inline-block text-sm text-primary underline'>下载这批 ZIP</a> : null}
               {onPrepareDocuments ? <Button type='button' size='sm' variant='ghost' onClick={() => onPrepareDocuments(item.id)}>制作整套五册</Button> : null}
@@ -71,6 +71,13 @@ export function SolutionsLauncher({ householdId, onOpen, onPrepareDocuments, onM
           </div>
         </div>
       </> : null}
-      {remote.status === 'loaded' && remote.data.items.length === 0 ? <div className='space-y-2 text-sm'><p>{query || subject ? '没有找到符合筛选条件的资料。' : '当前家庭还没有资料。新建资料并上传原图后即可整理讲解。'}</p>{query || subject ? <Button type='button' size='sm' variant='outline' onClick={() => { setSearchText(''); setQuery(''); setSubject(''); setPage(1) }}>清除筛选</Button> : null}{!query && !subject ? <Button type='button' size='sm' variant='outline' onClick={onMaterials}>前往资料整理</Button> : null}</div> : null}
+      {remote.status === 'loaded' && remote.data.items.length === 0 ? <div className='space-y-3 text-sm'>
+        <EmptyState
+          title={query || subject ? '没有找到符合条件的资料' : '当前家庭还没有资料'}
+          detail={query || subject ? '调整资料名称或学科条件，或清除筛选查看全部资料。' : '新建资料并上传原图后，可在这里整理讲解。'}
+        />
+        {query || subject ? <Button type='button' size='sm' variant='outline' onClick={() => { setSearchText(''); setQuery(''); setSubject(''); setPage(1) }}>清除筛选</Button> : null}
+        {!query && !subject ? <Button type='button' size='sm' variant='outline' onClick={onMaterials}>前往资料整理</Button> : null}
+      </div> : null}
     </section>
 }

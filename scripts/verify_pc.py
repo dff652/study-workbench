@@ -950,6 +950,10 @@ def main():
                             expect(page.get_by_role('heading', name='今天从哪里开始？')).to_be_visible()
                             expect(page.get_by_role('heading', name='当前范围摘要', exact=True)).to_be_visible()
                             expect(page.get_by_text('正在整理学习证据…', exact=True)).not_to_be_visible()
+                            # Plans load independently from the evidence summary.
+                            next_tasks = page.get_by_role('region', name='接下来做什么', exact=True)
+                            expect(next_tasks.get_by_text('正在读取计划…', exact=True)).not_to_be_visible()
+                            expect(next_tasks.get_by_role('link').first).to_be_visible()
                         elif view == 'materials':
                             expect(page.get_by_role('button', name=re.compile('合成容器验收 PC 资料'))).to_be_visible()
                             expect(page.get_by_text('正在读取资料列表…', exact=True)).not_to_be_visible()
@@ -1005,14 +1009,20 @@ def main():
                                     workspace_width: workspace?.getBoundingClientRect().width,
                                     first_action_top: first?.top, first_action: actions[0]?.textContent.trim() || actions[0]?.name};
                             }''')
-                            limit = 1440 if view in ('materials', 'knowledge') else 896 if view == 'settings' else 1280
-                            assert measured['main_width'] <= min(measured['available_width'], limit + 48) + 2, (view, width, measured)
+                            limit = 1056 if view == 'settings' else 1440  # DESIGN.md: 66rem settings / 90rem workspace
+                            assert measured['main_width'] <= min(measured['available_width'], limit) + 2, (view, width, measured)
                             assert measured['workspace_width'] <= measured['main_width'] + 2, (view, width, measured)
                             assert measured['main_width'] >= min(measured['available_width'], limit) * .85, (view, width, measured)
                             assert measured['first_action_top'] is not None and measured['first_action_top'] <= 220, (view, width, measured)
                             assert page.get_by_role('navigation', name='主导航').get_by_role('button').count() == 7
                             ux_measurements.append({'view':view, 'width':width, **measured})
                         if width >= 1920 and view in ('materials', 'progress'):
+                            if view == 'progress':
+                                # Relative-date buckets may legitimately be empty
+                                # as the fixture crosses from upcoming to today.
+                                # Use the known completed fixture for row density.
+                                page.get_by_role('button', name=re.compile('^已完成')).click()
+                                expect(page.get_by_text('合成复测：检查乘法与单位', exact=True)).to_be_visible()
                             rows = (page.get_by_role('region', name='资料列表', exact=True).locator('button[aria-pressed]')
                                 if view == 'materials' else page.locator('#progress-workspace-plans-panel tbody tr'))
                             heights = rows.evaluate_all('''rows => rows.filter(row => row.getClientRects().length && !row.querySelector('td[colspan]'))
@@ -1124,6 +1134,8 @@ def main():
                 verify_ux_remediation(page, origin, app_url, db, actor, house, material, f, output, checks)
                 from verify_acceptance_follow_up import verify as verify_acceptance_follow_up
                 verify_acceptance_follow_up(page, origin, app_url, db, actor, house, material, f, output, checks)
+                from verify_design_system import verify as verify_design_system
+                verify_design_system(page, origin, app_url, output, checks)
                 assert not errors, errors
                 assert not external, external
                 assert not leaks, leaks

@@ -497,8 +497,8 @@ export default function App() {
             </div>
           </header>
 
-          <Main id='content' className={`min-w-0 space-y-6 px-4 py-6 sm:px-6 ${route.view === 'settings' ? 'max-w-4xl' : route.view === 'materials' || route.view === 'knowledge' ? 'max-w-[90rem]' : 'max-w-7xl'}`}>
-            {!isBusinessScreen || (isDocumentsLanding && documentsTab !== 'practice') || isSolutionScreen || isKnowledgeScreen || isKnowledgeLauncher ? <h1 className='text-xl font-semibold tracking-tight'>{isSolutionScreen ? '逐题讲解' : isKnowledgeScreen || isKnowledgeLauncher ? '知识点讲解' : title}</h1> : null}
+          <Main id='content' style={{ maxWidth: route.view === 'settings' ? 'var(--settings-width, 66rem)' : 'var(--workspace-width, 90rem)' }} className={`min-w-0 px-4 py-6 sm:px-6 ${route.view === 'overview' ? 'space-y-4' : 'space-y-6'}`}>
+            {!isBusinessScreen || (isDocumentsLanding && documentsTab !== 'practice') || isSolutionScreen || isKnowledgeScreen || isKnowledgeLauncher ? <h1 className='text-xl font-semibold tracking-tight' style={{ fontSize: 'var(--type-page, 1.375rem)' }}>{isSolutionScreen ? '逐题讲解' : isKnowledgeScreen || isKnowledgeLauncher ? '知识点讲解' : title}</h1> : null}
 
             {households.length === 0 ? (
               <EmptyState title='当前账号没有可访问的家庭' detail='请使用有权限的账号登录，或联系家庭所有者调整访问权限。' icon={House} />
@@ -623,7 +623,7 @@ export default function App() {
               />
             ) : null}
             {households.length > 0 && needsNativeLearner && learners.status === 'error' ? (
-              <Card className='border-amber-300/70 bg-amber-50/70'><CardContent className='flex flex-wrap items-center justify-between gap-3 p-5'><p className='text-sm'>{learners.message}</p><Button type='button' variant='outline' onClick={() => setLearnersRetry((count) => count + 1)}>重试</Button></CardContent></Card>
+              <div className='workspace-notice workspace-notice--danger flex flex-wrap items-center justify-between gap-3' role='alert'><p>{learners.message}</p><Button type='button' variant='outline' onClick={() => setLearnersRetry((count) => count + 1)}>重试</Button></div>
             ) : null}
             {households.length > 0 && needsNativeLearner && learners.status === 'loaded' && learners.data.items.length === 0 ? (
               <div className='space-y-3'><EmptyState title='这个家庭还没有学习者' detail='添加学习者后，这里会显示真实的作答和证据记录。资料整理可以独立进行。' icon={GraduationCap} />{selectedHousehold?.role !== 'viewer' ? <Button type='button' onClick={() => navigateBusinessPath(`/learning/profile/new/?household=${encodeURIComponent(householdId)}`)}>添加首位学习者</Button> : <p className='text-sm text-muted-foreground'>请家庭所有者或审核成员添加学习档案。</p>}</div>

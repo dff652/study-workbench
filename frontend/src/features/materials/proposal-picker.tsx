@@ -81,7 +81,7 @@ export function ProposalPicker({
         </div>
         {pages.length === 0 ? <p className='text-sm text-muted-foreground'>先上传至少一张原图，才能核对导入内容的来源页。</p> : null}
         {reading ? <p role='status' className='text-sm text-muted-foreground'>正在读取并核对文件…</p> : null}
-        {error ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900'>{error}</p> : null}
+        {error ? <p role='alert' className='workspace-notice workspace-notice--danger'>{error}</p> : null}
         {value ? (
           <div className='rounded-lg border bg-muted/20 p-4'>
             <div className='flex flex-wrap items-center gap-2'>
@@ -101,13 +101,13 @@ export function ProposalPicker({
                       <h3 className='font-semibold'>{preview.title}</h3>
                     </div>
                     <p className='mt-2 whitespace-pre-wrap break-words text-sm leading-6'>{preview.text}</p>
-                    {preview.hasAdditionalContent ? <p role='status' className='mt-2 text-sm text-amber-900'>另有内容待核对，已保留。</p> : null}
+                    {preview.hasAdditionalContent ? <p role='status' className='mt-2 text-sm workspace-inline-state--warning'>另有内容待核对，已保留。</p> : null}
                     {preview.sources.length ? <ul className='mt-3 space-y-3 border-t pt-3'>
                       {preview.sources.map((source, index) => {
                         const page = pages.find((candidate) => candidate.position === source.pagePosition)
                         return <li key={`${source.pagePosition}-${index}`} className='space-y-1'>
                           <p className='text-xs text-muted-foreground'>资料页 {source.pagePosition} · 原图来源区域 {index + 1}</p>
-                          {page ? <ImageBoxPicker page={page} boxes={[{ bbox: source.bbox, label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm text-amber-900'>找不到对应的原图页，请重新核对来源。</p>}
+                          {page ? <ImageBoxPicker page={page} boxes={[{ bbox: source.bbox, label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm workspace-inline-state--warning'>找不到对应的原图页，请重新核对来源。</p>}
                         </li>
                       })}
                     </ul> : null}

@@ -8,6 +8,7 @@
 !licenses/**
 !frontend/
 !frontend/**
+!DESIGN.md
 !scripts/
 !scripts/container_entrypoint.sh
 !scripts/run_model_tasks.py

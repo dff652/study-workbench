@@ -131,11 +131,11 @@ function AssessmentHistory({ assessment }: { assessment: Assessment }) {
               <li key={dimension.dimension} className='py-2 first:pt-0'>
                 <div className='flex flex-wrap items-baseline gap-x-2 gap-y-1'>
                   <span className='text-sm font-medium'>{dimension.dimension_label || '评价项目未命名'}</span>
-                  {unknown ? <Badge variant='outline' className='border-amber-300 text-amber-900'>未知 / 未测</Badge> : null}
+                  {unknown ? <Badge variant='outline' className='workspace-status-badge workspace-status-badge--warning'>未知 / 未测</Badge> : null}
                   <span className='text-xs text-muted-foreground'>{dimension.judgment_label} · {dimension.basis_label}</span>
                 </div>
                 {dimension.rationale ? <p className='mt-1 whitespace-pre-wrap text-sm leading-5'>{dimension.rationale}</p> : null}
-                {dimension.unknown_reason ? <p className='mt-1 whitespace-pre-wrap text-sm leading-5 text-amber-900'>未确定原因：{dimension.unknown_reason}</p> : null}
+                {dimension.unknown_reason ? <p className='mt-1 whitespace-pre-wrap text-sm leading-5 workspace-inline-state--warning'>未确定原因：{dimension.unknown_reason}</p> : null}
                 <div className='mt-2'><SourceEvidence sources={dimension.sources} /></div>
               </li>
             )

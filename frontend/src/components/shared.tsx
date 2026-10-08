@@ -44,7 +44,7 @@ export function isUnauthorized(error: unknown) {
 
 export function LoadingState({ label }: { label: string }) {
   return (
-    <div className='flex items-center gap-3 rounded-xl border bg-card px-5 py-6 text-sm text-muted-foreground' role='status' aria-live='polite'>
+    <div className='flex items-center gap-[var(--space-3)] rounded-lg border bg-card px-[var(--space-4)] py-[var(--space-3)] text-[length:var(--type-small)] text-muted-foreground' role='status' aria-live='polite'>
       <LoaderCircle className='size-4 animate-spin text-primary' aria-hidden='true' />
       {label}
     </div>
@@ -61,12 +61,12 @@ export function RetryState({
   title?: string
 }) {
   return (
-    <div className='rounded-xl border border-amber-300/70 bg-amber-50/70 p-5 dark:border-amber-900 dark:bg-amber-950/30' role='alert'>
+    <div className='workspace-notice workspace-notice--warning' role='alert'>
       <div className='flex items-start gap-3'>
-        <CircleHelp className='mt-0.5 size-5 shrink-0 text-amber-700' aria-hidden='true' />
+        <CircleHelp className='mt-0.5 size-5 shrink-0' aria-hidden='true' />
         <div className='min-w-0 flex-1'>
-          <h3 className='font-semibold text-foreground'>{title}</h3>
-          <p className='mt-1 text-sm leading-6 text-muted-foreground'>{message}</p>
+          <h3 className='font-semibold'>{title}</h3>
+          <p className='mt-1 text-[length:var(--type-body)] leading-[var(--line-body)]'>{message}</p>
           <Button type='button' variant='outline' size='sm' className='mt-3' onClick={onRetry}>
             <RefreshCw className='size-4' aria-hidden='true' />
             重试
@@ -87,12 +87,12 @@ export function EmptyState({
   icon?: LucideIcon
 }) {
   return (
-    <div className='flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed bg-card px-6 py-10 text-center'>
-      <span className='mb-4 flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground'>
+    <div className='flex flex-col items-start gap-[var(--space-2)] rounded-lg border border-dashed bg-muted/20 px-[var(--space-4)] py-[var(--space-4)] text-left'>
+      <span className='flex size-9 items-center justify-center rounded-full bg-muted text-muted-foreground'>
         <Icon className='size-5' aria-hidden='true' />
       </span>
-      <h3 className='font-semibold'>{title}</h3>
-      <p className='mt-1 max-w-md text-sm leading-6 text-muted-foreground'>{detail}</p>
+      <h3 className='text-[length:var(--type-section)] font-semibold'>{title}</h3>
+      <p className='max-w-[var(--reading-width)] text-[length:var(--type-body)] leading-[var(--line-body)] text-muted-foreground'>{detail}</p>
     </div>
   )
 }

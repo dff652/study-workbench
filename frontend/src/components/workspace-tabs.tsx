@@ -48,7 +48,7 @@ export function WorkspacePanel({ id, value, active, children, className }: {
 
 export function WorkspaceHeading({ title, actions }: { title: ReactNode; actions?: ReactNode }) {
   return <header className='flex flex-wrap items-center justify-between gap-3'>
-    <h2 className='min-w-0 break-words text-lg font-semibold'>{title}</h2>
+    <h2 className='min-w-0 break-words font-semibold' style={{ fontSize: 'var(--type-section, 1.125rem)' }}>{title}</h2>
     {actions ? <div className='flex flex-wrap items-center gap-2'>{actions}</div> : null}
   </header>
 }

@@ -37,10 +37,10 @@ export function Overview({
   const recordAttemptUrl = links.record_attempt_url || appendAttemptNewPath(links.profile_url)
 
   return (
-    <div className='space-y-6'>
+    <div className='space-y-[var(--space-6)]'>
       <section aria-labelledby='evidence-summary-heading' className='space-y-3'>
         <div>
-          <h3 id='evidence-summary-heading' className='font-semibold'>当前范围摘要</h3>
+          <h3 id='evidence-summary-heading' className='text-[length:var(--type-section)] font-semibold'>当前范围摘要</h3>
           <p className='mt-1 text-sm text-muted-foreground'>
             {[learnerName || '当前学习者', formatDateScope(selectedFilters), selectedFilters.sourceKind ? SOURCE_LABELS[selectedFilters.sourceKind] : '全部来源'].join(' · ')}
           </p>
@@ -58,7 +58,7 @@ export function Overview({
 
       <details className='space-y-3'><summary className='cursor-pointer text-sm font-medium'>作答来源分布</summary><section aria-labelledby='evidence-sources-heading' className='space-y-3'>
         <div>
-          <h3 id='evidence-sources-heading' className='font-semibold'>作答来源</h3>
+          <h3 id='evidence-sources-heading' className='text-[length:var(--type-section)] font-semibold'>作答来源</h3>
           <p className='mt-1 text-sm text-muted-foreground'>以下均为当前学习者与筛选范围内的作答次数。</p>
         </div>
         <ul className='grid max-w-4xl gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3'>
@@ -99,7 +99,7 @@ export function Overview({
           {remote.data.recent_attempts !== undefined ? (
             <section aria-labelledby='evidence-recent-heading' className='space-y-3'>
               <div>
-                <h3 id='evidence-recent-heading' className='font-semibold'>近期作答记录</h3>
+                <h3 id='evidence-recent-heading' className='text-[length:var(--type-section)] font-semibold'>近期作答记录</h3>
                 <p className='mt-1 text-sm text-muted-foreground'>按实际作答日期由近到远排序，日期未知的记录列在最后。</p>
               </div>
               {recentAttempts.length === 0 ? (
@@ -115,7 +115,7 @@ export function Overview({
           <details><summary className='cursor-pointer font-medium'>家长关注 · 过程观察与待核实证据</summary>
           <section aria-labelledby='evidence-correct-heading' className='space-y-3'>
             <div>
-              <h3 id='evidence-correct-heading' className='font-semibold'>已观察到的正确方法与过程</h3>
+              <h3 id='evidence-correct-heading' className='text-[length:var(--type-section)] font-semibold'>已观察到的正确方法与过程</h3>
               <p className='mt-1 text-sm text-muted-foreground'>同一次作答的观察归在一起，来源和评价修订可展开查看。</p>
             </div>
             {findings.observed_correct_methods.length === 0 ? (
@@ -131,7 +131,7 @@ export function Overview({
 
           <section aria-labelledby='evidence-unconfirmed-heading' className='space-y-3'>
             <div>
-              <h3 id='evidence-unconfirmed-heading' className='font-semibold'>尚未充分核实</h3>
+              <h3 id='evidence-unconfirmed-heading' className='text-[length:var(--type-section)] font-semibold'>尚未充分核实</h3>
               <p className='mt-1 text-sm text-muted-foreground'>按每次作答分组；原有原因、评价修订和来源会保留在展开内容中。</p>
             </div>
             {findings.insufficient_evidence.length === 0 ? (
@@ -148,7 +148,7 @@ export function Overview({
           </details>
           <details><summary className='cursor-pointer font-medium'>重复错误与日期间隔</summary><section aria-labelledby='evidence-repeated-heading' className='space-y-3'>
             <div>
-              <h3 id='evidence-repeated-heading' className='font-semibold'>重复错误观察</h3>
+              <h3 id='evidence-repeated-heading' className='text-[length:var(--type-section)] font-semibold'>重复错误观察</h3>
               <p className='mt-1 text-sm text-muted-foreground'>仅列出有多次可追溯观察的错误组；没有足够观察不代表表现良好。</p>
             </div>
             {findings.repeated_errors.length === 0 ? (
@@ -167,7 +167,7 @@ export function Overview({
 
           <section aria-labelledby='evidence-intervals-heading' className='space-y-3'>
             <div>
-              <h3 id='evidence-intervals-heading' className='font-semibold'>已知作答日期间隔</h3>
+              <h3 id='evidence-intervals-heading' className='text-[length:var(--type-section)] font-semibold'>已知作答日期间隔</h3>
               <p className='mt-1 text-sm text-muted-foreground'>只使用确认的实际作答日期，不按记录创建时间推算。</p>
             </div>
             {findings.known_actual_date_intervals.length === 0 ? (
@@ -192,8 +192,8 @@ export function Overview({
 function SummaryCount({ label, value, unit }: { label: string; value: number; unit: string }) {
   return (
     <div>
-      <dt className='text-xs text-muted-foreground'>{label}</dt>
-      <dd className='mt-1 flex items-baseline gap-1 text-xl font-semibold tabular-nums'>
+      <dt className='text-[length:var(--type-small)] text-muted-foreground'>{label}</dt>
+      <dd className='mt-1 flex items-baseline gap-1 font-semibold tabular-nums' style={{ fontSize: 'var(--type-metric, 1.75rem)' }}>
         {formatCount(value)}<span className='text-xs font-normal text-muted-foreground'>{unit}</span>
       </dd>
     </div>

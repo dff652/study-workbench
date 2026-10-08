@@ -106,7 +106,7 @@ export function Schedules({
         {remote.data.scope.as_of ? `按服务端日期 ${today}` : `服务端日期未提供，暂按本地日期 ${today}`} 区分计划时间。计划保留逐次变更；完成时必须选择同一题目版本的已保存作答。
       </p>
 
-      {notice ? <p role='status' className='rounded-md border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'>{notice}</p> : null}
+      {notice ? <p role='status' className='workspace-notice workspace-notice--success'>{notice}</p> : null}
       {createOpen ? (
         <CreateScheduleForm
           householdId={householdId}
@@ -475,7 +475,7 @@ function ScheduleRow({
               <h3 className='font-semibold'>复测详情</h3>
               <p className='mt-1 text-sm'><span className='font-medium'>提示安排：</span>{item.prompt_plan || '未记录'}</p>
               <LatestAttemptDetails attempt={item.latest_attempt} attemptCount={item.attempt_count} />
-              {item.target_stale ? <p className='mt-2 text-sm text-amber-900'>计划保留原题目版本；当前题目内容已更新。</p> : null}
+              {item.target_stale ? <p className='mt-2 text-sm workspace-inline-state--warning'>计划保留原题目版本；当前题目内容已更新。</p> : null}
               <ApiLink href={item.detail_url}>查看复测历史</ApiLink>
             </div>
             {canWrite && !terminal ? (
@@ -500,8 +500,8 @@ function ScheduleRow({
             </ol> : <p className='mt-2 text-sm text-muted-foreground'>暂无可显示的历史记录。</p>}
           </section>
         </div>
-        {notice ? <p role='status' className='mt-3 text-sm text-emerald-800'>{notice}</p> : null}
-        {error ? <p role='alert' className='mt-3 text-sm text-destructive'>{error}</p> : null}
+        {notice ? <p role='status' className='mt-3 text-sm workspace-inline-state--success'>{notice}</p> : null}
+        {error ? <p role='alert' className='mt-3 text-sm workspace-inline-state--danger'>{error}</p> : null}
         {mode ? <form className='mt-4 space-y-4 border-t pt-4' onSubmit={submitAction}>
           <div>
             <h3 className='font-semibold'>{mode === 'rescheduled' ? '调整复测计划' : mode === 'completed' ? '记录复测完成' : '取消复测计划'}</h3>
@@ -518,7 +518,7 @@ function ScheduleRow({
               <option value=''>请选择已保存的作答</option>
               {item.attempt_choices.map((choice) => <option key={choice.revision_id} value={String(choice.revision_id)}>{choice.label}</option>)}
             </select>
-            {item.attempt_choices.length === 0 ? <p className='mt-2 text-sm text-amber-900'>暂无可关联的真实作答。先保存作答记录后再完成计划。</p> : null}
+            {item.attempt_choices.length === 0 ? <p className='mt-2 text-sm workspace-inline-state--warning'>暂无可关联的真实作答。先保存作答记录后再完成计划。</p> : null}
           </div> : null}
           <Field label='本次操作原因' value={reason} onChange={(value) => { setReason(value); markDirty() }} required disabled={busy} />
           <div className='flex flex-wrap gap-2'>
@@ -685,7 +685,7 @@ function CreateScheduleForm({
                 <Field label='提示安排（可留空）' value={promptPlan} onChange={(value) => { setPromptPlan(value); markDirty() }} disabled={busy} />
                 <Field label='创建原因' value={reason} onChange={(value) => { setReason(value); markDirty() }} required disabled={busy} />
               </div>
-              {error ? <p role='alert' className='text-sm text-destructive'>{error}</p> : null}
+              {error ? <p role='alert' className='text-sm workspace-inline-state--danger'>{error}</p> : null}
               <div className='flex flex-wrap gap-2'>
                 <Button type='submit' disabled={busy || !questionRevisionId || !dueDate || !goal.trim() || !reason.trim()}>{busy ? '正在保存…' : '创建复测计划'}</Button>
                 <Button type='button' variant='outline' disabled={busy} onClick={onCancel}>取消</Button>

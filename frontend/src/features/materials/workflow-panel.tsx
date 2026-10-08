@@ -136,9 +136,9 @@ export function WorkflowPanel({
           <Button type='button' variant='outline' size='sm' onClick={refresh} disabled={busy}><RefreshCw className='size-4' aria-hidden='true' />刷新任务</Button>
         </CardHeader>
         <CardContent className='space-y-4 pt-4'>
-          {job.error_code ? <p className='flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-950'><AlertCircle className='size-4 shrink-0' aria-hidden='true' />{workflowErrorMessage(job.error_code)}</p> : null}
-          {job.state === 'queued' || job.state === 'running' ? <p role='status' className='rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-950'>任务{job.state === 'queued' ? '正在等待执行' : '正在处理中'}；此页面不会自动刷新，可点击“刷新任务”查看最新状态。</p> : null}
-          {error ? <p role='alert' className='rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950'>{error}</p> : null}
+          {job.error_code ? <p className='workspace-notice workspace-notice--danger flex items-center gap-2'><AlertCircle className='size-4 shrink-0' aria-hidden='true' />{workflowErrorMessage(job.error_code)}</p> : null}
+          {job.state === 'queued' || job.state === 'running' ? <p role='status' className='workspace-notice'>任务{job.state === 'queued' ? '正在等待执行' : '正在处理中'}；此页面不会自动刷新，可点击“刷新任务”查看最新状态。</p> : null}
+          {error ? <p role='alert' className='workspace-notice workspace-notice--danger'>{error}</p> : null}
           <div className='flex flex-wrap gap-x-5 gap-y-2 text-sm'>
             <ApiLink href={links.material_url}>查看资料记录</ApiLink>
             <ApiLink href={links.prepare_url}>准备配套练习</ApiLink>
@@ -149,7 +149,7 @@ export function WorkflowPanel({
           {!canWrite ? <p className='text-sm text-muted-foreground'>当前成员只读；确认和处理由家庭所有者或审核成员操作。</p> : null}
           <fieldset disabled={!canWrite} className='space-y-4'>
           {job.state === 'needs_review' ? (
-            <section className='space-y-4 rounded-lg border border-amber-300/70 bg-amber-50/40 p-4'>
+            <section className='space-y-4 rounded-lg border bg-muted/20 p-4'>
               <div>
                 <h3 className='font-semibold'>逐项核对本任务的全部内容</h3>
                 <p className='mt-1 text-sm leading-6 text-muted-foreground'>确认会一次保存并确认整包记录。请检查题目、知识、方法、题型、答案、关联和原图观察；确认原因会写入审计记录。</p>
@@ -179,7 +179,7 @@ export function WorkflowPanel({
               <Button type='button' onClick={() => void runAction('check_output', outputReason.trim(), checks)} disabled={busy || !checks.pdf || !checks.docx || !checks.purposes || outputReason.trim().length === 0}><CircleCheck className='size-4' aria-hidden='true' />确认输出检查</Button>
             </section>
           ) : null}
-          {job.state === 'complete' ? <div className='flex flex-wrap items-center gap-3 rounded-lg bg-emerald-50 p-4 text-emerald-950'><CircleCheck className='size-5' aria-hidden='true' /><p className='mr-auto font-medium'>五册输出检查已完成。</p>{links.download_url ? <Button asChild><a href={links.download_url}><ArrowDownToLine className='size-4' aria-hidden='true' />下载五册文件</a></Button> : null}</div> : null}
+          {job.state === 'complete' ? <div className='workspace-notice workspace-notice--success flex flex-wrap items-center gap-3'><CircleCheck className='size-5' aria-hidden='true' /><p className='mr-auto font-medium'>五册输出检查已完成。</p>{links.download_url ? <Button asChild><a href={links.download_url}><ArrowDownToLine className='size-4' aria-hidden='true' />下载五册文件</a></Button> : null}</div> : null}
           {job.state === 'failed' ? <Button type='button' variant='outline' onClick={() => void runAction('resume')} disabled={busy}>恢复处理</Button> : null}
           {!['complete', 'failed', 'cancelled'].includes(job.state) ? <Button type='button' variant='ghost' size='sm' className='text-destructive' onClick={() => void runAction('cancel')} disabled={busy}>取消任务</Button> : null}
           </fieldset>
@@ -264,13 +264,13 @@ function SourceEvidence({ value, sourcePages }: { value: unknown; sourcePages: M
   return <div className='space-y-3'>
     {references.map((reference, index) => {
       if (!reference || typeof reference !== 'object' || !('source_id' in reference) || !Array.isArray(reference.bbox)) {
-        return <p key={index} className='text-sm text-amber-900'>第 {index + 1} 个来源区域格式待核对。</p>
+        return <p key={index} className='text-sm workspace-inline-state--warning'>第 {index + 1} 个来源区域格式待核对。</p>
       }
       const page = sourcePages.get(String(reference.source_id))
       const bbox = reference.bbox as number[]
       return <section key={index} className='space-y-1 rounded-md border p-2'>
         <p className='text-xs text-muted-foreground'>资料页 {page?.position ?? '未映射'} · 原图来源区域 {index + 1}</p>
-        {page ? <ImageBoxPicker page={page} boxes={[{ bbox: bbox as [number, number, number, number], label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm text-amber-900'>找不到该来源对应的原图页。</p>}
+        {page ? <ImageBoxPicker page={page} boxes={[{ bbox: bbox as [number, number, number, number], label: `来源区域 ${index + 1}` }]} onAdd={() => undefined} disabled /> : <p className='text-sm workspace-inline-state--warning'>找不到该来源对应的原图页。</p>}
       </section>
     })}
   </div>
@@ -281,7 +281,7 @@ function DiagramAssetPreview({ asset }: { asset: NonNullable<WorkflowDetailRespo
   return src ? <figure className='space-y-1'>
     <img src={src} alt='待核对教学图' className='max-h-72 max-w-full rounded-md border bg-white object-contain' />
     <figcaption className='text-xs text-muted-foreground'>教学图预览</figcaption>
-  </figure> : <div className='rounded-md border border-dashed px-3 py-2 text-sm text-amber-900'>教学图预览暂不可用，请重新核对该项内容。</div>
+  </figure> : <div className='workspace-notice workspace-notice--warning border-dashed'>教学图预览暂不可用，请重新核对该项内容。</div>
 }
 
 function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {

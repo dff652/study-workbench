@@ -27,7 +27,7 @@
 
 2026-10-07，后续整改已统一部署到HTTP／HTTPS Web／worker，固定构建提交`d08a509`。39项运维、17组正式双入口浏览器及前后配套空恢复通过；旧业务行、28个私有文件与CA保持。见[本轮部署验收](docs/reviews/learning-system-follow-up-deployment-20261007.md)。两个入口继续使用内网IP＋端口；当前运行不再是两套不同应用版本。真实用户与客户端验收继续单独登记，源码和文档只本地提交，不push。
 
-最新后续整改、验证结果和真实客户端／用户门槛见[实施回执](docs/reviews/learning-system-follow-up-implementation-20261007.md)。已实现、合成验证、正式部署和产品体验验收分别记录。
+最新设计规范与七域呈现改进见[design.md实施回执](docs/reviews/design-md-implementation-20261008.md)及[DESIGN.md](DESIGN.md)。前轮后续整改、验证结果和真实客户端／用户门槛见[实施回执](docs/reviews/learning-system-follow-up-implementation-20261007.md)。已实现、合成验证、正式部署和产品体验验收分别记录。
 
 2026-10-06，用户提供新的回归验收 PDF，产品体验结论为暂不通过。既有工程和部署记录保留；当前后续工作见 [回归评估与29项任务](docs/reviews/learning-system-acceptance-follow-up-20261006.md)，包括行动区重复、成果查找、同日排序、任务路径及补验。评估阶段先形成清单，用户随后授权实施；当前结果以本轮实施回执为准，不以旧工程通过关闭产品问题。
 

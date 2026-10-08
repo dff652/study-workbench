@@ -104,14 +104,14 @@ export function MaterialUploadQueue({ materialId, csrfToken, canWrite, onUploade
       <div className='flex flex-wrap items-center gap-3'>
         <input ref={fileInput} aria-label='选择多张原图' type='file' accept='image/*' multiple disabled={!canWrite || busy} onChange={addFiles} className='block max-w-full text-sm file:mr-3 file:rounded-md file:border file:bg-background file:px-3 file:py-2 file:text-sm file:font-medium' />
         <Button type='button' disabled={!canWrite || busy || queuedCount === 0} onClick={() => void process()}>{busy ? '正在处理上传队列…' : `上传待处理原图${queuedCount ? `（${queuedCount}）` : ''}`}</Button>
-        {doneCount ? <span className='text-xs text-emerald-800'>已完成 {doneCount} 张</span> : null}
-        {failedCount ? <span className='text-xs text-amber-900'>失败 {failedCount} 张</span> : null}
+        {doneCount ? <span className='text-xs workspace-inline-state--success'>已完成 {doneCount} 张</span> : null}
+        {failedCount ? <span className='text-xs workspace-inline-state--danger'>失败 {failedCount} 张</span> : null}
       </div>
       {!canWrite ? <p className='text-sm text-muted-foreground'>当前账号不能向此资料上传原图。</p> : null}
       {queue.length ? <ul className='space-y-2'>
         {queue.map((item) => <li key={item.id} className='flex flex-wrap items-center justify-between gap-3 rounded-md border p-3'>
           <div className='min-w-0 flex-1'><p className='truncate text-sm font-medium'>{item.file.name}</p><p className='mt-1 text-xs text-muted-foreground'>{(item.file.size / 1024 / 1024).toFixed(2)} MiB · {uploadStatus(item)}</p>
-            {item.error ? <p role='alert' className='mt-1 text-xs text-amber-900'>{item.error}</p> : null}</div>
+            {item.error ? <p role='alert' className='mt-1 text-xs workspace-inline-state--danger'>{item.error}</p> : null}</div>
           <div className='flex gap-2'>
             {item.status === 'failed' ? <Button type='button' size='sm' variant='outline' disabled={busy || !canWrite} onClick={() => void process([item.id])}>重试此图</Button> : null}
             {item.status !== 'uploading' ? <Button type='button' size='sm' variant='outline' disabled={busy || item.status === 'done'} onClick={() => updateQueue((current) => current.filter((candidate) => candidate.id !== item.id))}>移出队列</Button> : null}

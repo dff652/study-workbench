@@ -4,6 +4,8 @@
 
 ## 使用与当前交付
 
+- [design.md 前端接入评估与实施建议](reviews/design-md-feasibility-20261008.md)：工具定位、当前主题兼容、9次隔离CLI验证、七项接入候选任务与真实小批次准备；应用接入待执行。
+
 - [后续整改统一部署与验收（2026-10-07）](reviews/learning-system-follow-up-deployment-20261007.md)：HTTP／HTTPS／worker同版、39项运维、17组正式浏览器、配套空恢复、回退及真实待验项。
 
 - [后续整改实施与验收回执（2026-10-07）](reviews/learning-system-follow-up-implementation-20261007.md)：源码、合成验证、提交、部署与产品待验门槛。

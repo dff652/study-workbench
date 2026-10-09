@@ -16,6 +16,21 @@ def synthetic_document(*blocks, purpose="knowledge_summary"):
 
 
 class ExportContractTests(unittest.TestCase):
+    def test_v1_round_trip_and_v2_figures_do_not_change_legacy_identity(self):
+        from app.exports.contracts import canonical, document_dict, document_from_dict
+        legacy=replace(synthetic_document(Block('p','旧内容')),schema_version='study-workbench.print.v0.1')
+        raw=document_dict(legacy)
+        self.assertEqual(document_dict(document_from_dict(raw)),raw)
+        self.assertEqual(snapshot_id(document_from_dict(raw)),digest(canonical(raw)))
+        content={'storage_key':'figure.png','sha256':'a'*64,'source_ref':'region-r1|original-sha',
+            'alt':'合成三角形','width_points':120,'source_label':'合成资料 · 原题7'}
+        figure=synthetic_document(Block('source_image',content,'question'),purpose='independent_practice')
+        validate_document(figure)
+        self.assertEqual(document_dict(document_from_dict(document_dict(figure))),document_dict(figure))
+        with self.assertRaises(ExportError):validate_document(replace(figure,schema_version=legacy.schema_version))
+        with self.assertRaises(ExportError):validate_document(synthetic_document(Block('source_image',{k:v for k,v in content.items() if k!='source_label'})))
+        with self.assertRaises(ExportError):validate_document(synthetic_document(Block('source_image',content,'answer'),purpose='independent_practice'))
+
     def test_independent_material_rejects_answer_method_classification_and_ambiguous_body(self):
         for role in ("answer", "method", "classification", "body", "assessment"):
             with self.assertRaises(ExportError) as caught:

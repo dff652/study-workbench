@@ -61,7 +61,7 @@ class KnowledgeForm(ScopedRequestForm):
         help_text="完整写入定义、公式、示例和推导；数学表达式按原样保留。")
     display_markup = forms.CharField(required=False, max_length=24000, label="公式与重点排版",
         widget=forms.Textarea(attrs={"rows": 8}),
-        help_text="可留空。公式行写 [[math:1/2]]、重点可写 **重点** 或 ==重点==，图片行写 [[image:1|原文]]；公式和图片标记各占整行。去除标记后须与定义一致，图片序号只指本修订中有坐标的来源区域。")
+        help_text="可留空。公式行写 [[math:1/2]]、重点可写 **重点** 或 ==重点==；原图题图写 [[figure:1|原文]]，公式图片回退写 [[image:1|原文]]；各占整行。去除标记后须与定义一致，序号只指本修订中有坐标的来源区域。")
     conditions = forms.CharField(required=False, max_length=6000, label="适用条件", widget=forms.Textarea(attrs={"rows": 5}),
         help_text="每行一项。")
     common_errors = forms.CharField(required=False, max_length=6000, label="易错点", widget=forms.Textarea(attrs={"rows": 5}),

@@ -1,5 +1,6 @@
 """PDF and Word renderer for the versioned print document contract."""
 import hashlib
+from html import escape
 from pathlib import Path
 import shutil
 import subprocess
@@ -51,6 +52,8 @@ _PALETTE = {
 _FOOTER_FORMAT_GLYPHS = "0123456789 /|"
 _FOOTER_STATUS_UNREVIEWED = "历史未审核"
 _FORMULA_IMAGE_LABEL = "公式图片："
+_SOURCE_IMAGE_LABEL = "题图："
+_SOURCE_IMAGE_SOURCE_LABEL = "题图来源："
 _FORMULA_SOURCE_LABEL = "公式来源："
 _DIAGRAM_IMAGE_LABEL = "教学图："
 _DIAGRAM_SOURCE_LABEL = "图示来源："
@@ -142,9 +145,10 @@ def _required_glyphs(document, snapshot):
                         _add_glyphs(required["bold"], line)
                     for line in group["detail"]:
                         _add_glyphs(required["regular"], line)
-            elif kind in {"formula_image", "diagram", "companion_image"}:
-                _add_glyphs(required["regular"], (_DIAGRAM_IMAGE_LABEL if kind in {'diagram','companion_image'} else _FORMULA_IMAGE_LABEL) + content["alt"])
-                _add_glyphs(required["regular"], (_DIAGRAM_SOURCE_LABEL if kind in {'diagram','companion_image'} else _FORMULA_SOURCE_LABEL) + content["source_ref"])
+            elif kind in {"formula_image", "diagram", "companion_image", "source_image"}:
+                for label in _image_captions(content, diagram=kind=='diagram', companion=kind=='companion_image', source_image=kind=='source_image'):
+                    if kind=='source_image':_add_rich_glyphs(required, label)
+                    else:_add_glyphs(required["regular"], label)
                 if kind=='diagram':_add_glyphs(required['regular'],'条件：'+'；'.join(content['conditions']))
     return required
 
@@ -255,7 +259,14 @@ class _MathLine(Flowable):
         paint(self.canv, self.node, 7, self.baseline, self.font_size, self.font_name)
 
 
-def _formula_image_flowables(content, path, styles, *, diagram=False, companion=False):
+def _image_captions(content, *, diagram=False, companion=False, source_image=False):
+    if source_image:
+        return (escape(_SOURCE_IMAGE_LABEL + content["alt"]), escape(_SOURCE_IMAGE_SOURCE_LABEL + content["source_label"]))
+    return ((_DIAGRAM_IMAGE_LABEL if diagram or companion else _FORMULA_IMAGE_LABEL) + content["alt"],
+            (_DIAGRAM_SOURCE_LABEL if diagram or companion else _FORMULA_SOURCE_LABEL) + content["source_ref"])
+
+
+def _formula_image_flowables(content, path, styles, *, diagram=False, companion=False, source_image=False):
     with PillowImage.open(path) as image:
         original_width, original_height = image.size
     width = float(content["width_points"])
@@ -264,8 +275,7 @@ def _formula_image_flowables(content, path, styles, *, diagram=False, companion=
         raise ExportError("fallback_too_tall", "Formula image exceeds the supported printable height")
     return [
         Image(str(path), width=width, height=height),
-        Paragraph(pdf_markup((_DIAGRAM_IMAGE_LABEL if diagram or companion else _FORMULA_IMAGE_LABEL) + content["alt"]), styles["small"]),
-        Paragraph(pdf_markup((_DIAGRAM_SOURCE_LABEL if diagram or companion else _FORMULA_SOURCE_LABEL) + content["source_ref"]), styles["small"]),
+        *(Paragraph(pdf_markup(label), styles["small"]) for label in _image_captions(content, diagram=diagram, companion=companion, source_image=source_image)),
     ] + ([Paragraph(pdf_markup('条件：'+'；'.join(content['conditions'])),styles['small'])] if diagram else [])
 
 
@@ -308,9 +318,9 @@ def _build_pdf(document, output_path, fonts, styles, snapshot, assets):
                 if sum(content[1]) > usable_width + 0.1:
                     raise ExportError("table_too_wide", "Table exceeds the A4 printable width")
                 story.extend((_pdf_table(content, styles), Spacer(1, 6)))
-            elif kind in {"formula_image", "diagram", "companion_image"}:
+            elif kind in {"formula_image", "diagram", "companion_image", "source_image"}:
                 path = assets[id(block)]
-                story.extend(_formula_image_flowables(content, path, styles,diagram=kind=='diagram',companion=kind=='companion_image'))
+                story.extend(_formula_image_flowables(content, path, styles,diagram=kind=='diagram',companion=kind=='companion_image',source_image=kind=='source_image'))
             else:
                 story.append(Paragraph(pdf_markup(content), styles[kind]))
 
@@ -392,13 +402,13 @@ def _write_space(document, points):
     run.font.size = Pt(1)
 
 
-def _write_formula_image(document, content, path, family, *, diagram=False, companion=False):
+def _write_formula_image(document, content, path, family, *, diagram=False, companion=False, source_image=False):
     paragraph = document.add_paragraph()
     inline = paragraph.add_run().add_picture(str(path), width=Pt(float(content["width_points"])))
     inline._inline.docPr.set("descr", content["alt"])
     inline._inline.docPr.set("title", content["source_ref"])
-    _word_rich(document.add_paragraph(), (_DIAGRAM_IMAGE_LABEL if diagram or companion else _FORMULA_IMAGE_LABEL) + content["alt"], family)
-    _word_rich(document.add_paragraph(), (_DIAGRAM_SOURCE_LABEL if diagram or companion else _FORMULA_SOURCE_LABEL) + content["source_ref"], family)
+    for label in _image_captions(content, diagram=diagram, companion=companion, source_image=source_image):
+        _word_rich(document.add_paragraph(), label, family)
     if diagram:_word_rich(document.add_paragraph(),'条件：'+'；'.join(content['conditions']),family)
 
 
@@ -506,9 +516,9 @@ def _build_docx(document, output_path, word_family, map_fonts, snapshot, assets,
                 _write_space(word, content)
             elif kind == "table":
                 _word_table(word, content, word_family)
-            elif kind in {"formula_image", "diagram", "companion_image"}:
+            elif kind in {"formula_image", "diagram", "companion_image", "source_image"}:
                 path = assets[id(block)]
-                _write_formula_image(word, content, path, word_family,diagram=kind=='diagram',companion=kind=='companion_image')
+                _write_formula_image(word, content, path, word_family,diagram=kind=='diagram',companion=kind=='companion_image',source_image=kind=='source_image')
             else:
                 style_name = "Title" if kind == "title" else "Heading 1" if kind == "h" else "Normal"
                 paragraph = word.add_paragraph(style=style_name)
@@ -551,7 +561,7 @@ def _stage_formula_images(document, asset_root, work_dir):
     index = 0
     for page in document.pages:
         for block in page:
-            if block.kind not in {"formula_image", "diagram", "companion_image"}:
+            if block.kind not in {"formula_image", "diagram", "companion_image", "source_image"}:
                 continue
             if block.kind=='diagram':
                 from .contracts import resolve_diagram

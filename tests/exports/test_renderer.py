@@ -78,6 +78,9 @@ def font_coverage_document():
             "storage_key": "synthetic.png", "sha256": "a" * 64,
             "source_ref": "synthetic-source-17", "alt": "handwritten radical alternative", "width_points": 120,
         }, "body"),
+        Block("source_image", {"storage_key":"synthetic.png", "sha256":"a"*64,
+            "source_ref":"synthetic-source-17", "alt":"Triangle ABC", "width_points":120,
+            "source_label":"合成资料 · 原题7 · 来源区域2"}, "question"),
     ]])
 
 
@@ -208,6 +211,29 @@ class RendererTests(unittest.TestCase):
                 self.render(bad_doc, bad_output, asset_root=assets)
             self.assertEqual(caught.exception.code, "fallback_hash_mismatch")
             self.assertEqual(list(bad_output.iterdir()), [])
+
+    def test_source_figure_has_readable_caption_and_keeps_exact_provenance_off_paper(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);assets=root/'assets';assets.mkdir()
+            png=assets/'figure.png';PillowImage.new('RGB',(200,100),'white').save(png)
+            ref='web-rev-'+('b'*32)+'|'+('a'*64)
+            content={'storage_key':'figure.png','sha256':hashlib.sha256(png.read_bytes()).hexdigest(),
+                'source_ref':ref,'alt':'Triangle ABC','width_points':120,'source_label':'合成资料 · 原题7 · 来源区域2 <A> & B'}
+            result=self.render(document([[Block('source_image',content,'question')]],purpose='independent_practice'),root/'out',asset_root=assets)
+            text=pdf_text(result['pdf'])
+            self.assertIn('题图：Triangle ABC',text)
+            self.assertIn('原题7',text)
+            self.assertIn('<A> & B',text)
+            self.assertNotIn('公式图片',text);self.assertNotIn(ref,text)
+            xml,_=word_xml(result['docx']);ns={'w':'http://schemas.openxmlformats.org/wordprocessingml/2006/main','wp':'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'}
+            body=''.join(xml.xpath('//w:t/text()',namespaces=ns))
+            self.assertIn('题图：Triangle ABC',body);self.assertIn('原题7',body)
+            self.assertIn('<A> & B',body)
+            self.assertNotIn('公式图片',body);self.assertNotIn(ref,body)
+            self.assertEqual(xml.xpath('.//wp:docPr/@title',namespaces=ns),[ref])
+            with self.assertRaises(ExportError) as caught:
+                self.render(document([[Block('source_image',dict(content,sha256='c'*64),'question')]],purpose='independent_practice'),root/'tampered',asset_root=assets)
+            self.assertEqual(caught.exception.code,'fallback_hash_mismatch')
 
     def test_teaching_diagram_preserves_conditions_and_vector_hash(self):
         with tempfile.TemporaryDirectory() as temporary:

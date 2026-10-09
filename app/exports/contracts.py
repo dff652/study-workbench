@@ -10,8 +10,9 @@ import re
 from PIL import Image
 
 
-SCHEMA_VERSION = "study-workbench.print.v0.1"
-GENERATOR_VERSION = "study-workbench.renderer.a2.v4"
+SCHEMA_VERSION = "study-workbench.print.v0.2"
+SUPPORTED_SCHEMAS = {"study-workbench.print.v0.1", SCHEMA_VERSION}
+GENERATOR_VERSION = "study-workbench.renderer.a2.v5"
 PURPOSES = {"knowledge_summary", "classification_index", "evidence_report", "independent_practice", "parent_answers"}
 TEXT_KINDS = {"title", "sub", "h", "p", "small", "key", "warn", "bridge", "erratum"}
 INDEPENDENT_ROLES = {"title", "instruction", "question", "answer_space"}
@@ -47,6 +48,7 @@ class ExportDocument:
     purpose: str
     pages: tuple[tuple[Block, ...], ...]
     source: SourceRef
+    schema_version: str = SCHEMA_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +153,8 @@ def _text(value):
 def validate_document(document):
     if not isinstance(document, ExportDocument) or not isinstance(document.purpose, str) or document.purpose not in PURPOSES:
         raise ExportError("invalid_document", "Expected a supported document purpose")
+    if not isinstance(document.schema_version, str) or document.schema_version not in SUPPORTED_SCHEMAS:
+        raise ExportError("invalid_document", "Unsupported export schema")
     if not isinstance(document.document_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}", document.document_id):
         raise ExportError("invalid_document", "Document ID must be a local identifier")
     _text(document.title)
@@ -215,14 +219,22 @@ def validate_document(document):
                         _text(value)
                         if plain_text(value) != value:
                             raise ExportError("invalid_map", "Map labels are literal text")
-            elif kind in {"formula_image", "diagram", "companion_image"}:
+            elif kind in {"formula_image", "diagram", "companion_image", "source_image"}:
+                if kind == "source_image" and document.schema_version != SCHEMA_VERSION:
+                    raise ExportError("invalid_document", "Source figures require print.v0.2")
                 if kind == "companion_image" and document.purpose not in {"parent_answers", "knowledge_summary"}:
                     raise ExportError("companion_purpose", "Companion PNG figures require an explanatory document")
                 diagram_fields={"vector_storage_key", "vector_sha256", "conditions", "min_label_points", "independent_safe"} if kind=="diagram" else set()
+                if kind == "source_image":
+                    diagram_fields = {"source_label"}
                 if not isinstance(content, dict) or set(content) != {"storage_key", "sha256", "source_ref", "alt", "width_points"} | diagram_fields:
                     raise ExportError("invalid_fallback", "Formula image needs local bytes, source and alternative text")
                 for name in ("storage_key", "source_ref", "alt"):
                     _text(content[name])
+                if kind == "source_image":
+                    _text(content["source_label"])
+                    if len(content["source_label"]) > 400:
+                        raise ExportError("invalid_fallback", "Figure source label must be concise")
                 if not isinstance(content["sha256"], str) or not SHA_RE.fullmatch(content["sha256"]) or type(content["width_points"]) not in (int, float) or not 1 <= content["width_points"] <= 490:
                     raise ExportError("invalid_fallback", "Invalid formula image hash or printable size")
                 if kind=="diagram":
@@ -241,7 +253,7 @@ def validate_document(document):
 
 def document_dict(document):
     validate_document(document)
-    return {"schema_version": SCHEMA_VERSION, "document_id": document.document_id, "title": document.title,
+    return {"schema_version": document.schema_version, "document_id": document.document_id, "title": document.title,
         "purpose": document.purpose, "pages": [[{"kind": b.kind, "content": b.content, "role": b.role} for b in p] for p in document.pages],
         "source": {"source_id": document.source.source_id, "sha256": document.source.sha256,
                    "state": document.source.state, "revision_id": document.source.revision_id}}
@@ -252,7 +264,7 @@ def snapshot_id(document):
 
 
 def document_from_dict(value):
-    if not isinstance(value, dict) or set(value) != {"schema_version", "document_id", "title", "purpose", "pages", "source"} or value["schema_version"] != SCHEMA_VERSION:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "document_id", "title", "purpose", "pages", "source"} or not isinstance(value["schema_version"], str) or value["schema_version"] not in SUPPORTED_SCHEMAS:
         raise ExportError("invalid_document", "Unsupported or extended export schema")
     if not isinstance(value["source"], dict) or set(value["source"]) != {"source_id", "sha256", "state", "revision_id"}:
         raise ExportError("invalid_source", "Source fields must be explicit")
@@ -268,7 +280,7 @@ def document_from_dict(value):
                 raise ExportError("invalid_block", "Block fields must be explicit")
             blocks.append(Block(**block))
         pages.append(tuple(blocks))
-    document = ExportDocument(value["document_id"], value["title"], value["purpose"], tuple(pages), SourceRef(**value["source"]))
+    document = ExportDocument(value["document_id"], value["title"], value["purpose"], tuple(pages), SourceRef(**value["source"]), value["schema_version"])
     validate_document(document)
     return document
 

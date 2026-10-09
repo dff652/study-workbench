@@ -6,17 +6,20 @@ from app.domain.presentation import display_lines, EMPHASIS
 from .contracts import Block
 
 
-def body_blocks(text, markup=None, *, role="body", image_resolver=None):
+def body_blocks(text, markup=None, *, role="body", image_resolver=None, source_label="原图"):
     if markup is None:
         return [Block("p", escape(text or "").replace("\n", "<br/>"), role)]
     result = []
     for line in display_lines(markup):
         if line.kind == "math":
             result.append(Block("math", formula_ast(line.text), role))
-        elif line.kind == "image":
+        elif line.kind in {"image", "figure"}:
             if image_resolver is None:
                 raise ValueError("Source image resolver is required")
-            result.append(Block("formula_image", image_resolver(line.sequence, line.text), role))
+            content = image_resolver(line.sequence, line.text)
+            if line.kind == "figure":
+                content = {**content, "source_label": f"{source_label} · 来源区域 {line.sequence}"}
+            result.append(Block("source_image" if line.kind == "figure" else "formula_image", content, role))
         else:
             parts = []
             start = 0

@@ -25,9 +25,9 @@ def paginate(blocks, fonts, asset_root):
             return _pdf_table(block.content, styles).wrap(width, capacity)[1] + 6
         if block.kind == 'math':
             flowables = [_MathLine(block.content, registered['math'])]
-        elif block.kind in {'formula_image','diagram','companion_image'}:
+        elif block.kind in {'formula_image','diagram','companion_image','source_image'}:
             path = (resolve_diagram if block.kind=='diagram' else resolve_formula_image)(block.content, asset_root)
-            flowables = _formula_image_flowables(block.content, path, styles,diagram=block.kind=='diagram',companion=block.kind=='companion_image')
+            flowables = _formula_image_flowables(block.content, path, styles,diagram=block.kind=='diagram',companion=block.kind=='companion_image',source_image=block.kind=='source_image')
         else:
             flowables = [Paragraph(pdf_markup(block.content), styles[block.kind])]
         return sum(f.wrap(width, capacity)[1] + f.getSpaceBefore() + f.getSpaceAfter()

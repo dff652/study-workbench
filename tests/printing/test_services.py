@@ -85,6 +85,31 @@ class PrintTests(TransactionTestCase):
         q.refresh_from_db();self.assertEqual(q.payload,before)
         self.assertEqual(services.snapshot_file(self.owner,snapshot.pk,'content.json').read_bytes(),raw)
 
+    def test_source_figures_require_review_and_export_original_question_labels(self):
+        from app.printing import packets
+        from app.exports.contracts import document_from_dict
+        page=self.page()
+        result=materials.save_question(self.owner,self.material.pk,printed_text='如图',display_markup='[[figure:1|如图]]',
+            original_number='7',sources=[self.source(page)],request_key=key(),reason='合成题图，尚未确认无提示')
+        self.accept_revision(result['revision_id'])
+        with self.assertRaises(core.PersistenceError) as caught:
+            services.export_questions(self.owner,self.house.pk,[result['revision_id']],title='无提示练习',purpose='independent_practice')
+        self.assertEqual(caught.exception.code,'image_review_required')
+        self.assertTrue(any('图片尚未确认' in gap for gap in packets.readiness(self.owner,self.material.pk)['gaps']))
+        detail=materials.question_detail(self.owner,result['question_id'])
+        confirmed=materials.save_question(self.owner,self.material.pk,printed_text='如图',display_markup='[[figure:1|如图]]',
+            image_print_confirmed=True,original_number='7',sources=[self.source(page)],question_id=result['question_id'],
+            expected_context=detail['edit_context'],request_key=key(),reason='合成题图核对无作答／提示')
+        self.accept_revision(confirmed['revision_id'])
+        snapshot=services.export_questions(self.owner,self.house.pk,[confirmed['revision_id']],title='无提示练习',purpose='independent_practice')
+        raw=json.loads(services.snapshot_file(self.owner,snapshot.pk,'content.json').read_bytes())
+        document_from_dict(raw)
+        figures=[b for p in raw['pages'] for b in p if b['kind']=='source_image']
+        self.assertEqual(len(figures),1);self.assertIn('原题 7',figures[0]['content']['source_label'])
+        self.assertIn(self.material.title,figures[0]['content']['source_label'])
+        self.assertIn('|',figures[0]['content']['source_ref'])
+        with self.assertRaises(core.PersistenceError):services.snapshot_file(self.other,snapshot.pk,'document.pdf')
+
     def test_unconfirmed_formula_image_blocks_independent_practice(self):
         result=materials.save_question(self.owner,self.material.pk,printed_text='sqrt(x)',display_markup='[[image:1|sqrt(x)]]',
             original_number='图片未核定',sources=[self.source(self.page())],request_key=key(),reason='图像可能含未知手写')

@@ -220,7 +220,7 @@ def export_questions(actor, household_id, revision_ids, *, title, purpose, _pack
             'evidence_refs':question.payload['evidence_refs']})
         if question.payload.get('display_markup'):
             if purpose=='independent_practice' and not question.payload.get('image_print_confirmed') and any(
-                    line.kind=='image' for line in display_lines(question.payload['display_markup'])):
+                    line.kind in {'image','figure'} for line in display_lines(question.payload['display_markup'])):
                 raise core.PersistenceError('image_review_required','独立练习的图片须先人工核对没有作答、提示或方法笔记，并追加已审核版本。')
             blocks.append(Block('small',f'{position}.','question'))
             blocks.extend(_revision_blocks(question,owner.pk,'question'))
@@ -293,7 +293,10 @@ def _revision_blocks(revision,household_id,role):
         ref=next((ref for ref in refs if ref['sequence']==sequence and ref.get('region_revision_id')),None)
         if ref is None:raise core.PersistenceError('invalid_display','排版图片缺少本版本来源。')
         return _source_ref_image(household_id,ref,alt)
-    return body_blocks(text,payload.get('display_markup'),role=role,image_resolver=resolve)
+    from app.web.models import QuestionSource
+    source=QuestionSource.objects.filter(revision=revision,material__household_id=household_id).select_related('material').first()
+    label=f'《{source.material.title}》 · 原题 {source.original_number or "未编号"}' if source else '原图'
+    return body_blocks(text,payload.get('display_markup'),role=role,image_resolver=resolve,source_label=label)
 
 
 def _export_blocks(actor,owner,title,purpose,blocks,provenance,source_hash,revision_id):

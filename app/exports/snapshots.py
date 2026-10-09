@@ -7,7 +7,7 @@ from pathlib import Path
 import shutil
 import tempfile
 
-from .contracts import (ExportError, GENERATOR_VERSION, SCHEMA_VERSION, canonical, digest,
+from .contracts import (ExportError, GENERATOR_VERSION, SUPPORTED_SCHEMAS, canonical, digest,
     document_dict, snapshot_id, validate_document)
 
 
@@ -46,7 +46,7 @@ def runtime_fingerprint():
 def verify_snapshot(directory):
     directory = Path(directory).resolve()
     manifest = json.loads((directory / "snapshot.json").read_text())
-    if manifest["schema_version"] != SCHEMA_VERSION:
+    if not isinstance(manifest["schema_version"], str) or manifest["schema_version"] not in SUPPORTED_SCHEMAS:
         raise ExportError("invalid_snapshot", "Unknown print snapshot schema")
     if digest(canonical(manifest["inputs"])) != manifest["export_id"]:
         raise ExportError("invalid_snapshot", "Snapshot identity does not match its inputs")
@@ -110,7 +110,7 @@ def export_document(document, output_root, fonts, font_manifest, *, asset_root=N
                     continue
                 path.chmod(0o600)
                 files[str(path.relative_to(temporary))] = {"sha256": digest(path.read_bytes()), "size_bytes": path.stat().st_size}
-            manifest = {"schema_version": SCHEMA_VERSION, "export_id": export_id, "snapshot_id": snapshot_id(document),
+            manifest = {"schema_version": document.schema_version, "export_id": export_id, "snapshot_id": snapshot_id(document),
                 "inputs": inputs, "page_count": result["page_count"], "word_equations": result["word_equations"],
                 "files": files, "archive_complete": False}
             write_private(temporary / "snapshot.json", manifest)

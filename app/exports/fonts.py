@@ -11,7 +11,7 @@ from fontTools.ttLib import TTFont
 from .contracts import ExportError, FontSet, digest, plain_text, validate_document
 
 
-FOOTER_TEXT = "历史未审核 草稿 已审核 快照 / 0123456789abcdef · 不支持的公式，图片回退 来源 公式图片：公式来源：教学图：图示来源：条件：；"
+FOOTER_TEXT = "历史未审核 草稿 已审核 快照 / 0123456789abcdef · 不支持的公式，图片回退 来源 公式图片：公式来源：教学图：图示来源：题图：题图来源：条件：；"
 SUPERSCRIPT_DIGITS = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")
 
 
@@ -29,8 +29,8 @@ def document_characters(documents):
                 elif block.kind == "map":
                     text += "".join(block.content["root"])
                     text += "".join(value for group in block.content["groups"] for key in ("label", "detail") for value in group[key])
-                elif block.kind in {"formula_image", "diagram", "companion_image"}:
-                    text += block.content["alt"] + block.content["source_ref"]
+                elif block.kind in {"formula_image", "diagram", "companion_image", "source_image"}:
+                    text += block.content["alt"] + (block.content["source_label"] if block.kind=="source_image" else block.content["source_ref"])
                     if block.kind=='diagram':text+=''.join(block.content['conditions'])
                 elif isinstance(block.content, str):
                     text += plain_text(block.content).translate(SUPERSCRIPT_DIGITS)

@@ -52,10 +52,10 @@ class QuestionForm(RequestForm):
     )
     display_markup = forms.CharField(required=False, max_length=24000,
         label="排版文本（可选）", widget=forms.Textarea(attrs={"rows": 8}),
-        help_text="整行公式 [[math:1/2]]；**重点**；==标记==；图片回退 [[image:1|原文]]，数字为来源区域序号。去标记后须与当前正文一致。")
+        help_text="整行公式 [[math:1/2]]；**重点**；==标记==；题图 [[figure:1|原文]]；公式图片回退 [[image:1|原文]]，数字为来源区域序号。去标记后须与当前正文一致。")
     image_print_confirmed = forms.BooleanField(required=False,
         label="我已逐一核对本版打印图片，只包含题干或数学符号，没有作答、提示或方法笔记",
-        help_text="有图片回退的独立练习必须人工核对。原图区域含手写答案时，请重新选择纯题干区域；每次修订重新核对。")
+        help_text="有题图或公式图片的独立练习必须人工核对。原图区域含手写答案时，请重新选择纯题干区域；每次修订重新核对。")
     sources = forms.CharField(widget=forms.HiddenInput, label="原图区域")
     reason = forms.CharField(
         max_length=1000,

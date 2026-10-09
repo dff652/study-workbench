@@ -45,3 +45,16 @@ class PresentationTests(unittest.TestCase):
         for markup,text in [('**答案**','题目'),('[[image:1|sqrt(x)]]','sqrt(x)'),
                 ('[[math:sqrt(x)]]','sqrt(x)'),('[[math:__import__("os")]]','__import__("os")')]:
             with self.assertRaises(ValueError):validate_display(markup,text,())
+
+    def test_figures_are_explicit_and_bound_without_reclassifying_formula_images(self):
+        from types import SimpleNamespace
+        refs=(SimpleNamespace(sequence=2,region_revision_id='region-r1',region_missing=False),)
+        validate_display('[[figure:2|三角形]]','三角形',refs)
+        with self.assertRaises(ValueError):validate_display('[[figure:1|三角形]]','三角形',refs)
+        with self.assertRaises(ValueError):validate_display('[[figure:2|答案]]','三角形',refs)
+        resolver=lambda sequence,alt: {'source_ref':'region-r1|hash','alt':alt}
+        figure=body_blocks('三角形','[[figure:2|三角形]]',role='question',image_resolver=resolver,source_label='合成资料 · 原题7')[0]
+        self.assertEqual(figure.kind,'source_image')
+        self.assertEqual(figure.content['source_label'],'合成资料 · 原题7 · 来源区域 2')
+        self.assertEqual(figure.content['source_ref'],'region-r1|hash')
+        self.assertEqual(body_blocks('sqrt(x)','[[image:2|sqrt(x)]]',image_resolver=resolver)[0].kind,'formula_image')

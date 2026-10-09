@@ -21,6 +21,17 @@ SOURCE_FONTS = {
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_legacy_snapshot_remains_readable_and_immutable_after_v2_export(self):
+        with tempfile.TemporaryDirectory() as root:
+            legacy=replace(self.document,schema_version='study-workbench.print.v0.1')
+            old,_=export_document(legacy,root,self.fonts,self.profile)
+            before={p.name:p.read_bytes() for p in old.iterdir()}
+            new,_=export_document(self.document,root,self.fonts,self.profile)
+            self.assertNotEqual(old,new)
+            self.assertEqual(verify_snapshot(old)['schema_version'],legacy.schema_version)
+            self.assertEqual(verify_snapshot(new)['schema_version'],'study-workbench.print.v0.2')
+            self.assertEqual(before,{p.name:p.read_bytes() for p in old.iterdir()})
+
     @classmethod
     def setUpClass(cls):
         cls.temporary = tempfile.TemporaryDirectory(prefix='study-a2-snapshot-tests-')

@@ -58,7 +58,7 @@ def readiness(actor, material_id):
             entry['confirmed']=True
             entry['answer_ready']=services.accepted_answer(revision)[0] is not None
             if (revision.payload.get('display_markup') and not revision.payload.get('image_print_confirmed') and
-                any(line.kind=='image' for line in display_lines(revision.payload['display_markup']))):
+                any(line.kind in {'image','figure'} for line in display_lines(revision.payload['display_markup']))):
                 gaps.append(f'{label}：独立复测图片尚未确认无作答或提示。')
             for diagram in current_diagrams(revision):
                 diagram_revisions.append({'diagram_id': diagram.pk, 'question_revision_id': revision.pk,

@@ -4,6 +4,8 @@
 
 ## 使用与当前交付
 
+- [pull rebase冲突修复与Git交付（2026-10-09）](reviews/rebase-conflict-recovery-20261009.md)：双方文档保留、24笔提交重放、源码字节一致、旧新SHA映射、原附件及普通推送边界。
+
 - [题图导出整改、部署与交付（2026-10-09）](reviews/source-figures-remediation-20261009.md)：43b05fb三服务同版、134项相关回归、40项运维／19组正式浏览器、新PRE／POST实际空恢复、旧快照兼容、本地提交与真实待验范围。
 
 - [design.md 七域改进部署与验收（2026-10-08）](reviews/design-md-deployment-20261008.md)：6e53405三服务同版、39项运维／19组正式浏览器、配套空恢复、独立157运维／32浏览器与文档审查、工具中断及真实待验范围。
@@ -24,7 +26,7 @@
 - [三种资料模式与学科契约](knowledge-subject-contract-20261005.md)：知识点讲解、逐题讲解、五册与练习，学校学科和讲解依据分别保存。
 - [知识集成与匿名小批次验收](reviews/knowledge-integration-20261005.md)：本机候选、实际验证和空实例恢复，区分源码、正式运行与 Word 实机状态。
 - [知识源码交付与 review](reviews/knowledge-handoff-20261005.md)：本地源码／文档提交、完整交付范围、GitHub PR 与独立交付结果。
-- [36 知识与学科部署验收](reviews/knowledge-deployment-20261006.md)：PR #3 合并后的当前运行身份、两份迁移、前后空恢复、实际 HTTPS 与独立复核 PASS。
+- [36 知识与学科部署验收](reviews/knowledge-deployment-20261006.md)：PR #3 合并后的历史运行身份、两份迁移、前后空恢复、实际 HTTPS 与独立复核 PASS。
 - [Web 体验改进方案与任务清单](web-ux-improvement-plan-20261005.md)：导航／空间／任务交互／文案、改进顺序及新产品验收门槛。
 - [Web 体验实施契约](web-ux-implementation-contract-20261005.md)：公共组件、URL／输入保持、业务模板及三个 Luna6 任务的文件归属。
 - [Web 体验改进验收](reviews/web-ux-20261005.md)：当前候选的实际测试、浏览器与独立复核进展，区分真实试用和运行交付。

@@ -25,7 +25,9 @@
 
 ## 验收证据
 
-2026-10-08，design.md规范及七域呈现改进已部署到HTTP／HTTPS Web／worker，固定构建提交`6e53405`。39项运维、19组正式双入口浏览器及前后配套空恢复通过；独立157项运维／32组只读浏览器与文档review PASS；旧业务行、28个私有文件与CA保持。见[当前部署验收](docs/reviews/design-md-deployment-20261008.md)。两个入口继续使用内网IP＋端口，真实用户与客户端验收单独登记；源码和文档只本地提交，不push。
+2026-10-09，题图导出整改已部署到HTTP／HTTPS Web／worker，源码`43b05fb`。134项相关回归、40项运维、19组双入口浏览器及PRE／POST配套空恢复通过；真实几何两题的新样稿、旧五册兼容及隔离5组浏览器核对通过。正式业务记录和原文件保持，真实学习者／Word实开仍待验，详见[题图整改回执](docs/reviews/source-figures-remediation-20261009.md)。主代理review通过，本轮独立代理review未执行；只本地提交，后续手动push。
+
+2026-10-08，design.md规范及七域呈现改进已部署到HTTP／HTTPS Web／worker，固定构建提交`6e53405`。39项运维、19组正式双入口浏览器及前后配套空恢复通过；独立157项运维／32组只读浏览器与文档review PASS；旧业务行、28个私有文件与CA保持。见[design.md部署验收](docs/reviews/design-md-deployment-20261008.md)。两个入口继续使用内网IP＋端口，真实用户与客户端验收单独登记；源码和文档只本地提交，不push。
 
 最新设计规范与七域呈现改进见[design.md实施回执](docs/reviews/design-md-implementation-20261008.md)及[DESIGN.md](DESIGN.md)。前轮后续整改、验证结果和真实客户端／用户门槛见[实施回执](docs/reviews/learning-system-follow-up-implementation-20261007.md)。已实现、合成验证、正式部署和产品体验验收分别记录。
 
